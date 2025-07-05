@@ -286,6 +286,69 @@ class Client:
     def delete_user(self, user_id: int) -> None:
         """Delete a user"""
         self.delete(f'users/{user_id}/')
+    
+    # Workflow Job Templates
+    def list_workflow_job_templates(self, **params) -> Dict[str, Any]:
+        """List workflow job templates"""
+        return self.get('workflow_job_templates/', params=params)
+    
+    def get_workflow_job_template(self, template_id: int) -> Dict[str, Any]:
+        """Get a specific workflow job template"""
+        return self.get(f'workflow_job_templates/{template_id}/')
+    
+    def create_workflow_job_template(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Create a new workflow job template"""
+        return self.post('workflow_job_templates/', data=data)
+    
+    def update_workflow_job_template(self, template_id: int, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Update a workflow job template"""
+        return self.patch(f'workflow_job_templates/{template_id}/', data=data)
+    
+    def delete_workflow_job_template(self, template_id: int) -> None:
+        """Delete a workflow job template"""
+        self.delete(f'workflow_job_templates/{template_id}/')
+    
+    def launch_workflow_job_template(self, template_id: int, data: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """Launch a workflow job template"""
+        return self.post(f'workflow_job_templates/{template_id}/launch/', data=data or {})
+    
+    # Workflow Jobs
+    def list_workflow_jobs(self, **params) -> Dict[str, Any]:
+        """List workflow jobs"""
+        return self.get('workflow_jobs/', params=params)
+    
+    def get_workflow_job(self, job_id: int) -> Dict[str, Any]:
+        """Get a specific workflow job"""
+        return self.get(f'workflow_jobs/{job_id}/')
+    
+    def cancel_workflow_job(self, job_id: int) -> Dict[str, Any]:
+        """Cancel a workflow job"""
+        return self.post(f'workflow_jobs/{job_id}/cancel/')
+    
+    def relaunch_workflow_job(self, job_id: int) -> Dict[str, Any]:
+        """Relaunch a workflow job"""
+        return self.post(f'workflow_jobs/{job_id}/relaunch/')
+    
+    # Workflow Job Template Nodes
+    def list_workflow_job_template_nodes(self, template_id: int, **params) -> Dict[str, Any]:
+        """List nodes for a workflow job template"""
+        return self.get(f'workflow_job_templates/{template_id}/workflow_nodes/', params=params)
+    
+    def get_workflow_job_template_node(self, template_id: int, node_id: int) -> Dict[str, Any]:
+        """Get a specific workflow job template node"""
+        return self.get(f'workflow_job_templates/{template_id}/workflow_nodes/{node_id}/')
+    
+    def create_workflow_job_template_node(self, template_id: int, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Create a workflow job template node"""
+        return self.post(f'workflow_job_templates/{template_id}/workflow_nodes/', data=data)
+    
+    def update_workflow_job_template_node(self, template_id: int, node_id: int, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Update a workflow job template node"""
+        return self.patch(f'workflow_job_templates/{template_id}/workflow_nodes/{node_id}/', data=data)
+    
+    def delete_workflow_job_template_node(self, template_id: int, node_id: int) -> None:
+        """Delete a workflow job template node"""
+        self.delete(f'workflow_job_templates/{template_id}/workflow_nodes/{node_id}/')
 
 
 def make_client(instance):

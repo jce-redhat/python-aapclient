@@ -109,6 +109,20 @@ user_list = "aapclient.gateway.v1.user:ListUser"
 user_show = "aapclient.gateway.v1.user:ShowUser"
 user_set = "aapclient.gateway.v1.user:SetUser"
 
+# Workflow Job Templates
+workflow_create = "aapclient.controller.v2.workflow:CreateWorkflow" 
+workflow_delete = "aapclient.controller.v2.workflow:DeleteWorkflow"
+workflow_list = "aapclient.controller.v2.workflow:ListWorkflow"
+workflow_show = "aapclient.controller.v2.workflow:ShowWorkflow"
+workflow_set = "aapclient.controller.v2.workflow:SetWorkflow"
+workflow_launch = "aapclient.controller.v2.workflow:LaunchWorkflow"
+
+# Workflow Jobs
+workflow_job_list = "aapclient.controller.v2.workflow_job:ListWorkflowJob"
+workflow_job_show = "aapclient.controller.v2.workflow_job:ShowWorkflowJob"
+workflow_job_cancel = "aapclient.controller.v2.workflow_job:CancelWorkflowJob"
+workflow_job_relaunch = "aapclient.controller.v2.workflow_job:RelaunchWorkflowJob"
+
 [project.entry-points."aap.eda.v1"]
 # EDA Rulebooks
 eda_rulebook_list = "aapclient.eda.v1.rulebook:ListRulebook"
