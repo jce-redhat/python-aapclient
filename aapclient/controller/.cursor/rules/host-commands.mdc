@@ -1,0 +1,168 @@
+---
+description: Comprehensive documentation for Controller API host CRUD commands
+globs: aapclient/controller/v2/host.py
+alwaysApply: false
+---
+
+# Controller API Host Commands
+
+## Host CRUD Commands (Completed)
+
+**Problem**: Users needed comprehensive host management capabilities through the CLI to match the GUI functionality for managing hosts within inventories.
+
+**Solution**: Implemented complete CRUD operations for hosts in the Controller API:
+
+**Commands Added:**
+- `aap host list [--long] [--inventory <id|name>] [--limit <number>]` - List hosts with filtering and pagination
+- `aap host show <host>` - Display detailed host information (by name or ID)
+- `aap host create <name> --inventory <id|name> [--description <text>] [--variables <json>] [--enabled/--disabled]` - Create new hosts
+- `aap host set <host> [--name <name>] [--description <text>] [--variables <json>] [--enabled/--disabled]` - Update host properties
+- `aap host delete <host>...` - Delete hosts (supports multiple hosts and name/ID lookup)
+- `aap host metrics [--long] [--hostname <hostname>] [--limit <number>]` - Display host automation metrics
+
+**Key Features:**
+- **GUI-aligned columns**:
+  - Host List: ID, Name, Description, Inventory, Enabled
+  - Host Metrics: ID, Hostname, First Automated, Last Automated, Automation Count, Deleted, Deleted Count
+- **Smart inventory resolution**: `--inventory` parameter accepts both names and IDs with automatic resolution
+- **Filtering capabilities**: `--inventory` by ID/name, `--hostname` for metrics, `--limit` for pagination (default: 20 items)
+- **Dual lookup support**: All commands support both name and ID lookup for flexibility
+- **User-friendly messages**: Success messages display host names instead of IDs (e.g., "Host inky.example.com updated")
+- **Enhanced error handling**: Duplicate host creation shows clear error with existing host ID
+- **Enabled/disabled management**: Intuitive `--enabled`/`--disabled` flags for host state management
+- **Bulk operations**: Delete command supports multiple hosts in a single operation
+- **Validation**: Name/ID cross-validation prevents accidental operations on wrong resources
+- **Automation metrics**: Complete visibility into host automation activity including deleted counts
+
+**Enhanced Features (Recent Updates):**
+- **Inventory Name Support**: `--inventory` parameter intelligently handles both names ("Demo Inventory") and IDs (1, 2)
+- **User-Friendly Messages**: `aap host set` displays host names in success messages instead of internal IDs
+- **Improved Error Messages**: Duplicate host creation error format: `Host 'duplicate (ID: 11)' already exists in this inventory`
+- **Host Metrics**: Added comprehensive automation metrics with deleted counter tracking
+- **Resource Integration**: Host count integrated into `aap resource list` command output
+
+**Files Modified:**
+- `aapclient/controller/v2/host.py` - Complete host CRUD command implementations including metrics
+- `aapclient/controller/client.py` - Added host API methods (list_hosts, get_host, create_host, update_host, delete_host, list_host_metrics)
+- `aapclient/common/resource_list.py` - Added host count to resource overview
+- `pyproject.toml` - Added host command entry points
+
+**API Integration:**
+- Uses Controller API `/hosts/` endpoint with standard CRUD operations
+- Uses Controller API `/host_metrics/` endpoint for automation metrics
+- Supports pagination with `page_size` parameter and ID-based sorting
+- Handles inventory relationships and name resolution via summary_fields
+- Graceful error handling for invalid hosts, permissions, and API failures
+- Smart inventory resolution using name-to-ID lookup for enhanced usability
+
+**Testing Verified:**
+- ✅ List hosts with various filters and formats
+- ✅ Show hosts by both name and ID
+- ✅ Create hosts with inventory name/ID resolution
+- ✅ Enhanced duplicate host error handling
+- ✅ Update host properties with user-friendly success messages
+- ✅ Delete hosts with confirmation messages
+- ✅ Host metrics command with all columns and filtering
+- ✅ Host count integration in resource list
+- ✅ Error handling for invalid inputs and missing resources
+
+**Technical Implementation Details:**
+- Follows established CRUD patterns from projects, inventories, and credentials
+- Uses `Lister`, `ShowOne`, and `Command` base classes appropriately
+- Implements consistent ID-based sorting (order_by=id) and 20-item default pagination
+- Variables field supports JSON format with proper error handling
+- Name resolution leverages summary_fields for related object names (inventory, created_by, modified_by)
+- Metrics command uses `automated_counter` and `deleted_counter` fields from host_metrics endpoint
+- Duplicate detection uses targeted API queries with user-friendly error formatting
+
+## Host Command Patterns
+
+### Smart Inventory Resolution
+
+The `--inventory` parameter in host commands automatically resolves both names and IDs:
+
+```python
+# Resolve inventory name to ID if needed
+if parsed_args.inventory.isdigit():
+    inventory_id = int(parsed_args.inventory)
+else:
+    inventories = client.list_inventories(name=parsed_args.inventory)
+    inventory = utils.find_resource(inventories, parsed_args.inventory)
+    inventory_id = inventory['id']
+```
+
+### User-Friendly Success Messages
+
+Host commands display meaningful names instead of internal IDs:
+
+```python
+# Update the host
+client.update_host(host_id, update_data)
+# Use the updated name if the name was changed, otherwise use the original name
+final_name = update_data.get('name', host_name)
+self.app.stdout.write(f"Host {final_name} updated\n")
+```
+
+### Enhanced Duplicate Error Handling
+
+Host creation provides clear error messages for duplicates:
+
+```python
+try:
+    existing_hosts = client.list_hosts(name=parsed_args.name, inventory=inventory_id)
+    if existing_hosts.get('count', 0) > 0:
+        existing_host = existing_hosts['results'][0]
+        raise CommandError(
+            f"Host '{parsed_args.name} (ID: {existing_host['id']})' already exists in this inventory"
+        )
+except CommandError:
+    raise
+```
+
+### Host Metrics Integration
+
+The host metrics command provides comprehensive automation visibility:
+
+```python
+# Standard columns with automation metrics
+columns = ('ID', 'Hostname', 'First Automated', 'Last Automated', 'Automation Count', 'Deleted', 'Deleted Count')
+
+# Uses automated_counter and deleted_counter fields
+metric_info = [
+    metric['id'],
+    metric.get('hostname', ''),
+    format_datetime(metric.get('first_automation')),
+    format_datetime(metric.get('last_automation')),
+    metric.get('automated_counter', 0),
+    'Yes' if metric.get('deleted', False) else 'No',
+    metric.get('deleted_counter', 0),
+]
+```
+
+## Development Guidelines for Host Commands
+
+### Adding New Host Features
+
+1. **Follow established patterns**: Use existing host commands as templates
+2. **Implement smart resolution**: Support both names and IDs for inventory references
+3. **User-friendly messages**: Always display host names in success messages
+4. **Enhanced error handling**: Provide clear, actionable error messages
+5. **Consistent pagination**: Use 20-item default with `--limit` parameter
+6. **ID-based sorting**: Always sort by ID for consistency
+
+### Testing Host Commands
+
+Always test these scenarios:
+```bash
+# Inventory resolution
+aap host list --inventory 1              # ID lookup
+aap host list --inventory "Demo Inventory"  # Name lookup
+
+# Host identification
+aap host show "MyHost"                   # Name lookup
+aap host show 123                        # ID lookup
+
+# Error handling
+aap host create duplicate --inventory test  # Duplicate detection
+aap host show nonexistent               # Not found handling
+```

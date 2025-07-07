@@ -1,4 +1,12 @@
+---
+description: AAP CLI project overview, architecture, command patterns, and development guidelines
+globs:
+alwaysApply: true
+---
+
 # AAP CLI Development Context
+
+> **Note**: This project uses distributed cursor rules. Component-specific rules are located in `.cursor/rules/` directories throughout the codebase. See `.cursor/rules/README.mdc` for organization details.
 
 ## Project Overview
 
@@ -156,72 +164,9 @@ else:
 
 ### 10. Host CRUD Commands (Completed)
 
-**Problem**: Users needed comprehensive host management capabilities through the CLI to match the GUI functionality for managing hosts within inventories.
+**Note**: Detailed host command documentation has been moved to `aapclient/controller/.cursor/rules/host-commands.mdc`
 
-**Solution**: Implemented complete CRUD operations for hosts in the Controller API:
-
-**Commands Added:**
-- `aap host list [--long] [--inventory <id|name>] [--limit <number>]` - List hosts with filtering and pagination
-- `aap host show <host>` - Display detailed host information (by name or ID)
-- `aap host create <name> --inventory <id|name> [--description <text>] [--variables <json>] [--enabled/--disabled]` - Create new hosts
-- `aap host set <host> [--name <name>] [--description <text>] [--variables <json>] [--enabled/--disabled]` - Update host properties
-- `aap host delete <host>...` - Delete hosts (supports multiple hosts and name/ID lookup)
-- `aap host metrics [--long] [--hostname <hostname>] [--limit <number>]` - Display host automation metrics
-
-**Key Features:**
-- **GUI-aligned columns**:
-  - Host List: ID, Name, Description, Inventory, Enabled
-  - Host Metrics: ID, Hostname, First Automated, Last Automated, Automation Count, Deleted, Deleted Count
-- **Smart inventory resolution**: `--inventory` parameter accepts both names and IDs with automatic resolution
-- **Filtering capabilities**: `--inventory` by ID/name, `--hostname` for metrics, `--limit` for pagination (default: 20 items)
-- **Dual lookup support**: All commands support both name and ID lookup for flexibility
-- **User-friendly messages**: Success messages display host names instead of IDs (e.g., "Host inky.example.com updated")
-- **Enhanced error handling**: Duplicate host creation shows clear error with existing host ID
-- **Enabled/disabled management**: Intuitive `--enabled`/`--disabled` flags for host state management
-- **Bulk operations**: Delete command supports multiple hosts in a single operation
-- **Validation**: Name/ID cross-validation prevents accidental operations on wrong resources
-- **Automation metrics**: Complete visibility into host automation activity including deleted counts
-
-**Enhanced Features (Recent Updates):**
-- **Inventory Name Support**: `--inventory` parameter intelligently handles both names ("Demo Inventory") and IDs (1, 2)
-- **User-Friendly Messages**: `aap host set` displays host names in success messages instead of internal IDs
-- **Improved Error Messages**: Duplicate host creation error format: `Host 'duplicate (ID: 11)' already exists in this inventory`
-- **Host Metrics**: Added comprehensive automation metrics with deleted counter tracking
-- **Resource Integration**: Host count integrated into `aap resource list` command output
-
-**Files Added:**
-- `aapclient/controller/v2/host.py` - Complete host CRUD command implementations including metrics
-- Updated `aapclient/controller/client.py` - Added host API methods (list_hosts, get_host, create_host, update_host, delete_host, list_host_metrics)
-- Updated `aapclient/common/resource_list.py` - Added host count to resource overview
-- Updated `pyproject.toml` - Added host command entry points
-
-**API Integration:**
-- Uses Controller API `/hosts/` endpoint with standard CRUD operations
-- Uses Controller API `/host_metrics/` endpoint for automation metrics
-- Supports pagination with `page_size` parameter and ID-based sorting
-- Handles inventory relationships and name resolution via summary_fields
-- Graceful error handling for invalid hosts, permissions, and API failures
-- Smart inventory resolution using name-to-ID lookup for enhanced usability
-
-**Testing Verified:**
-- ✅ List hosts with various filters and formats
-- ✅ Show hosts by both name and ID
-- ✅ Create hosts with inventory name/ID resolution
-- ✅ Enhanced duplicate host error handling
-- ✅ Update host properties with user-friendly success messages
-- ✅ Delete hosts with confirmation messages
-- ✅ Host metrics command with all columns and filtering
-- ✅ Host count integration in resource list
-- ✅ Error handling for invalid inputs and missing resources
-
-**Technical Details:**
-- Follows established CRUD patterns from projects, inventories, and credentials
-- Uses `Lister`, `ShowOne`, and `Command` base classes appropriately
-- Implements consistent ID-based sorting (order_by=id) and 20-item default pagination
-- Variables field supports JSON format with proper error handling
-- Name resolution leverages summary_fields for related object names (inventory, created_by, modified_by)
-- Metrics command uses `automated_counter` and `deleted_counter` fields from host_metrics endpoint
-- Duplicate detection uses targeted API queries with user-friendly error formatting
+**Summary**: Implemented complete CRUD operations for hosts in the Controller API with smart inventory resolution, user-friendly messages, enhanced error handling, and automation metrics. Host count integrated into resource list command.
 
 ### 11. List Command Pagination Consistency (Completed)
 
@@ -356,14 +301,9 @@ return (columns, get_dict_properties(data, columns))
 
 ## Key Utility Functions
 
-### `aapclient/common/utils.py`
+**Note**: Detailed utility function documentation has been moved to `aapclient/common/.cursor/rules/utilities.mdc`
 
-- **`format_name(name)`**: Wraps numeric names in quotes for visual distinction
-- **`get_dict_properties(data, columns)`**: Extracts and formats data for tabular display
-- **`find_resource(resources, name_or_id)`**: Generic resource lookup with error handling
-- **`format_datetime(dt_string)`**: Consistent datetime formatting
-- **`format_duration(start_time, end_time)`**: Formats time spans as "1h 2m 5s" (omits zero values)
-- **`CommandError`**: Standard exception for CLI errors
+**Summary**: Core utility functions for name formatting, resource lookup, datetime/duration formatting, tabular display, and consistent error handling across all commands.
 
 ## Testing Approach
 
@@ -453,3 +393,7 @@ aap resource show --id 123 "MyResource"  # Should validate they match
 5. **Validation**: Test all three resource identification methods
 
 This codebase represents a mature, well-structured CLI tool with consistent patterns and robust error handling. New contributors should focus on following established conventions and leveraging the comprehensive utility functions already in place.
+description:
+globs:
+alwaysApply: false
+---

@@ -1,0 +1,71 @@
+---
+description: Guide to the distributed cursor rules structure used in this project
+globs:
+alwaysApply: false
+---
+
+# Distributed Cursor Rules Structure
+
+This project uses a distributed cursor rules structure to organize context and guidelines closer to the relevant code.
+
+## Rules Organization
+
+### Top-Level Rules (`.cursorrules`)
+- **Project overview and architecture**
+- **General command patterns and conventions**
+- **Cross-cutting concerns (error handling, pagination, etc.)**
+- **Development guidelines and testing approaches**
+- **Historical context and major improvements**
+
+### Component-Specific Rules
+
+#### `aapclient/common/.cursor/rules/`
+- **`utilities.mdc`**: Common utility functions, formatting patterns, error handling
+- **Scope**: Functions and patterns used across all command types
+
+#### `aapclient/controller/.cursor/rules/`
+- **`host-commands.mdc`**: Comprehensive host CRUD command documentation
+- **Scope**: Controller API specific commands and patterns
+
+#### `aapclient/gateway/.cursor/rules/`
+- **Scope**: Gateway API specific commands and patterns (future)
+
+## Benefits of This Structure
+
+1. **Proximity**: Rules are located near the code they describe
+2. **Focused Context**: Each file contains only relevant information
+3. **Maintainability**: Easier to update rules when code changes
+4. **Scalability**: New command sets can have their own rule files
+
+## When to Add New Rule Files
+
+### Add to component-specific directories when:
+- Rules apply only to that API (Controller vs Gateway)
+- Rules are specific to a command family (hosts, templates, etc.)
+- Content is implementation-specific and detailed
+
+### Keep in top-level `.cursorrules` when:
+- Rules apply across multiple APIs
+- Patterns are used by all command types
+- Guidelines are architectural or project-wide
+
+## Finding Relevant Rules
+
+1. **Start with top-level `.cursorrules`** for general patterns and architecture
+2. **Check component-specific rules** for detailed implementation guidance
+3. **Use file names** to quickly identify relevant context (e.g., `host-commands.mdc`)
+
+## File Naming Convention
+
+- Use descriptive kebab-case names: `host-commands.mdc`, `utilities.mdc`
+- Include the primary topic or command family
+- Use `.mdc` extension for Cursor rule processing
+- Keep names concise but clear
+
+## Maintenance
+
+When adding new features:
+1. Determine the appropriate scope (general vs component-specific)
+2. Update existing rule files or create new ones as needed
+3. Update this README if adding new directories or patterns
+4. Reference new rule files from the top-level `.cursorrules` when appropriate

@@ -1,0 +1,200 @@
+---
+description: Common utility functions and patterns used across all CLI commands
+globs: aapclient/common/utils.py
+alwaysApply: false
+---
+
+# Common Utilities and Patterns
+
+## Key Utility Functions
+
+### `aapclient/common/utils.py`
+
+- **`format_name(name)`**: Wraps numeric names in quotes for visual distinction
+- **`get_dict_properties(data, columns)`**: Extracts and formats data for tabular display
+- **`find_resource(resources, name_or_id)`**: Generic resource lookup with error handling
+- **`format_datetime(dt_string)`**: Consistent datetime formatting
+- **`format_duration(start_time, end_time)`**: Formats time spans as "1h 2m 5s" (omits zero values)
+- **`CommandError`**: Standard exception for CLI errors
+
+## Visual Name Formatting (Completed)
+
+**Problem**: Numeric names displayed without quotes could be confused with IDs.
+
+**Solution**:
+- Added `format_name()` utility function in `utils.py`
+- Automatically wraps numeric names in double quotes
+- Applied to all tabular output via `get_dict_properties()`
+- Examples: `"420"` vs `420` (ID), `"123"` vs `123` (ID)
+
+## Duration Formatting Enhancement
+
+**Problem**: CLI displayed durations in HH:MM:SS format which didn't match GUI's human-readable format.
+
+**Solution**: Modified `format_duration()` in `utils.py` to use "1h 2m 5s" format:
+- Omits zero values (e.g., "2m 5s" instead of "0h 2m 5s")
+- Matches GUI formatting exactly
+- More readable and intuitive for users
+
+## Error Handling Patterns
+
+### Standard Error Handling
+
+```python
+from aapclient.common.utils import CommandError
+
+try:
+    resource = client.get_resource(resource_id)
+except (ControllerClientError, GatewayClientError):
+    raise CommandError(f"Resource with ID {resource_id} not found")
+```
+
+### Numeric Name vs ID Resolution
+
+For commands that accept resource identifiers:
+```python
+# Create mutually exclusive group for --id and --name
+group = parser.add_mutually_exclusive_group()
+group.add_argument('--id', metavar='<id>', type=int, help='Resource ID')
+group.add_argument('--name', metavar='<name>', help='Resource name')
+
+# Validation logic:
+if parsed_args.id and parsed_args.resource:
+    # Cross-validate ID and name refer to same resource
+elif parsed_args.id:
+    # Direct ID lookup
+else:
+    # Name lookup (default behavior)
+```
+
+## Output Formatting Patterns
+
+### Tabular Output
+
+```python
+from aapclient.common.utils import get_dict_properties, format_name
+
+# For tabular output (automatic name formatting)
+return (columns, get_dict_properties(data, columns))
+```
+
+### Success Messages
+
+```python
+# For success messages with names
+self.app.stdout.write(f"Resource {format_name(resource_name)} deleted\n")
+```
+
+### Datetime Formatting
+
+```python
+from aapclient.common.utils import format_datetime
+
+# Consistent datetime display
+created_time = format_datetime(resource.get('created'))
+```
+
+## List Command Pagination Standards
+
+### Pagination Requirements
+
+**All list commands should support consistent pagination**:
+- **Default limit**: 20 results per command
+- **`--limit` parameter**: Allow users to override default
+- **Implementation**: Always set explicit `page_size` to avoid API-specific defaults
+
+### Implementation Pattern
+
+```python
+parser.add_argument('--limit', type=int, help='Limit the number of results (default: 20)')
+
+# In take_action:
+if parsed_args.limit:
+    params['page_size'] = parsed_args.limit
+else:
+    params['page_size'] = 20  # Consistent default
+```
+
+## List Command Sorting Standards
+
+### Sorting Requirements
+
+**All list commands MUST sort by ID by default** for consistency across the CLI interface.
+
+### Controller API Implementation
+
+```python
+params['order_by'] = 'id'
+data = client.list_resource(**params)
+```
+
+### Gateway API Implementation
+
+```python
+params['order_by'] = 'id'
+data = client.list_resource(**params)
+# or direct parameter: data = client.list_resource(order_by='id')
+```
+
+This ensures consistent, predictable ordering across all list commands.
+
+## Resource List Command Integration
+
+### Adding Resources to Overview
+
+When adding new resource types, integrate them into the resource list command:
+
+```python
+# Add to resource_configs in aapclient/common/resource_list.py
+resource_configs = [
+    ('Templates', controller_client, 'list_job_templates'),
+    ('Projects', controller_client, 'list_projects'),
+    ('Inventories', controller_client, 'list_inventories'),
+    ('Hosts', controller_client, 'list_hosts'),  # Example addition
+    ('Credentials', controller_client, 'list_credentials'),
+    ('Organizations', gateway_client, 'list_organizations'),
+    ('Teams', gateway_client, 'list_teams'),
+    ('Users', gateway_client, 'list_users'),
+]
+```
+
+### API Client Selection
+
+- **Controller API**: For automation resources (projects, templates, inventories, hosts, credentials)
+- **Gateway API**: For identity resources (organizations, users, teams)
+
+## Development Guidelines
+
+### Using Utility Functions
+
+1. **Always use `format_name()`** for displaying resource names in messages
+2. **Use `get_dict_properties()`** for consistent tabular formatting
+3. **Use `find_resource()`** for generic resource lookups
+4. **Use `CommandError`** for all CLI error conditions
+5. **Use `format_datetime()`** for consistent timestamp display
+
+### Testing Utility Functions
+
+Test these key scenarios:
+```bash
+# Name formatting
+format_name("test")      # Returns: test
+format_name("123")       # Returns: "123"
+
+# Resource lookup
+find_resource(resources, "name")  # Name lookup
+find_resource(resources, "123")   # ID lookup
+
+# Error handling
+try:
+    find_resource([], "nonexistent")
+except CommandError as e:
+    # Should get user-friendly error message
+```
+
+### Code Organization
+
+- **Keep utilities focused**: Single responsibility per utility function
+- **Shared logic in utils**: Don't duplicate validation or formatting logic
+- **Consistent imports**: Use established import patterns from `aapclient.common.utils`
+- **Documentation**: Include helpful docstrings for utility functions
