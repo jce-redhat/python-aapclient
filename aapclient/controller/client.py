@@ -313,6 +313,15 @@ class Client:
         """List host metrics"""
         return self.get('host_metrics/', params=params)
 
+    # Instances
+    def list_instances(self, **params) -> Dict[str, Any]:
+        """List instances"""
+        return self.get('instances/', params=params)
+
+    def get_instance(self, instance_id: int) -> Dict[str, Any]:
+        """Get a specific instance"""
+        return self.get(f'instances/{instance_id}/')
+
 
 def make_client(instance):
     """Factory function for creating client instances"""

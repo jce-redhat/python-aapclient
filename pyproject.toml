@@ -118,6 +118,10 @@ host_metrics = "aapclient.controller.v2.host:HostMetrics"
 host_show = "aapclient.controller.v2.host:ShowHost"
 host_set = "aapclient.controller.v2.host:SetHost"
 
+# Instances
+instance_list = "aapclient.controller.v2.instance:ListInstance"
+instance_show = "aapclient.controller.v2.instance:ShowInstance"
+
 [project.entry-points."aap.eda.v1"]
 # EDA Rulebooks
 eda_rulebook_list = "aapclient.eda.v1.rulebook:ListRulebook"
