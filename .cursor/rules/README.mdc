@@ -10,7 +10,7 @@ This project uses a distributed cursor rules structure to organize context and g
 
 ## Rules Organization
 
-### Top-Level Rules (`.cursorrules`)
+### Top-Level Rules (`.cursor/rules/project.mdc`)
 - **Project overview and architecture**
 - **General command patterns and conventions**
 - **Cross-cutting concerns (error handling, pagination, etc.)**
@@ -28,7 +28,7 @@ This project uses a distributed cursor rules structure to organize context and g
 - **Scope**: Controller API specific commands and patterns
 
 #### `aapclient/gateway/.cursor/rules/`
-- **Scope**: Gateway API specific commands and patterns (future)
+- **Scope**: Gateway API specific commands and patterns
 
 ## Benefits of This Structure
 
@@ -44,14 +44,14 @@ This project uses a distributed cursor rules structure to organize context and g
 - Rules are specific to a command family (hosts, templates, etc.)
 - Content is implementation-specific and detailed
 
-### Keep in top-level `.cursorrules` when:
+### Keep in top-level `.cursor/rules/project.mdc` when:
 - Rules apply across multiple APIs
 - Patterns are used by all command types
 - Guidelines are architectural or project-wide
 
 ## Finding Relevant Rules
 
-1. **Start with top-level `.cursorrules`** for general patterns and architecture
+1. **Start with top-level `.cursor/rules/project.mdc`** for general patterns and architecture
 2. **Check component-specific rules** for detailed implementation guidance
 3. **Use file names** to quickly identify relevant context (e.g., `host-commands.mdc`)
 
@@ -68,4 +68,4 @@ When adding new features:
 1. Determine the appropriate scope (general vs component-specific)
 2. Update existing rule files or create new ones as needed
 3. Update this README if adding new directories or patterns
-4. Reference new rule files from the top-level `.cursorrules` when appropriate
+4. Reference new rule files from the top-level `.cursor/rules/project.mdc` when appropriate

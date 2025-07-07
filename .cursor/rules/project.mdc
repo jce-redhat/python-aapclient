@@ -16,8 +16,7 @@ alwaysApply: true
 
 - **Multi-API Support**: Integrates with AAP's Gateway API (identity management) and Controller API (automation operations)
 - **Cliff Framework**: Built on OpenStack's Cliff framework for consistent CLI patterns
-- **Resource Management**: CRUD operations for organizations, users, teams, projects, job templates, inventories, credentials, and jobs
-- **Dual API Strategy**: Uses Gateway API for identity resources (AAP 2.5+) and Controller API for automation resources
+- **Resource Management**: CRUD operations for AAP resources, including but not limited to  organizations, users, teams, projects, job templates, inventories, credentials, and jobs
 
 ### Key Directories
 
@@ -28,7 +27,43 @@ python-aapclient/
 │   ├── controller/v2/    # Controller API commands
 │   ├── gateway/v1/       # Gateway API commands
 │   ├── eda/             # Event-Driven Ansible integration
-│   └── galaxy/          # Galaxy content management
+│   └── galaxy/          # Private Automation Hub content management
+```
+
+## Development Environment
+
+### Virtual Environment Usage
+
+**IMPORTANT**: Always use the local virtual environment (`.venv`) when running commands from python-aapclient or creating and running test commands based on the python-aapclient code or AAP APIs.
+
+**Required Pattern**:
+```bash
+# Running AAP CLI commands
+source .venv/bin/activate && aap project list
+source .venv/bin/activate && aap instance show 1
+source .venv/bin/activate && aap host list --inventory "Demo Inventory"
+
+# Running test scripts
+source .venv/bin/activate && python test_instance_api.py
+source .venv/bin/activate && python debug_auth_flow.py
+source .venv/bin/activate && python -m pytest tests/
+
+# Installing updates during development
+source .venv/bin/activate && pip install -e .
+```
+
+**Why This Matters**:
+- Ensures correct package dependencies and versions
+- Uses the development version of the package with your changes
+- Prevents conflicts with system-wide Python packages
+- Maintains consistent behavior across development and testing
+
+**Setup (if not already done)**:
+```bash
+cd python-aapclient
+python -m venv .venv
+source .venv/bin/activate
+pip install -e .
 ```
 
 ## Recent Major Improvements
