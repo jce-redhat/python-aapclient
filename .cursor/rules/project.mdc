@@ -194,6 +194,86 @@ else:
 
 **Files Modified**: `aapclient/controller/v2/job_template.py`
 
+## Development Environment
+
+### API Endpoint Testing Requirement
+
+**CRITICAL RULE**: Before implementing any command that acts against an API endpoint, you MUST first write and run a test script to explore the endpoint and determine what fields and data structures are actually returned by the API.
+
+**Required Pattern**:
+```python
+#!/usr/bin/env python3
+"""Test script to explore the <endpoint_name> API endpoint"""
+
+import json
+from aapclient.controller.client import Client  # or appropriate client
+from aapclient.common.aapconfig import AAPConfig
+
+def main():
+    config = AAPConfig()
+    client = Client(config)
+
+    # Test list endpoint
+    data = client.list_<resource>()
+    print(f"Count: {data.get('count', 0)}")
+    if data.get('results'):
+        first_item = data['results'][0]
+        print("Available fields:")
+        for key in sorted(first_item.keys()):
+            print(f"  {key}: {type(first_item[key]).__name__} = {first_item[key]}")
+
+    # Test detailed endpoint if applicable
+    if data.get('results'):
+        item_id = data['results'][0]['id']
+        detailed = client.get_<resource>(item_id)
+        print(f"Detailed fields for {item_id}:")
+        for key in sorted(detailed.keys()):
+            print(f"  {key}: {type(detailed[key]).__name__} = {detailed[key]}")
+
+if __name__ == "__main__":
+    main()
+```
+
+**Why This Matters**:
+- Prevents assumptions about API response structure
+- Ensures commands use actual available fields
+- Avoids runtime errors from missing or misnamed fields
+- Documents the actual API behavior
+
+### Virtual Environment Usage
+
+**IMPORTANT**: Always use the local virtual environment (`.venv`) when running commands from python-aapclient or creating and running test commands based on the python-aapclient code or AAP APIs.
+
+**Required Pattern**:
+```bash
+# Running AAP CLI commands
+source .venv/bin/activate && aap project list
+source .venv/bin/activate && aap instance show 1
+source .venv/bin/activate && aap host list --inventory 2
+
+# Running test scripts
+source .venv/bin/activate && python test_instance_api.py
+source .venv/bin/activate && python debug_auth_flow.py
+source .venv/bin/activate && python -m pytest tests/
+
+# Installing updates during development
+source .venv/bin/activate && pip install -e .
+```
+
+**Why This Matters**:
+- Ensures correct package dependencies and versions
+- Uses the development version of the package with your changes
+- Prevents conflicts with system-wide Python packages
+- Maintains consistent behavior across development and testing
+
+**Setup (if not already done)**:
+```bash
+cd python-aapclient
+python -m venv .venv
+source .venv/bin/activate
+pip install -e .
+```
+
 ## Command Patterns & Conventions
 
 ### Standard CRUD Operations

@@ -122,6 +122,13 @@ host_set = "aapclient.controller.v2.host:SetHost"
 instance_list = "aapclient.controller.v2.instance:ListInstance"
 instance_show = "aapclient.controller.v2.instance:ShowInstance"
 
+# Instance Groups
+instance_group_create = "aapclient.controller.v2.instance_group:CreateInstanceGroup"
+instance_group_delete = "aapclient.controller.v2.instance_group:DeleteInstanceGroup"
+instance_group_list = "aapclient.controller.v2.instance_group:ListInstanceGroup"
+instance_group_show = "aapclient.controller.v2.instance_group:ShowInstanceGroup"
+instance_group_set = "aapclient.controller.v2.instance_group:SetInstanceGroup"
+
 [project.entry-points."aap.eda.v1"]
 # EDA Rulebooks
 eda_rulebook_list = "aapclient.eda.v1.rulebook:ListRulebook"

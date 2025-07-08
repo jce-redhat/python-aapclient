@@ -322,6 +322,27 @@ class Client:
         """Get a specific instance"""
         return self.get(f'instances/{instance_id}/')
 
+    # Instance Groups
+    def list_instance_groups(self, **params) -> Dict[str, Any]:
+        """List instance groups"""
+        return self.get('instance_groups/', params=params)
+
+    def get_instance_group(self, instance_group_id: int) -> Dict[str, Any]:
+        """Get a specific instance group"""
+        return self.get(f'instance_groups/{instance_group_id}/')
+
+    def create_instance_group(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Create a new instance group"""
+        return self.post('instance_groups/', data=data)
+
+    def update_instance_group(self, instance_group_id: int, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Update an instance group"""
+        return self.patch(f'instance_groups/{instance_group_id}/', data=data)
+
+    def delete_instance_group(self, instance_group_id: int) -> None:
+        """Delete an instance group"""
+        self.delete(f'instance_groups/{instance_group_id}/')
+
 
 def make_client(instance):
     """Factory function for creating client instances"""
