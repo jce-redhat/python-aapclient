@@ -142,16 +142,13 @@ class ShowInstance(ShowOne):
 
             data = client.get_instance(instance['id'])
 
-        # Calculate percent capacity remaining
-        capacity = data.get('capacity', 0)
-        consumed_capacity = data.get('consumed_capacity', 0)
-        if capacity > 0:
-            percent_remaining = ((capacity - consumed_capacity) / capacity) * 100
-            data['percent_capacity_remaining'] = f"{percent_remaining:.1f}%"
-        else:
-            data['percent_capacity_remaining'] = "N/A"
+        # Use the actual percent_capacity_remaining from the API
+        percent_remaining = data.get('percent_capacity_remaining', 0.0)
+        data['percent_capacity_remaining'] = f"{percent_remaining:.1f}%"
 
         # Format capacity with units
+        capacity = data.get('capacity', 0)
+        consumed_capacity = data.get('consumed_capacity', 0)
         data['capacity_formatted'] = f"{capacity} forks"
         data['consumed_capacity_formatted'] = f"{consumed_capacity} forks"
 
@@ -164,6 +161,8 @@ class ShowInstance(ShowOne):
         data['managed_formatted'] = 'Yes' if data.get('managed', False) else 'No'
         data['managed_by_policy_formatted'] = 'Yes' if data.get('managed_by_policy', False) else 'No'
         data['health_check_pending_formatted'] = 'Yes' if data.get('health_check_pending', False) else 'No'
+        data['enabled_formatted'] = 'Yes' if data.get('enabled', True) else 'No'
+        data['peers_from_control_nodes_formatted'] = 'Yes' if data.get('peers_from_control_nodes', False) else 'No'
 
         # Format the data for display
         display_data = []
@@ -171,10 +170,11 @@ class ShowInstance(ShowOne):
         fields = [
             ('id', 'ID'),
             ('hostname', 'Name'),
+            ('type', 'Type'),
             ('uuid', 'UUID'),
             ('node_type', 'Node Type'),
             ('node_state_formatted', 'Node State'),
-            ('enabled', 'Enabled'),
+            ('enabled_formatted', 'Enabled'),
             ('capacity_formatted', 'Capacity'),
             ('consumed_capacity_formatted', 'Consumed Capacity'),
             ('percent_capacity_remaining', 'Percent Capacity Remaining'),
@@ -189,6 +189,7 @@ class ShowInstance(ShowOne):
             ('ip_address', 'IP Address'),
             ('listener_port', 'Listener Port'),
             ('protocol', 'Protocol'),
+            ('peers_from_control_nodes_formatted', 'Peers From Control Nodes'),
             ('managed_formatted', 'Managed'),
             ('managed_by_policy_formatted', 'Managed By Policy'),
             ('health_check_pending_formatted', 'Health Check Pending'),
