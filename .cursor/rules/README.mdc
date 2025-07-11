@@ -1,0 +1,116 @@
+```mdc
+---
+description: Top-level README for cursor rules
+globs:
+alwaysApply: true
+---
+```
+
+# Streamlined Cursor Rules Structure
+
+This project uses a focused cursor rules structure that emphasizes general development principles and patterns over specific implementation details.
+
+## Core Philosophy
+
+**Principles Over Implementation**: Cursor rules should provide guidance for future development rather than documenting completed tasks or specific implementation details that belong in code comments.
+
+## Rules Organization
+
+### Top-Level Rules (`.cursor/rules/`)
+
+#### `project.mdc` (Always Applied)
+- **Project overview and architecture**
+- **Development environment requirements**
+- **Command patterns and conventions**
+- **Output standards and error handling philosophy**
+- **Historical context and current state**
+
+#### `development-standards.mdc` (Always Applied)
+- **Core DRY principles and patterns**
+- **Base class usage guidelines**
+- **Code quality standards**
+- **Testing principles and patterns**
+- **Architecture decision guidelines**
+
+### Component-Specific Rules
+
+#### `aapclient/common/.cursor/rules/utilities.mdc`
+- **Utility function patterns and design principles**
+- **Common development approaches**
+- **When to create utilities vs other solutions**
+- **Testing and maintenance guidelines for utilities**
+
+## Benefits of This Structure
+
+1. **Principle-Focused**: Rules emphasize patterns and principles over specific code
+2. **DRY Compliance**: Eliminates duplication between rule files themselves
+3. **Future-Oriented**: Provides guidance for new development rather than documenting completed work
+4. **Maintainable**: Fewer files to keep updated as code evolves
+5. **Clear Hierarchy**: General principles → specific patterns → component guidance
+
+## When to Add New Rule Content
+
+### Add to `development-standards.mdc` when:
+- Establishing new project-wide patterns
+- Documenting architectural decisions
+- Setting code quality standards
+- Defining testing approaches
+
+### Add to `project.mdc` when:
+- Updating project context or goals
+- Changing development environment requirements
+- Modifying overall command conventions
+- Adding new API integrations
+
+### Add component-specific rules when:
+- Patterns are truly specific to one component
+- Guidance applies only to certain file types
+- Component has unique requirements not covered by general standards
+
+### DO NOT add cursor rules for:
+- Step-by-step implementation guides
+- Detailed code examples (put in code comments instead)
+- Documentation of completed features
+- Specific bug fixes or task completion notes
+
+## File Naming Convention
+
+- Use descriptive kebab-case names: `development-standards.mdc`, `utilities.mdc`
+- Focus on the pattern or principle, not the implementation
+- Use `.mdc` extension for Cursor rule processing
+- Keep names general rather than task-specific
+
+## Maintenance Guidelines
+
+### Regular Review
+- **Quarterly**: Review rules for continued relevance
+- **After major changes**: Update affected guidance
+- **Before new features**: Ensure rules support new development patterns
+
+### Content Standards
+- **General over specific**: Focus on reusable patterns
+- **Principles over process**: Emphasize why, not just how
+- **Future-oriented**: Help with upcoming development, not past work
+- **DRY compliance**: Avoid duplicating content between rule files
+
+### When to Remove Rules
+- **Implementation details**: Move to code comments
+- **Completed tasks**: Remove documentation of finished work
+- **Outdated patterns**: Remove guidance that no longer applies
+- **Duplicate content**: Consolidate similar guidance
+
+## Finding Relevant Rules
+
+1. **Start with `development-standards.mdc`** for DRY principles and base class patterns
+2. **Check `project.mdc`** for project context and general conventions
+3. **Look at component rules** for specific pattern guidance
+4. **Use rule descriptions** to quickly identify relevant context
+
+## Success Metrics
+
+This cursor rules structure is successful when:
+- **New developers** can quickly understand patterns and principles
+- **Existing code** follows consistent patterns across the codebase
+- **Rule maintenance** is minimal and focused on principles
+- **Development velocity** increases due to clear guidance
+- **Code quality** improves through consistent application of standards

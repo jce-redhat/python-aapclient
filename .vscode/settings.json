@@ -1,0 +1,14 @@
+{
+    "files.insertFinalNewline": true,
+    "files.trimTrailingWhitespace": true,
+    "files.trimFinalNewlines": true,
+    "python.defaultInterpreterPath": "./.venv/bin/python",
+    "python.linting.enabled": true,
+    "python.linting.flake8Enabled": true,
+    "python.formatting.provider": "black",
+    "editor.formatOnSave": true,
+    "editor.rulers": [120],
+    "files.associations": {
+        "*.toml": "toml"
+    }
+}

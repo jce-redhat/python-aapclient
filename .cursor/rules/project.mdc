@@ -1,0 +1,272 @@
+```mdc
+---
+description: Project Overview
+globs:
+alwaysApply: true
+---
+```
+
+# AAPClient Project Overview
+
+> **Note**: This project uses distributed cursor rules. Core development standards are in `.cursor/rules/development-standards.mdc`. Component-specific rules are in `.cursor/rules/` directories throughout the codebase.
+
+## Project Architecture
+
+**python-aapclient** is a command-line client for Ansible Automation Platform (AAP) that provides a unified interface for managing AAP resources. It follows OpenStack client patterns for consistency and reliability, while incorporating proven patterns from the upstream AWX CLI (awxkit).
+
+### Core Design Principles
+
+- **Multi-API Integration**: Gateway API (identity) and Controller API (automation) through unified CLI
+- **Cliff Framework**: Leverages OpenStack's proven CLI framework for consistent patterns
+- **DRY Architecture**: Base classes and utilities eliminate code duplication
+- **Resource-Centric**: Commands organized by resource type following `aap resource verb` pattern
+- **AWXKit Integration**: Incorporates proven patterns from the upstream AWX CLI for Controller API interactions
+
+### Relationship with AWXKit
+
+**AWXKit Context**: The upstream AWX project includes awxkit (`awx/awxkit/`), a mature CLI for the AWX Controller API. Our AAPClient builds upon these established patterns:
+
+- **Pattern Reuse**: Adopt successful architectural patterns from awxkit
+- **API Compatibility**: Maintain compatibility with Controller API patterns
+- **Proven Approaches**: Leverage awxkit's connection management, authentication, and resource handling
+- **Multi-API Extension**: Extend awxkit patterns to support Gateway, EDA, and Galaxy APIs
+
+### Directory Structure
+
+```
+python-aapclient/
+├── aapclient/
+│   ├── common/           # Shared utilities, base classes, constants
+│   ├── controller/v2/    # Controller API commands (automation)
+│   ├── gateway/v1/       # Gateway API commands (identity)
+│   ├── eda/             # Event-Driven Ansible integration
+│   └── galaxy/          # Private Automation Hub content
+├── pyproject.toml        # Modern Python packaging with entry points
+├── setup.cfg             # PBR configuration
+└── setup.py              # Build system integration
+```
+
+### Native AAPClient Architecture (OpenStack-Inspired)
+
+**Framework Foundation**: The AAPClient adopts OpenStack client patterns but implements them natively:
+
+- **Cliff Framework**: Command-line interface framework for consistent structure
+- **Native AAP Utilities**: Common utilities implemented in `aapclient.common` (OpenStack-style patterns)
+- **PBR**: Python Build Reasonableness for packaging and versioning
+- **Entry Points**: Modern Python packaging for command registration
+
+**Entry Points Structure** (pyproject.toml):
+```toml
+[project.entry-points."aap.cli"]
+# Common commands across APIs
+command_list = "aapclient.common.module:ListCommand"
+ping = "aapclient.common.ping:Ping"
+
+[project.entry-points."aap.controller.v2"]
+# Controller API commands
+job_template_list = "aapclient.controller.v2.job_template:ListJobTemplate"
+job_template_show = "aapclient.controller.v2.job_template:ShowJobTemplate"
+job_template_create = "aapclient.controller.v2.job_template:CreateJobTemplate"
+
+[project.entry-points."aap.gateway.v1"]
+# Gateway API commands
+user_list = "aapclient.gateway.v1.user:ListUser"
+organization_list = "aapclient.gateway.v1.organization:ListOrganization"
+```
+
+### Unified AAP Environment Variables
+
+**Primary Configuration**:
+- `AAP_HOST`: Single hostname for all AAP APIs
+- `AAP_USERNAME` / `AAP_PASSWORD`: Unified authentication
+- `AAP_TOKEN`: Token-based authentication (preferred)
+- `AAP_VERIFY_SSL`: SSL certificate verification
+- `AAP_CA_BUNDLE`: Custom CA certificate bundle
+- `AAP_TIMEOUT`: Connection timeout in seconds
+
+## Development Environment
+
+### Virtual Environment Requirement
+
+**CRITICAL**: Always use the local virtual environment (`.venv`) for all development activities:
+
+```bash
+# Setup (if needed)
+python -m venv .venv
+source .venv/bin/activate
+pip install -e .
+
+# Daily usage
+source .venv/bin/activate && aap command test
+source .venv/bin/activate && python test_script.py
+```
+
+**Why This Matters**:
+- Ensures development version of package with your changes
+- Prevents conflicts with system-wide packages
+- Maintains consistent dependencies and behavior
+
+### Configuration
+
+- **Environment file**: Copy `env.example` to `.env` with AAP credentials
+- **Real testing**: Always test against actual AAP instance
+- **API exploration**: Write test scripts before implementing commands
+
+### Native AAPClient Dependencies
+
+**Core Dependencies**:
+```toml
+[project]
+dependencies = [
+    "cliff>=4.0.0",
+    "pbr>=6.0.0",
+    "requests>=2.25.0",
+    "PyYAML>=5.4.0",
+    "python-dotenv>=0.19.0",
+]
+```
+
+**Python Version Support**:
+- **Minimum**: Python 3.6 or greater
+- **Recommended**: Python 3.9+ for best performance
+- **Testing**: Verify compatibility across Python 3.6 through latest
+
+**Development Setup**:
+```bash
+# Install in development mode with native AAP client patterns
+pip install -e .[test,dev]
+pbr develop   # For PBR version management
+```
+
+## Command Categories & Patterns
+
+### Standard Resource Operations
+
+All resources follow consistent CRUD patterns:
+
+```bash
+# List operations with pagination
+aap <resource> list [--long] [--limit <number>] [--filters...]
+
+# Show operations with flexible identification
+aap <resource> show <identifier> [--id <id>]
+
+# Create operations with required parameters
+aap <resource> create <name> [--options...]
+
+# Update operations with selective changes
+aap <resource> set <identifier> [--id <id>] [--updates...]
+
+# Delete operations with multiple resource support
+aap <resource> delete <identifier>... [--id <id>]
+```
+
+### Resource Identification Patterns
+
+- **Positional arguments**: Only one positional parameter will be supported for each CRUD command except "list". Default to name lookup with ID fallback.
+- **Explicit flags**: `--id` for numeric ID must be supported for "show", "set", and "delete" commands
+- **Cross-validation**: When both provided, verify they reference same resource
+
+### API Endpoint Distribution
+
+- **Controller API**: Projects, templates, inventories, hosts, credentials, jobs
+- **Gateway API**: Organizations, users, teams, authentication
+- **Special commands**: `ping` (both APIs), `resource list` (unified view)
+
+## Output Standards
+
+### List Command Formatting
+
+- **Consistent pagination**: 20 items default with `--limit` override
+- **ID-based sorting**: Predictable ordering across all list commands
+- **Long format**: `--long` flag for additional columns
+
+### Display Formatting
+
+- **Numeric names**: Quoted to distinguish from IDs (`"123"` vs `123`)
+- **Timestamps**: Consistent format using utility functions
+- **Durations**: Human-readable format ("1h 2m 5s" not "01:02:05")
+- **Success messages**: Use resource names not IDs when possible
+- **Error messages**: Use resource names not IDs when possible
+
+### Native AAPClient Output Standards
+
+**Column Formatting**:
+- **SDK Column Mapping**: Implement `aapclient.common.utils.get_aap_show_columns_for_resource`
+- **Hidden Columns**: Hide internal fields like `links`, `location`, `original_name`
+- **Cliff Columns**: Use `cliff.columns` for complex data formatting
+- **Format Columns**: Implement `aapclient.common.format_columns.DictColumn` for key-value pairs
+
+**Lister Output**:
+- **Generator Pattern**: Return generator for memory efficiency
+- **Item Properties**: Use `aapclient.common.utils.get_item_properties` for consistent field extraction
+- **Column Headers**: Map API field names to user-friendly column headers
+- **Pagination**: Support both marker-based and offset-based pagination
+
+## Error Handling Philosophy
+
+### User-Friendly Messaging
+
+- **Convert API errors**: Transform technical errors to clear CLI messages
+- **Include context**: Resource type and identifier in error messages
+- **Consistent format**: `Resource 'identifier' not found` pattern
+- **Actionable guidance**: Suggest corrections when appropriate
+
+### Graceful Degradation
+
+- **Partial failures**: Handle mixed success/failure in batch operations
+- **API unavailability**: Clear messages when services are down
+- **Permission issues**: Distinguish between not found and access denied
+
+## Historical Context
+
+### Upstream Foundation
+
+**AWXKit Legacy**: The project adopts patterns from the mature awxkit codebase, implemented natively:
+- **Proven Architecture**: Page-based API interaction patterns (implemented in `aapclient.common.pages`)
+- **Robust Authentication**: Session management and credential handling (implemented in `aapclient.common.client`)
+- **Comprehensive Error Handling**: HTTP status code to exception mapping (implemented in `aapclient.common.exceptions`)
+- **Resource Management**: Flexible resource identification and manipulation (implemented in `aapclient.common.utils`)
+- **Output Formatting**: Multiple format support with filtering capabilities (implemented in `aapclient.common.format`)
+
+### Major Architectural Improvements
+
+1. **DRY Refactoring**: Eliminated 440+ lines of duplicate code with base classes
+2. **Consistent Error Handling**: Standardized messaging across all commands
+3. **Numeric Name Resolution**: Proper handling of resources with numeric names
+4. **GUI Alignment**: Matched CLI output to web interface layouts
+5. **Enhanced Pagination**: Consistent limits and sorting across all lists
+6. **Native Pattern Implementation**: Adopted proven patterns from AWXKit and OpenStack clients without external dependencies
+
+### Current State
+
+- **Native implementation** with established patterns and comprehensive error handling
+- **Complete CRUD coverage** for all major AAP resource types
+- **Robust base classes** eliminating common duplication patterns
+- **Comprehensive utilities** for formatting, validation, and resource lookup (implemented in `aapclient.common`)
+- **Pattern alignment** with awxkit and OpenStack client patterns for Controller API compatibility
+
+## Development Guidelines
+
+### Contributing Principles
+
+- **Follow established patterns**: Use existing commands as templates
+- **Leverage base classes**: Don't recreate common functionality
+- **Test thoroughly**: Both positive and negative scenarios
+- **Document decisions**: Update rules when introducing new patterns
+
+### Code Quality Standards
+
+- **Inherit from base classes** for standard operations
+- **Use constants** instead of magic numbers
+- **Apply utility functions** for common operations
+- **Handle errors gracefully** with user-friendly messages
+
+### When to Update Rules
+
+- **New patterns emerge**: Document reusable approaches
+- **Base classes evolve**: Update guidance for new capabilities
+- **Architecture changes**: Reflect major structural modifications
+- **Standards clarification**: Address ambiguities discovered during development
+
+This project overview provides the foundational context for AAPClient development. For detailed development standards and patterns, see `.cursor/rules/development-standards.mdc`.

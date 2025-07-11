@@ -1,0 +1,372 @@
+```mdc
+---
+description: Development Standards & DRY Principles
+globs:
+alwaysApply: true
+---
+```
+
+# Development Standards & DRY Principles
+
+## Core DRY Philosophy
+
+**Don't Repeat Yourself (DRY)** is a fundamental principle in this codebase. All code must follow these patterns:
+
+### 1. Use Base Classes for Common Patterns
+- **API Clients**: Inherit from `BaseAPIClient` for CRUD operations
+- **Commands**: Use `BaseResourceShowCommand`, `BaseResourceDeleteCommand`, `BaseResourceListCommand`
+- **Never duplicate**: Argument parsing, resource lookup, error handling
+
+### 2. Constants Over Magic Numbers
+- **Always import**: Constants from `aapclient.common.constants`
+- **Never hardcode**: Page sizes, timeouts, status codes, API versions
+- **Centralize**: All configurable values in constants file
+
+### 3. Extract Common Utilities
+- **Reuse functions**: From `aapclient.common.utils` for formatting, lookup, validation
+- **Don't duplicate**: Error handling, resource resolution, display formatting
+- **Create utilities**: When patterns appear in 2+ places
+
+## AWXKit-Inspired Patterns
+
+**Drawing from the upstream AWX CLI (awxkit)**, incorporate these established patterns:
+
+### 1. Page-Based API Architecture
+- **Page Objects**: Represent API endpoints as page objects with standard methods
+- **Connection Management**: Use centralized connection handling with retry logic
+- **Resource Registry**: Map URLs to resource classes using registry pattern
+- **TentativePage**: Lazy-loaded page objects for related resources
+
+### 2. Configuration Management
+- **PseudoNamespace**: Support both dict and attribute access for configuration
+- **Environment Variables**: Load from `AAP_*` prefixes
+- **Credential Files**: Support YAML credential files for authentication
+- **Session Management**: Handle both basic auth and session-based auth
+
+### 3. Resource Identification Patterns
+- **pk_or_name**: Flexible resource lookup by ID or name with validation
+- **Uniqueness Rules**: Define identity fields per resource type
+- **Cross-validation**: Verify ID/name consistency when both provided
+- **Natural Keys**: Support resource identification by natural attributes
+
+### 4. CLI Argument Patterns
+- **OPTIONS-based**: Build arguments dynamically from HTTP OPTIONS requests
+- **Subparsers**: Nested command structure with resource-specific actions
+- **Custom Actions**: Registry-based system for specialized commands
+- **Formatting Arguments**: Consistent output formatting across commands
+
+## OpenStack Client Patterns (Implemented Natively)
+
+**Drawing from the mature python-openstackclient**, adopt these proven CLI patterns but implement them natively within aapclient:
+
+### 1. Cliff Framework Integration
+- **Command Base Classes**: Inherit from `command.ShowOne`, `command.Lister`, `command.Command`
+- **App Integration**: Access clients via `self.app.client_manager`
+- **Argument Parsing**: Use `get_parser(self, prog_name)` for argument definition
+- **Action Execution**: Implement `take_action(self, parsed_args)` for command logic
+
+### 2. Modern Python Packaging (pyproject.toml)
+- **Entry Points**: Use `project.entry-points` for command registration
+- **PBR Integration**: Use `pbr` for build system and version management
+- **Hierarchical Organization**: Group commands by API version and resource type
+- **Plugin Architecture**: Support extensible command registration
+
+### 3. Native AAP Client Patterns (Inspired by OSC-lib)
+- **Common Utilities**: Implement `aapclient.common.utils` for formatting and data manipulation
+- **Exception Handling**: Implement `aapclient.common.exceptions` for consistent error handling
+- **Parser Actions**: Implement `aapclient.common.cli.parseractions` for argument validation
+- **Client Management**: Implement `aapclient.common.clientmanager` for session management
+
+### 4. Pagination and Progress (Native Implementation)
+- **Marker-based Pagination**: Implement `add_marker_pagination_option_to_parser` in `aapclient.common.pagination`
+- **Offset-based Pagination**: Implement `add_offset_pagination_option_to_parser` in `aapclient.common.pagination`
+- **Non-blocking UI**: Show progress for file operations and API calls
+
+## Command Development Patterns
+
+### Standard Resource Commands
+All resource commands should follow these patterns:
+
+#### Show Commands (OpenStack/Cliff Pattern)
+```python
+class ShowResource(command.ShowOne):
+    _description = _("Display resource details")
+
+    def get_parser(self, prog_name):
+        parser = super().get_parser(prog_name)
+        parser.add_argument('resource', help=_('Resource to display'))
+        return parser
+
+    def take_action(self, parsed_args):
+        client = self.app.client_manager.controller
+        resource = client.get_resource(parsed_args.resource)
+        columns, data = _get_resource_columns(resource)
+        return (columns, data)
+```
+
+#### List Commands (OpenStack/Cliff Pattern)
+```python
+class ListResource(command.Lister):
+    _description = _("List resources")
+
+    def get_parser(self, prog_name):
+        parser = super().get_parser(prog_name)
+        pagination.add_marker_pagination_option_to_parser(parser)
+        return parser
+
+    def take_action(self, parsed_args):
+        client = self.app.client_manager.controller
+        resources = client.list_resources(**parsed_args.__dict__)
+        columns = ('ID', 'Name', 'Status')
+        return (columns, (aapclient.common.utils.get_item_properties(r, columns) for r in resources))
+```
+
+#### Delete Commands (OpenStack/Cliff Pattern)
+```python
+class DeleteResource(command.Command):
+    _description = _("Delete resource(s)")
+
+    def get_parser(self, prog_name):
+        parser = super().get_parser(prog_name)
+        parser.add_argument('resource', nargs='+', help=_('Resource(s) to delete'))
+        return parser
+
+    def take_action(self, parsed_args):
+        client = self.app.client_manager.controller
+        for resource in parsed_args.resource:
+            client.delete_resource(resource)
+```
+
+### Argument Patterns
+- **Resource identification**: Use `--id`/`--name` mutual exclusion with positional fallback
+- **Pagination**: Include `--limit` parameter with `DEFAULT_PAGE_SIZE` default
+- **Sorting**: Sort by ID by default for consistency
+- **Filtering**: Add logical filters based on resource relationships
+
+## API Client Patterns
+
+### Generic Operations
+All API clients should use base methods:
+
+```python
+class Client(BaseAPIClient):
+    def list_resources(self, **params):
+        return self.list_resource('resources', **params)
+
+    def get_resource(self, resource_id):
+        return self.get_resource('resources', resource_id)
+```
+
+### AWXKit-Inspired Client Architecture
+- **Connection Class**: Centralized session management with retry logic
+- **Page Methods**: Standard CRUD operations (get, post, put, patch, delete)
+- **Related Resources**: Lazy-loaded access to related endpoints
+- **Bulk Operations**: Support for batch operations where available
+
+### Error Handling
+- **Status Code Mapping**: Convert HTTP status codes to specific exceptions
+- **License Validation**: Handle license-specific error patterns
+- **Duplicate Detection**: Recognize and handle duplicate resource errors
+- **Resource Context**: Include resource type and identifier in errors
+
+### Authentication & Configuration
+- **Session Cookie Support**: Handle both sessionid and custom session cookies
+- **CSRF Protection**: Automatic CSRF token handling for state-changing operations
+- **Connection Retry**: Configurable retry attempts for network failures
+- **SSL Verification**: Respect insecure connection settings
+
+### Monitoring & Job Control
+- **Job Monitoring**: Built-in support for monitoring long-running jobs
+- **Progress Tracking**: Real-time status updates with configurable intervals
+- **Job Cancellation**: Graceful job termination capabilities
+- **Timeout Handling**: Configurable timeouts for job completion
+
+## Code Quality Standards
+
+### Python Version Requirements
+- **Minimum Python Version**: Support Python 3.6 or greater
+- **Modern Features**: Use features available in Python 3.6+ (f-strings, type hints, etc.)
+- **Compatibility**: Ensure code runs on Python 3.6 through latest stable version
+- **Testing**: Test on multiple Python versions (3.6, 3.9, 3.11, latest)
+
+### DRY Violations to Avoid
+1. **Identical method implementations** across classes
+2. **Repeated argument parsing** in commands
+3. **Duplicate error handling** patterns
+4. **Magic numbers** instead of constants
+5. **Similar HTTP patterns** in API clients
+
+### When to Extract Code
+- **2+ identical patterns**: Extract to utility function
+- **3+ similar classes**: Create base class
+- **Hardcoded values**: Move to constants
+- **Complex logic**: Centralize in common module
+
+### Code Organization Principles
+- **Single responsibility**: Each class/function has one clear purpose
+- **Dependency injection**: Pass clients and config rather than importing globally
+- **Consistent imports**: Group and order imports logically
+- **Clear naming**: Use descriptive names that explain intent
+
+## Utility Patterns from AWXKit
+
+### Common Utilities
+- **PseudoNamespace**: Dict-like objects with attribute access
+- **Date/Time Handling**: Consistent timestamp formatting and timezone handling
+- **Resource Cleanup**: Silent cleanup methods for test teardown
+- **Random Data Generation**: Utilities for generating test data
+- **Configuration Loading**: YAML-based credential and project loading
+
+### Output Formatting
+- **Multiple Formats**: Support JSON, YAML, and human-readable table formats
+- **Filtering**: JQ-style filtering for JSON/YAML output
+- **Colorization**: Configurable colored output for better UX
+- **Pagination**: Consistent pagination with "X of Y" indicators
+- **Column Alignment**: Dynamic column width calculation for tables
+
+### Resource Management
+- **get_or_create**: Idempotent resource creation patterns
+- **create_or_replace**: Replace existing resources by name/identifier
+- **Object Roles**: Built-in support for AWX role-based access control
+- **Related Resources**: Automatic handling of resource relationships
+
+## Testing Principles
+
+### API Endpoint Exploration
+**REQUIRED**: Before implementing any new command, write test scripts to explore API endpoints and understand data structures.
+
+### Standard Test Scenarios
+For any resource command, test:
+1. **Name lookup**: `aap resource show "MyResource"`
+2. **ID lookup**: `aap resource show --id 123`
+3. **Cross-validation**: `aap resource show --id 123 "MyResource"`
+4. **Error cases**: Not found, invalid arguments, API failures
+
+### Virtual Environment
+**ALWAYS** use `.venv` for development and testing:
+```bash
+source .venv/bin/activate && aap command test
+source .venv/bin/activate && python test_script.py
+```
+
+## Architecture Decision Guidelines
+
+### API Selection
+- **Controller API**: For automation resources (projects, templates, inventories, hosts, credentials, jobs)
+- **Gateway API**: For identity resources (organizations, users, teams)
+- **Consistent patterns**: Use same base classes regardless of API
+
+### Command Structure
+- **Follow OpenStack model**: Similar command patterns and organization
+- **Resource-centric**: Group commands by resource type, not operation
+- **Consistent naming**: `aap resource verb` pattern throughout
+
+### AWXKit-Inspired Architecture Decisions
+- **Page-based Design**: Model API endpoints as page objects with standard methods
+- **Registry Pattern**: Use URL-to-class mapping for extensible resource handling
+- **Lazy Loading**: Implement TentativePage pattern for related resources
+- **OPTIONS-driven**: Build CLI arguments dynamically from API OPTIONS requests
+
+### Output Formatting
+- **GUI alignment**: Match AAP web interface column layouts when possible
+- **Consistent formatting**: Use utility functions for dates, durations, names
+- **Clear distinction**: Visual formatting for numeric names vs IDs
+- **Multiple formats**: Support JSON, YAML, and human-readable outputs
+- **Filtering support**: Enable JQ-style filtering for programmatic use
+
+### Configuration Management
+- **Environment Variables**: Use `AAP_*` prefix for unified configuration
+- **Credential Files**: YAML-based credential storage with multiple profiles
+- **Session Persistence**: Handle both basic auth and session-based authentication
+- **SSL Configuration**: Respect insecure connection settings from environment
+
+### AAP Environment Variables
+- **Primary Variables**: Use `AAP_HOST`, `AAP_USERNAME`, `AAP_PASSWORD`, `AAP_TOKEN`
+- **Unified Configuration**: All APIs (Controller, Gateway, EDA, Galaxy) use same credentials
+- **SSL Control**: Use `AAP_VERIFY_SSL` for certificate verification and `AAP_CA_BUNDLE` to use an alternate CA certificate source
+- **Connection Timeout Control**: Use `AAP_TIMEOUT` for overriding default connection timeout in units of seconds
+
+## Future Development Guidelines
+
+### Adding New Commands
+1. **Inherit from base classes** to avoid duplication
+2. **Use established patterns** from existing commands
+3. **Follow naming conventions** and argument patterns
+4. **Test thoroughly** with real AAP instance
+5. **Update constants** if adding new configurable values
+
+### Extending Base Classes
+- **Add methods carefully**: Ensure they're truly generic
+- **Maintain backwards compatibility**: Don't break existing commands
+- **Document patterns**: Update rules when adding new capabilities
+- **Consider alternatives**: Sometimes utility functions are better than base class methods
+
+### Maintaining DRY Compliance
+- **Regular reviews**: Look for emerging duplication patterns
+- **Refactor proactively**: Address duplication before it spreads
+- **Update constants**: Centralize new magic numbers immediately
+- **Extract patterns**: Create base classes when 3+ similar implementations exist
+
+## AWXKit and OpenStackClient Integration Guidelines (Native Implementation)
+
+### Adopting Proven Patterns
+When implementing new functionality, reference the upstream AWX CLI (awxkit) patterns but implement them natively:
+
+1. **Study awxkit modules**: Examine `awx/awxkit/awxkit/` for established patterns
+2. **Implement natively**: Recreate proven approaches in `aapclient` modules instead of importing
+3. **Maintain compatibility**: Ensure AAP-specific changes preserve established pattern benefits
+4. **Extend thoughtfully**: Add AAP-specific features while preserving awxkit's design philosophy
+
+### Key Files to Reference (for pattern inspiration)
+- `awx/awxkit/awxkit/api/client.py`: Connection and session management → implement in `aapclient.common.client`
+- `awx/awxkit/awxkit/api/pages/base.py`: Base page functionality → implement in `aapclient.common.pages`
+- `awx/awxkit/awxkit/cli/custom.py`: Custom action patterns → implement in `aapclient.common.cli`
+- `awx/awxkit/awxkit/cli/format.py`: Output formatting utilities → implement in `aapclient.common.format`
+- `awx/awxkit/awxkit/utils/`: Common utility functions → implement in `aapclient.common.utils`
+- `python-openstackclient/openstackclient/shell.py`: Cliff application setup → implement in `aapclient.shell`
+- `python-openstackclient/openstackclient/common/`: OpenStack common utilities → implement in `aapclient.common`
+- `python-openstackclient/pyproject.toml`: Modern Python packaging patterns
+
+## Packaging and Deployment Patterns
+
+### Modern Python Packaging (PBR + pyproject.toml)
+- **PBR Integration**: Use `pbr` for automatic version management from git tags
+- **Build Backend**: Use `pbr.build` as the build backend in pyproject.toml
+- **Dynamic Metadata**: Let PBR handle version, dependencies, and metadata
+- **Entry Points**: Define commands using modern `project.entry-points` syntax
+
+### Package Structure
+```
+python-aapclient/
+├── pyproject.toml          # Modern packaging configuration
+├── setup.cfg               # PBR configuration (minimal)
+├── setup.py                # Build system integration
+├── requirements.txt        # Runtime dependencies
+├── test-requirements.txt   # Testing dependencies
+└── aapclient/
+    ├── __init__.py         # Package metadata
+    ├── shell.py            # Main CLI application
+    └── common/
+        ├── clientmanager.py # Client management
+        └── pagination.py    # Pagination utilities
+```
+
+### Client Manager Pattern
+- **Lazy Loading**: Clients are loaded on-demand when accessed
+- **Plugin Architecture**: Support for extending with additional API clients
+- **Configuration Management**: Centralized configuration and authentication
+- **Service Discovery**: Automatic detection of available API endpoints
+
+### Upstream Compatibility
+- **Monitor awxkit changes**: Track upstream updates for relevant pattern improvements
+- **Contribute upstream**: Consider contributing generic improvements back to awxkit
+- **Document differences**: Clearly document AAP-specific deviations from awxkit patterns
+- **Maintain alignment**: Keep core patterns aligned with awxkit for long-term maintainability
+
+This development standards file provides the foundation for maintaining clean, DRY code throughout the AAPClient project. All new development should reference these patterns and principles, incorporating proven approaches from:
+
+- **AWXKit**: Page-based API architecture, authentication, and resource management (implemented natively in `aapclient`)
+- **OpenStack Client**: Cliff framework, modern packaging, and output formatting (patterns adopted natively)
+- **Native Implementation**: Common utilities, pagination, and CLI patterns implemented in `aapclient.common`
+
+The combination of these mature design patterns provides a solid foundation for building a professional-grade CLI for the Ansible Automation Platform.
