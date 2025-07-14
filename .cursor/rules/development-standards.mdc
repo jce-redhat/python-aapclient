@@ -8,6 +8,15 @@ alwaysApply: true
 
 # Development Standards & DRY Principles
 
+## 🔥 MANDATORY Pre-Development Checklist
+
+**BEFORE starting ANY development work, verify:**
+
+- [ ] Virtual environment is active: `which python` shows `.venv/bin/python`
+- [ ] Development package is installed: `pip list | grep python-aapclient` shows local path
+- [ ] All python commands or `aap` commands are prefixed with `source .venv/bin/activate &&`
+- [ ] Environment file exists: `.env` with AAP credentials copied from `env.example`
+
 ## Core DRY Philosophy
 
 **Don't Repeat Yourself (DRY)** is a fundamental principle in this codebase. All code must follow these patterns:
@@ -248,6 +257,8 @@ For any resource command, test:
 source .venv/bin/activate && aap command test
 source .venv/bin/activate && python test_script.py
 ```
+
+**🚨 CRITICAL REMINDER**: Never run python or `aap` commands without activating the virtual environment first. This is a major source of development issues.
 
 ## Architecture Decision Guidelines
 

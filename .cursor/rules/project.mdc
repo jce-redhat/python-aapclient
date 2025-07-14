@@ -8,6 +8,8 @@ alwaysApply: true
 
 # AAPClient Project Overview
 
+> **🚨 CRITICAL**: Before ANY development work, see `.cursor/rules/CRITICAL-development-environment.mdc` for mandatory virtual environment setup.
+
 > **Note**: This project uses distributed cursor rules. Core development standards are in `.cursor/rules/development-standards.mdc`. Component-specific rules are in `.cursor/rules/` directories throughout the codebase.
 
 ## Project Architecture
