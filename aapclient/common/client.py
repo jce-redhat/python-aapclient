@@ -121,6 +121,12 @@ class AAPHTTPClient:
         response = self.session.put(url, **kwargs)
         return self._handle_response(response)
 
+    def patch(self, endpoint, **kwargs):
+        """Make PATCH request."""
+        method, url, kwargs = self._prepare_request('PATCH', endpoint, **kwargs)
+        response = self.session.patch(url, **kwargs)
+        return self._handle_response(response)
+
     def delete(self, endpoint, **kwargs):
         """Make DELETE request."""
         method, url, kwargs = self._prepare_request('DELETE', endpoint, **kwargs)

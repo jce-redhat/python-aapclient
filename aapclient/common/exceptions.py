@@ -16,6 +16,22 @@ class AAPAuthenticationError(AAPClientError):
     pass
 
 
+class AAPResourceNotFoundError(AAPClientError):
+    """Exception raised when a resource is not found."""
+
+    def __init__(self, resource_type, identifier):
+        """Initialize with resource type and identifier.
+
+        Args:
+            resource_type (str): The type of resource (e.g., 'Organization', 'Project')
+            identifier (str): The resource identifier (name, ID, etc.)
+        """
+        self.resource_type = resource_type
+        self.identifier = identifier
+        message = f"{resource_type} '{identifier}' not found"
+        super().__init__(message)
+
+
 class AAPAPIError(AAPClientError):
     """Exception raised when API returns an error."""
 

@@ -147,7 +147,6 @@ class DeleteResource(command.Command):
 ```
 
 ### Argument Patterns
-- **Resource identification**: Use `--id`/`--name` mutual exclusion with positional fallback
 - **Pagination**: Include `--limit` parameter with `DEFAULT_PAGE_SIZE` default
 - **Sorting**: Sort by ID by default for consistency
 - **Filtering**: Add logical filters based on resource relationships

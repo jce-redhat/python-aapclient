@@ -8,10 +8,17 @@ class AAPApp(App):
     """Main application for AAP client."""
 
     def __init__(self):
+        # Create command manager with multiple namespaces
+        command_manager = CommandManager('aap.common')
+        # Add API-specific command groups
+        command_manager.add_command_group('aap.gateway')
+        command_manager.add_command_group('aap.controller')
+        command_manager.add_command_group('aap.eda')
+
         super().__init__(
             description='Ansible Automation Platform (AAP) Command Line Interface',
             version='0.1.0',
-            command_manager=CommandManager('aap.common'),
+            command_manager=command_manager,
             deferred_help=True,
         )
 

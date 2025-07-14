@@ -47,6 +47,13 @@ dev = [
 ping = "aapclient.common.ping:PingCommand"
 whoami = "aapclient.common.whoami:WhoamiCommand"
 
+[project.entry-points."aap.gateway"]
+"organization list" = "aapclient.gateway.organization:OrganizationListCommand"
+"organization show" = "aapclient.gateway.organization:OrganizationShowCommand"
+"organization create" = "aapclient.gateway.organization:OrganizationCreateCommand"
+"organization set" = "aapclient.gateway.organization:OrganizationSetCommand"
+"organization delete" = "aapclient.gateway.organization:OrganizationDeleteCommand"
+
 [project.scripts]
 aap = "aapclient.shell:main"
 

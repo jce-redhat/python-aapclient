@@ -166,7 +166,7 @@ aap <resource> delete <identifier>... [--id <id>]
 ### Resource Identification Patterns
 
 - **Positional arguments**: Only one positional parameter will be supported for each CRUD command except "list". Default to name lookup with ID fallback.
-- **Explicit flags**: `--id` for numeric ID must be supported for "show", "set", and "delete" commands
+- **Explicit flags**: `--id` for numeric ID must be supported for "show", "set", and "delete" commands.  When the `--id` argument is used the positional parameter will be ignored.
 - **Cross-validation**: When both provided, verify they reference same resource
 
 ### API Endpoint Distribution
