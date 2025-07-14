@@ -44,7 +44,8 @@ dev = [
 "Bug Tracker" = "https://github.com/example/python-aapclient/issues"
 
 [project.entry-points."aap.common"]
-"ping" = "aapclient.common.ping:PingCommand"
+ping = "aapclient.common.ping:PingCommand"
+whoami = "aapclient.common.whoami:WhoamiCommand"
 
 [project.scripts]
 aap = "aapclient.shell:main"
