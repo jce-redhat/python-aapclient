@@ -28,7 +28,21 @@ class AAPResourceNotFoundError(AAPClientError):
         """
         self.resource_type = resource_type
         self.identifier = identifier
-        message = f"{resource_type} '{identifier}' not found"
+
+        # Check if identifier is a positive integer
+        is_positive_integer = False
+        try:
+            int_value = int(identifier)
+            if int_value > 0:
+                is_positive_integer = True
+        except (ValueError, TypeError):
+            pass
+
+        if is_positive_integer:
+            message = f"{resource_type} with ID or name of {identifier} not found"
+        else:
+            message = f"{resource_type} '{identifier}' not found"
+
         super().__init__(message)
 
 

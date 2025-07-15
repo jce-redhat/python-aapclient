@@ -84,13 +84,34 @@ class AAPHTTPClient:
         try:
             response.raise_for_status()
         except requests.exceptions.HTTPError as e:
+            # Try to extract detailed error message from API response
+            error_message = None
+            try:
+                error_data = response.json()
+                if isinstance(error_data, dict):
+                    if 'detail' in error_data:
+                        error_message = error_data['detail']
+                    else:
+                        # Handle field-specific errors (e.g., {"name": ["This field may not be blank."]})
+                        field_errors = []
+                        for field, errors in error_data.items():
+                            if isinstance(errors, list):
+                                for error in errors:
+                                    field_errors.append(f"{field}: {error}")
+                            else:
+                                field_errors.append(f"{field}: {errors}")
+                        if field_errors:
+                            error_message = "\n".join(field_errors)
+            except:
+                pass  # If JSON parsing fails, use fallback messages
+
             if response.status_code == HTTP_UNAUTHORIZED:
-                raise AAPAuthenticationError("Authentication failed")
+                raise AAPAuthenticationError(error_message or "Authentication failed")
             elif response.status_code == HTTP_FORBIDDEN:
-                raise AAPAuthenticationError("Access denied")
+                raise AAPAuthenticationError(error_message or "Access denied")
             else:
                 raise AAPAPIError(
-                    f"API error: {response.status_code} - {response.text}",
+                    error_message or f"API error: {response.status_code} - {response.text}",
                     status_code=response.status_code,
                     response=response
                 )

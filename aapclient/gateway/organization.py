@@ -61,6 +61,9 @@ class OrganizationListCommand(Lister):
                 # Extract organizations from results
                 organizations = data.get('results', [])
 
+                # Sort organizations by ID
+                organizations.sort(key=lambda x: x.get('id', 0))
+
                 # Define columns for table display
                 columns = [
                     'ID',

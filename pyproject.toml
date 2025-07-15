@@ -53,6 +53,11 @@ whoami = "aapclient.common.whoami:WhoamiCommand"
 "organization create" = "aapclient.gateway.organization:OrganizationCreateCommand"
 "organization set" = "aapclient.gateway.organization:OrganizationSetCommand"
 "organization delete" = "aapclient.gateway.organization:OrganizationDeleteCommand"
+"user list" = "aapclient.gateway.user:UserListCommand"
+"user show" = "aapclient.gateway.user:UserShowCommand"
+"user create" = "aapclient.gateway.user:UserCreateCommand"
+"user set" = "aapclient.gateway.user:UserSetCommand"
+"user delete" = "aapclient.gateway.user:UserDeleteCommand"
 
 [project.scripts]
 aap = "aapclient.shell:main"
