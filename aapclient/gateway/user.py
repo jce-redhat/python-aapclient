@@ -39,7 +39,7 @@ class UserListCommand(Lister):
             client = AAPHTTPClient(config)
 
             # Build query parameters
-            params = {}
+            params = {'order_by': 'id'}  # Sort by ID on server side
             if parsed_args.limit:
                 params['page_size'] = parsed_args.limit
 
@@ -61,11 +61,8 @@ class UserListCommand(Lister):
             if response.status_code == HTTP_OK:
                 data = response.json()
 
-                # Extract users from results
+                # Extract users from results (already sorted by API)
                 users = data.get('results', [])
-
-                # Sort users by ID
-                users.sort(key=lambda x: x.get('id', 0))
 
                 # Define columns for table display
                 columns = [

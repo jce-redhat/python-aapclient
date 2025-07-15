@@ -39,7 +39,7 @@ class OrganizationListCommand(Lister):
             client = AAPHTTPClient(config)
 
             # Build query parameters
-            params = {}
+            params = {'order_by': 'id'}  # Sort by ID on server side
             if parsed_args.limit:
                 params['page_size'] = parsed_args.limit
 
@@ -58,11 +58,8 @@ class OrganizationListCommand(Lister):
             if response.status_code == HTTP_OK:
                 data = response.json()
 
-                # Extract organizations from results
+                # Extract organizations from results (already sorted by API)
                 organizations = data.get('results', [])
-
-                # Sort organizations by ID
-                organizations.sort(key=lambda x: x.get('id', 0))
 
                 # Define columns for table display
                 columns = [

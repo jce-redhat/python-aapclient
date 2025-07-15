@@ -58,6 +58,11 @@ whoami = "aapclient.common.whoami:WhoamiCommand"
 "user create" = "aapclient.gateway.user:UserCreateCommand"
 "user set" = "aapclient.gateway.user:UserSetCommand"
 "user delete" = "aapclient.gateway.user:UserDeleteCommand"
+"team list" = "aapclient.gateway.team:TeamListCommand"
+"team show" = "aapclient.gateway.team:TeamShowCommand"
+"team create" = "aapclient.gateway.team:TeamCreateCommand"
+"team set" = "aapclient.gateway.team:TeamSetCommand"
+"team delete" = "aapclient.gateway.team:TeamDeleteCommand"
 
 [project.scripts]
 aap = "aapclient.shell:main"
