@@ -234,7 +234,7 @@ class StatusCommand(Lister):
                         service_nodes = 'N/A'
 
                     row = [
-                        service_name.title(),
+                        service_name.upper() if service_name == 'eda' else service_name.title(),
                         service_status,
                         service_nodes
                     ]

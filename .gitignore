@@ -42,3 +42,6 @@ pip-delete-this-directory.txt
 
 # development venv
 .venv
+
+# tmp directory in project
+tmp/
