@@ -45,6 +45,7 @@ dev = [
 
 [project.entry-points."aap.common"]
 ping = "aapclient.common.ping:PingCommand"
+status = "aapclient.common.status:StatusCommand"
 whoami = "aapclient.common.whoami:WhoamiCommand"
 
 [project.entry-points."aap.gateway"]
