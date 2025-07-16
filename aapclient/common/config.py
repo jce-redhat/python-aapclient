@@ -1,8 +1,8 @@
 """Configuration management for AAP client."""
 import os
 from dotenv import load_dotenv
-from .constants import AAP_HOST, AAP_USERNAME, AAP_PASSWORD, AAP_TOKEN, AAP_TIMEOUT, DEFAULT_TIMEOUT
-from .exceptions import AAPClientError
+from aapclient.common.constants import AAP_HOST, AAP_USERNAME, AAP_PASSWORD, AAP_TOKEN, AAP_TIMEOUT, DEFAULT_TIMEOUT
+from aapclient.common.exceptions import AAPClientError
 
 # Load environment variables from .env file
 load_dotenv()

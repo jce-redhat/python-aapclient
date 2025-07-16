@@ -8,8 +8,8 @@ except ImportError:
     import requests.packages.urllib3 as urllib3
 import requests
 from requests.adapters import HTTPAdapter
-from .config import AAPConfig
-from .constants import (
+from aapclient.common.config import AAPConfig
+from aapclient.common.constants import (
     DEFAULT_TIMEOUT,
     HTTP_UNAUTHORIZED,
     HTTP_FORBIDDEN,
@@ -19,7 +19,7 @@ from .constants import (
     HTTP_SERVICE_UNAVAILABLE,
     HTTP_GATEWAY_TIMEOUT
 )
-from .exceptions import AAPConnectionError, AAPAuthenticationError, AAPAPIError
+from aapclient.common.exceptions import AAPConnectionError, AAPAuthenticationError, AAPAPIError
 
 
 class AAPHTTPClient:

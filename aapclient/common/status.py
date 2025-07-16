@@ -1,14 +1,14 @@
 """Status command for AAP Gateway API."""
 from cliff.lister import Lister
-from .client import AAPHTTPClient
-from .config import AAPConfig
-from .constants import (
+from aapclient.common.client import AAPHTTPClient
+from aapclient.common.config import AAPConfig
+from aapclient.common.constants import (
     GATEWAY_API_VERSION_ENDPOINT,
     HTTP_OK,
     HTTP_NOT_FOUND,
     HTTP_BAD_REQUEST
 )
-from .exceptions import AAPClientError, AAPResourceNotFoundError, AAPAPIError
+from aapclient.common.exceptions import AAPClientError, AAPResourceNotFoundError, AAPAPIError
 
 
 class StatusCommand(Lister):

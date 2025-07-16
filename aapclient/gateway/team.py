@@ -2,9 +2,9 @@
 from cliff.command import Command
 from cliff.lister import Lister
 from cliff.show import ShowOne
-from ..common.client import AAPHTTPClient
-from ..common.config import AAPConfig
-from ..common.constants import (
+from aapclient.common.client import AAPHTTPClient
+from aapclient.common.config import AAPConfig
+from aapclient.common.constants import (
     GATEWAY_API_VERSION_ENDPOINT,
     HTTP_OK,
     HTTP_CREATED,
@@ -12,7 +12,7 @@ from ..common.constants import (
     HTTP_NOT_FOUND,
     HTTP_BAD_REQUEST
 )
-from ..common.exceptions import AAPClientError, AAPResourceNotFoundError, AAPAPIError
+from aapclient.common.exceptions import AAPClientError, AAPResourceNotFoundError, AAPAPIError
 
 
 class TeamListCommand(Lister):
@@ -145,43 +145,29 @@ class TeamShowCommand(ShowOne):
                 response = client.get(endpoint)
                 team_data = response.json()
 
-                # Prepare columns and data for Cliff formatting
+                # Prepare data using dictionary for cleaner code
+                org_info = team_data.get('summary_fields', {}).get('organization', {})
+                created_by = team_data.get('summary_fields', {}).get('created_by', {})
+                modified_by = team_data.get('summary_fields', {}).get('modified_by', {})
+
+                # Define field mappings as ordered dictionary
+                field_data = {
+                    'ID': str(team_data.get('id', '')),
+                    'Name': team_data.get('name', ''),
+                    'Description': team_data.get('description', ''),
+                    'Organization': org_info.get('name', '') if org_info else '',
+                    'Created': team_data.get('created', ''),
+                    'Created By': created_by.get('username', '') if created_by else '',
+                    'Modified': team_data.get('modified', ''),
+                    'Modified By': modified_by.get('username', '') if modified_by else ''
+                }
+
+                # Convert to columns and values for Cliff formatting
                 columns = []
                 values = []
-
-                # Basic information
-                columns.append('ID')
-                values.append(str(team_data.get('id', '')))
-
-                columns.append('Name')
-                values.append(team_data.get('name', ''))
-
-                columns.append('Description')
-                values.append(team_data.get('description', ''))
-
-                # Organization information
-                if 'summary_fields' in team_data and 'organization' in team_data['summary_fields']:
-                    org_info = team_data['summary_fields']['organization']
-                    columns.append('Organization')
-                    values.append(org_info.get('name', ''))
-
-                # Timestamps
-                columns.append('Created')
-                values.append(team_data.get('created', ''))
-
-                created_by = team_data.get('summary_fields', {}).get('created_by', {})
-                if created_by:
-                    columns.append('Created By')
-                    values.append(created_by.get('username', 'Unknown'))
-
-                # Modifier info
-                columns.append('Modified')
-                values.append(team_data.get('modified', ''))
-
-                modified_by = team_data.get('summary_fields', {}).get('modified_by', {})
-                if modified_by:
-                    columns.append('Modified By')
-                    values.append(modified_by.get('username', 'Unknown'))
+                for column_name, value in field_data.items():
+                    columns.append(column_name)
+                    values.append(value)
 
                 return (columns, values)
             except AAPAPIError as api_error:
@@ -321,18 +307,16 @@ class TeamCreateCommand(ShowOne):
                 values.append(team_data.get('description', ''))
 
                 # Organization information
-                if 'summary_fields' in team_data and 'organization' in team_data['summary_fields']:
-                    org_info = team_data['summary_fields']['organization']
-                    columns.append('Organization')
-                    values.append(org_info.get('name', ''))
+                columns.append('Organization')
+                org_info = team_data.get('summary_fields', {}).get('organization', {})
+                values.append(org_info.get('name', '') if org_info else '')
 
                 columns.append('Created')
                 values.append(team_data.get('created', ''))
 
+                columns.append('Created By')
                 created_by = team_data.get('summary_fields', {}).get('created_by', {})
-                if created_by:
-                    columns.append('Created By')
-                    values.append(created_by.get('username', 'Unknown'))
+                values.append(created_by.get('username', '') if created_by else '')
 
                 return (columns, values)
             else:
@@ -502,26 +486,23 @@ class TeamSetCommand(ShowOne):
                 values.append(team_data.get('description', ''))
 
                 # Organization information
-                if 'summary_fields' in team_data and 'organization' in team_data['summary_fields']:
-                    org_info = team_data['summary_fields']['organization']
-                    columns.append('Organization')
-                    values.append(org_info.get('name', ''))
+                columns.append('Organization')
+                org_info = team_data.get('summary_fields', {}).get('organization', {})
+                values.append(org_info.get('name', '') if org_info else '')
 
                 columns.append('Created')
                 values.append(team_data.get('created', ''))
 
+                columns.append('Created By')
                 created_by = team_data.get('summary_fields', {}).get('created_by', {})
-                if created_by:
-                    columns.append('Created By')
-                    values.append(created_by.get('username', 'Unknown'))
+                values.append(created_by.get('username', '') if created_by else '')
 
                 columns.append('Modified')
                 values.append(team_data.get('modified', ''))
 
+                columns.append('Modified By')
                 modified_by = team_data.get('summary_fields', {}).get('modified_by', {})
-                if modified_by:
-                    columns.append('Modified By')
-                    values.append(modified_by.get('username', 'Unknown'))
+                values.append(modified_by.get('username', '') if modified_by else '')
 
                 return (columns, values)
             else:

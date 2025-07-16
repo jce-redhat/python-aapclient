@@ -2,9 +2,9 @@
 from cliff.command import Command
 from cliff.lister import Lister
 from cliff.show import ShowOne
-from ..common.client import AAPHTTPClient
-from ..common.config import AAPConfig
-from ..common.constants import (
+from aapclient.common.client import AAPHTTPClient
+from aapclient.common.config import AAPConfig
+from aapclient.common.constants import (
     GATEWAY_API_VERSION_ENDPOINT,
     HTTP_OK,
     HTTP_CREATED,
@@ -12,7 +12,7 @@ from ..common.constants import (
     HTTP_NOT_FOUND,
     HTTP_BAD_REQUEST
 )
-from ..common.exceptions import AAPClientError, AAPResourceNotFoundError, AAPAPIError
+from aapclient.common.exceptions import AAPClientError, AAPResourceNotFoundError, AAPAPIError
 
 
 class UserListCommand(Lister):
@@ -155,63 +155,33 @@ class UserShowCommand(ShowOne):
                 response = client.get(endpoint)
                 user_data = response.json()
 
-                # Prepare columns and data for Cliff formatting
+                # Prepare data using dictionary for cleaner code
+                created_by = user_data.get('summary_fields', {}).get('created_by', {})
+                modified_by = user_data.get('summary_fields', {}).get('modified_by', {})
+
+                # Define field mappings as ordered dictionary
+                field_data = {
+                    'ID': str(user_data.get('id', '')),
+                    'Username': user_data.get('username', ''),
+                    'Email': user_data.get('email', ''),
+                    'First Name': user_data.get('first_name', '').strip(),
+                    'Last Name': user_data.get('last_name', '').strip(),
+                    'Superuser': 'Yes' if user_data.get('is_superuser', False) else 'No',
+                    'Platform Auditor': 'Yes' if user_data.get('is_platform_auditor', False) else 'No',
+                    'Managed Account': 'Yes' if user_data.get('managed', False) else 'No',
+                    'Last Login': user_data.get('last_login', ''),
+                    'Created': user_data.get('created', ''),
+                    'Created By': created_by.get('username', '') if created_by else '',
+                    'Modified': user_data.get('modified', ''),
+                    'Modified By': modified_by.get('username', '') if modified_by else ''
+                }
+
+                # Convert to columns and values for Cliff formatting
                 columns = []
                 values = []
-
-                # Basic information
-                columns.append('ID')
-                values.append(str(user_data.get('id', '')))
-
-                columns.append('Username')
-                values.append(user_data.get('username', ''))
-
-                columns.append('Email')
-                values.append(user_data.get('email', ''))
-
-                # Name fields (only show if not empty)
-                first_name = user_data.get('first_name', '').strip()
-                last_name = user_data.get('last_name', '').strip()
-
-                if first_name:
-                    columns.append('First Name')
-                    values.append(first_name)
-
-                if last_name:
-                    columns.append('Last Name')
-                    values.append(last_name)
-
-                # Permission flags
-                columns.append('Superuser')
-                values.append('Yes' if user_data.get('is_superuser', False) else 'No')
-
-                columns.append('Platform Auditor')
-                values.append('Yes' if user_data.get('is_platform_auditor', False) else 'No')
-
-                columns.append('Managed Account')
-                values.append('Yes' if user_data.get('managed', False) else 'No')
-
-                # Timestamps
-                if user_data.get('last_login'):
-                    columns.append('Last Login')
-                    values.append(user_data['last_login'])
-
-                columns.append('Created')
-                values.append(user_data.get('created', ''))
-
-                created_by = user_data.get('summary_fields', {}).get('created_by', {})
-                if created_by:
-                    columns.append('Created By')
-                    values.append(created_by.get('username', 'Unknown'))
-
-                # Modifier info
-                columns.append('Modified')
-                values.append(user_data.get('modified', ''))
-
-                modified_by = user_data.get('summary_fields', {}).get('modified_by', {})
-                if modified_by:
-                    columns.append('Modified By')
-                    values.append(modified_by.get('username', 'Unknown'))
+                for column_name, value in field_data.items():
+                    columns.append(column_name)
+                    values.append(value)
 
                 return (columns, values)
             except AAPAPIError as api_error:
@@ -371,17 +341,12 @@ class UserCreateCommand(ShowOne):
                 columns.append('Email')
                 values.append(user_data.get('email', ''))
 
-                # Name fields (only show if not empty)
-                first_name = user_data.get('first_name', '').strip()
-                last_name = user_data.get('last_name', '').strip()
+                # Name fields (always show)
+                columns.append('First Name')
+                values.append(user_data.get('first_name', '').strip())
 
-                if first_name:
-                    columns.append('First Name')
-                    values.append(first_name)
-
-                if last_name:
-                    columns.append('Last Name')
-                    values.append(last_name)
+                columns.append('Last Name')
+                values.append(user_data.get('last_name', '').strip())
 
                 # Permission flags
                 columns.append('Superuser')
@@ -394,10 +359,9 @@ class UserCreateCommand(ShowOne):
                 columns.append('Created')
                 values.append(user_data.get('created', ''))
 
+                columns.append('Created By')
                 created_by = user_data.get('summary_fields', {}).get('created_by', {})
-                if created_by:
-                    columns.append('Created By')
-                    values.append(created_by.get('username', 'Unknown'))
+                values.append(created_by.get('username', '') if created_by else '')
 
                 return (columns, values)
             else:
@@ -565,17 +529,12 @@ class UserSetCommand(ShowOne):
                 columns.append('Email')
                 values.append(user_data.get('email', ''))
 
-                # Name fields (only show if not empty)
-                first_name = user_data.get('first_name', '').strip()
-                last_name = user_data.get('last_name', '').strip()
+                # Name fields (always show)
+                columns.append('First Name')
+                values.append(user_data.get('first_name', '').strip())
 
-                if first_name:
-                    columns.append('First Name')
-                    values.append(first_name)
-
-                if last_name:
-                    columns.append('Last Name')
-                    values.append(last_name)
+                columns.append('Last Name')
+                values.append(user_data.get('last_name', '').strip())
 
                 # Permission flags
                 columns.append('Superuser')
@@ -588,26 +547,23 @@ class UserSetCommand(ShowOne):
                 values.append('Yes' if user_data.get('managed', False) else 'No')
 
                 # Timestamps
-                if user_data.get('last_login'):
-                    columns.append('Last Login')
-                    values.append(user_data['last_login'])
+                columns.append('Last Login')
+                values.append(user_data.get('last_login', ''))
 
                 columns.append('Created')
                 values.append(user_data.get('created', ''))
 
+                columns.append('Created By')
                 created_by = user_data.get('summary_fields', {}).get('created_by', {})
-                if created_by:
-                    columns.append('Created By')
-                    values.append(created_by.get('username', 'Unknown'))
+                values.append(created_by.get('username', '') if created_by else '')
 
                 # Modifier info
                 columns.append('Modified')
                 values.append(user_data.get('modified', ''))
 
+                columns.append('Modified By')
                 modified_by = user_data.get('summary_fields', {}).get('modified_by', {})
-                if modified_by:
-                    columns.append('Modified By')
-                    values.append(modified_by.get('username', 'Unknown'))
+                values.append(modified_by.get('username', '') if modified_by else '')
 
                 return (columns, values)
             else:

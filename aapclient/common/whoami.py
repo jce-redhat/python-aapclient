@@ -1,9 +1,9 @@
 """Whoami command for getting current user information from AAP."""
 from cliff.show import ShowOne
-from .client import AAPHTTPClient
-from .config import AAPConfig
-from .constants import GATEWAY_API_VERSION_ENDPOINT, HTTP_OK
-from .exceptions import AAPClientError
+from aapclient.common.client import AAPHTTPClient
+from aapclient.common.config import AAPConfig
+from aapclient.common.constants import GATEWAY_API_VERSION_ENDPOINT, HTTP_OK
+from aapclient.common.exceptions import AAPClientError
 
 
 class WhoamiCommand(ShowOne):
