@@ -260,7 +260,8 @@ class TeamCreateCommand(ShowOne):
         )
         parser.add_argument(
             '--organization',
-            help='Organization name or ID (required)'
+            required=True,
+            help='Organization name or ID'
         )
 
         return parser
@@ -282,10 +283,10 @@ class TeamCreateCommand(ShowOne):
 
             if parsed_args.description:
                 team_data['description'] = parsed_args.description
-            if parsed_args.organization:
-                # Resolve organization name/ID to ID
-                org_id = self._resolve_organization_positional(client, parsed_args.organization)
-                team_data['organization'] = org_id
+
+            # Resolve organization name/ID to ID (organization is required)
+            org_id = self._resolve_organization_positional(client, parsed_args.organization)
+            team_data['organization'] = org_id
 
             # Create team
             endpoint = f"{GATEWAY_API_VERSION_ENDPOINT}teams/"
