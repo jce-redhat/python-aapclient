@@ -155,7 +155,7 @@ class TeamShowCommand(ShowOne):
                     'ID': str(team_data.get('id', '')),
                     'Name': team_data.get('name', ''),
                     'Description': team_data.get('description', ''),
-                    'Organization': org_info.get('name', '') if org_info else '',
+                    'Organization': org_info.get('name', '') or str(team_data.get('organization', '')),
                     'Created': team_data.get('created', ''),
                     'Created By': created_by.get('username', '') if created_by else '',
                     'Modified': team_data.get('modified', ''),
@@ -309,7 +309,7 @@ class TeamCreateCommand(ShowOne):
                 # Organization information
                 columns.append('Organization')
                 org_info = team_data.get('summary_fields', {}).get('organization', {})
-                values.append(org_info.get('name', '') if org_info else '')
+                values.append(org_info.get('name', '') or str(team_data.get('organization', '')))
 
                 columns.append('Created')
                 values.append(team_data.get('created', ''))
@@ -488,7 +488,7 @@ class TeamSetCommand(ShowOne):
                 # Organization information
                 columns.append('Organization')
                 org_info = team_data.get('summary_fields', {}).get('organization', {})
-                values.append(org_info.get('name', '') if org_info else '')
+                values.append(org_info.get('name', '') or str(team_data.get('organization', '')))
 
                 columns.append('Created')
                 values.append(team_data.get('created', ''))

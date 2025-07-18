@@ -29,6 +29,7 @@ def _format_project_data(project_data):
     org_info = project_data.get('summary_fields', {}).get('organization', {})
     ee_info = project_data.get('summary_fields', {}).get('default_environment', {})
     credential_info = project_data.get('summary_fields', {}).get('credential', {})
+    signature_validation_credential_info = project_data.get('summary_fields', {}).get('signature_validation_credential', {})
     created_by = project_data.get('summary_fields', {}).get('created_by', {})
     modified_by = project_data.get('summary_fields', {}).get('modified_by', {})
     last_job = project_data.get('summary_fields', {}).get('last_job', {})
@@ -39,11 +40,11 @@ def _format_project_data(project_data):
         'ID': str(project_data.get('id', '')),
         'Name': project_data.get('name', ''),
         'Description': project_data.get('description', ''),
-        'Organization': org_info.get('name', ''),
+        'Organization': org_info.get('name', '') or str(project_data.get('organization', '')),
         'Status': project_data.get('status', ''),
         'SCM Type': project_data.get('scm_type', ''),
         'SCM URL': project_data.get('scm_url', ''),
-        'SCM Credential': credential_info.get('name', ''),
+        'SCM Credential': credential_info.get('name', '') or str(project_data.get('credential', '')),
         'SCM Branch': project_data.get('scm_branch', ''),
         'SCM Refspec': project_data.get('scm_refspec', ''),
         'SCM Revision': project_data.get('scm_revision', ''),
@@ -56,7 +57,8 @@ def _format_project_data(project_data):
         'Local Path': project_data.get('local_path', ''),
         'Timeout': project_data.get('timeout', 0),
         'Custom Virtualenv': project_data.get('custom_virtualenv', ''),
-        'Execution Environment': ee_info.get('name', ''),
+        'Execution Environment': ee_info.get('name', '') or str(project_data.get('default_environment', '')),
+        'Signature Validation Credential': signature_validation_credential_info.get('name', '') or str(project_data.get('signature_validation_credential', '')),
         'Last Job Run': project_data.get('last_job_run', 'Never'),
         'Last Job Failed': 'Yes' if project_data.get('last_job_failed', False) else 'No',
         'Last Updated': project_data.get('last_updated', 'Never'),

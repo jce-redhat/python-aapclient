@@ -71,6 +71,11 @@ whoami = "aapclient.common.whoami:WhoamiCommand"
 "project create" = "aapclient.controller.project:ProjectCreateCommand"
 "project set" = "aapclient.controller.project:ProjectSetCommand"
 "project delete" = "aapclient.controller.project:ProjectDeleteCommand"
+"credential list" = "aapclient.controller.credential:CredentialListCommand"
+"credential show" = "aapclient.controller.credential:CredentialShowCommand"
+"credential create" = "aapclient.controller.credential:CredentialCreateCommand"
+"credential set" = "aapclient.controller.credential:CredentialSetCommand"
+"credential delete" = "aapclient.controller.credential:CredentialDeleteCommand"
 
 [project.scripts]
 aap = "aapclient.shell:main"
