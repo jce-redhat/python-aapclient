@@ -13,6 +13,9 @@ from aapclient.common.constants import (
     HTTP_BAD_REQUEST
 )
 from aapclient.common.exceptions import AAPClientError, AAPResourceNotFoundError, AAPAPIError
+from aapclient.common.functions import resolve_organization_name, resolve_team_name
+
+
 
 
 class TeamListCommand(Lister):
@@ -135,7 +138,7 @@ class TeamShowCommand(ShowOne):
                 team_id = parsed_args.id
             elif parsed_args.team:
                 # Use positional parameter - team name first, then ID fallback if numeric
-                team_id = self._resolve_team_positional(client, parsed_args.team)
+                team_id = resolve_team_name(client, parsed_args.team)
             else:
                 raise AAPClientError("Team identifier is required")
 
@@ -190,45 +193,6 @@ class TeamShowCommand(ShowOne):
         except Exception as e:
             raise SystemExit(f"Unexpected error: {e}")
 
-    def _resolve_team_positional(self, client, identifier):
-        """Resolve positional parameter - try team name first, then ID fallback if numeric."""
-        # First try as team name lookup
-        try:
-            return self._resolve_team_by_name(client, identifier)
-        except AAPClientError:
-            # If team name lookup fails and identifier is numeric, try as ID
-            try:
-                team_id = int(identifier)
-                # Verify the ID exists by trying to get it
-                endpoint = f"{GATEWAY_API_VERSION_ENDPOINT}teams/{team_id}/"
-                response = client.get(endpoint)
-                if response.status_code == HTTP_OK:
-                    return team_id
-                else:
-                    raise AAPResourceNotFoundError("Team", identifier)
-            except ValueError:
-                # Not a valid integer, and team name lookup already failed
-                raise AAPResourceNotFoundError("Team", identifier)
-            except Exception:
-                # Catch any other errors (like API errors) during ID lookup
-                raise AAPResourceNotFoundError("Team", identifier)
-
-    def _resolve_team_by_name(self, client, name):
-        """Resolve team name to ID."""
-        endpoint = f"{GATEWAY_API_VERSION_ENDPOINT}teams/"
-        params = {'name': name}
-        response = client.get(endpoint, params=params)
-
-        if response.status_code == HTTP_OK:
-            data = response.json()
-            results = data.get('results', [])
-            if results:
-                return results[0]['id']
-            else:
-                raise AAPResourceNotFoundError("Team", name)
-        else:
-            raise AAPClientError(f"Failed to search for team '{name}'")
-
 
 class TeamCreateCommand(ShowOne):
     """Create a team."""
@@ -271,7 +235,7 @@ class TeamCreateCommand(ShowOne):
                 team_data['description'] = parsed_args.description
 
             # Resolve organization name/ID to ID (organization is required)
-            org_id = self._resolve_organization_positional(client, parsed_args.organization)
+            org_id = resolve_organization_name(client, parsed_args.organization)
             team_data['organization'] = org_id
 
             # Create team
@@ -343,45 +307,6 @@ class TeamCreateCommand(ShowOne):
         except Exception as e:
             raise SystemExit(f"Unexpected error: {e}")
 
-    def _resolve_organization_positional(self, client, identifier):
-        """Resolve organization identifier - try name first, then ID fallback if numeric."""
-        # First try as organization name lookup
-        try:
-            return self._resolve_organization_by_name(client, identifier)
-        except AAPClientError:
-            # If name lookup fails and identifier is numeric, try as ID
-            try:
-                org_id = int(identifier)
-                # Verify the ID exists by trying to get it
-                endpoint = f"{GATEWAY_API_VERSION_ENDPOINT}organizations/{org_id}/"
-                response = client.get(endpoint)
-                if response.status_code == HTTP_OK:
-                    return org_id
-                else:
-                    raise AAPResourceNotFoundError("Organization", identifier)
-            except ValueError:
-                # Not a valid integer, and name lookup already failed
-                raise AAPResourceNotFoundError("Organization", identifier)
-            except Exception:
-                # Catch any other errors (like API errors) during ID lookup
-                raise AAPResourceNotFoundError("Organization", identifier)
-
-    def _resolve_organization_by_name(self, client, name):
-        """Resolve organization name to ID."""
-        endpoint = f"{GATEWAY_API_VERSION_ENDPOINT}organizations/"
-        params = {'name': name}
-        response = client.get(endpoint, params=params)
-
-        if response.status_code == HTTP_OK:
-            data = response.json()
-            results = data.get('results', [])
-            if results:
-                return results[0]['id']
-            else:
-                raise AAPResourceNotFoundError("Organization", name)
-        else:
-            raise AAPClientError(f"Failed to search for organization '{name}'")
-
 
 class TeamSetCommand(ShowOne):
     """Set team properties."""
@@ -434,7 +359,7 @@ class TeamSetCommand(ShowOne):
                 team_id = parsed_args.id
             elif parsed_args.team:
                 # Use positional parameter - team name first, then ID fallback if numeric
-                team_id = self._resolve_team_positional(client, parsed_args.team)
+                team_id = resolve_team_name(client, parsed_args.team)
             else:
                 raise AAPClientError("Team identifier is required")
 
@@ -446,7 +371,7 @@ class TeamSetCommand(ShowOne):
                 set_data['description'] = parsed_args.description
             if parsed_args.organization:
                 # Resolve organization name/ID to ID
-                org_id = self._resolve_organization_positional(client, parsed_args.organization)
+                org_id = resolve_organization_name(client, parsed_args.organization)
                 set_data['organization'] = org_id
 
             if not set_data:
@@ -529,84 +454,6 @@ class TeamSetCommand(ShowOne):
         except Exception as e:
             raise SystemExit(f"Unexpected error: {e}")
 
-    def _resolve_team_positional(self, client, identifier):
-        """Resolve positional parameter - try team name first, then ID fallback if numeric."""
-        # First try as team name lookup
-        try:
-            return self._resolve_team_by_name(client, identifier)
-        except AAPClientError:
-            # If team name lookup fails and identifier is numeric, try as ID
-            try:
-                team_id = int(identifier)
-                # Verify the ID exists by trying to get it
-                endpoint = f"{GATEWAY_API_VERSION_ENDPOINT}teams/{team_id}/"
-                response = client.get(endpoint)
-                if response.status_code == HTTP_OK:
-                    return team_id
-                else:
-                    raise AAPResourceNotFoundError("Team", identifier)
-            except ValueError:
-                # Not a valid integer, and team name lookup already failed
-                raise AAPResourceNotFoundError("Team", identifier)
-            except Exception:
-                # Catch any other errors (like API errors) during ID lookup
-                raise AAPResourceNotFoundError("Team", identifier)
-
-    def _resolve_team_by_name(self, client, name):
-        """Resolve team name to ID."""
-        endpoint = f"{GATEWAY_API_VERSION_ENDPOINT}teams/"
-        params = {'name': name}
-        response = client.get(endpoint, params=params)
-
-        if response.status_code == HTTP_OK:
-            data = response.json()
-            results = data.get('results', [])
-            if results:
-                return results[0]['id']
-            else:
-                raise AAPResourceNotFoundError("Team", name)
-        else:
-            raise AAPClientError(f"Failed to search for team '{name}'")
-
-    def _resolve_organization_positional(self, client, identifier):
-        """Resolve organization identifier - try name first, then ID fallback if numeric."""
-        # First try as organization name lookup
-        try:
-            return self._resolve_organization_by_name(client, identifier)
-        except AAPClientError:
-            # If name lookup fails and identifier is numeric, try as ID
-            try:
-                org_id = int(identifier)
-                # Verify the ID exists by trying to get it
-                endpoint = f"{GATEWAY_API_VERSION_ENDPOINT}organizations/{org_id}/"
-                response = client.get(endpoint)
-                if response.status_code == HTTP_OK:
-                    return org_id
-                else:
-                    raise AAPResourceNotFoundError("Organization", identifier)
-            except ValueError:
-                # Not a valid integer, and name lookup already failed
-                raise AAPResourceNotFoundError("Organization", identifier)
-            except Exception:
-                # Catch any other errors (like API errors) during ID lookup
-                raise AAPResourceNotFoundError("Organization", identifier)
-
-    def _resolve_organization_by_name(self, client, name):
-        """Resolve organization name to ID."""
-        endpoint = f"{GATEWAY_API_VERSION_ENDPOINT}organizations/"
-        params = {'name': name}
-        response = client.get(endpoint, params=params)
-
-        if response.status_code == HTTP_OK:
-            data = response.json()
-            results = data.get('results', [])
-            if results:
-                return results[0]['id']
-            else:
-                raise AAPResourceNotFoundError("Organization", name)
-        else:
-            raise AAPClientError(f"Failed to search for organization '{name}'")
-
 
 class TeamDeleteCommand(Command):
     """Delete a team."""
@@ -646,7 +493,7 @@ class TeamDeleteCommand(Command):
                 team_id = parsed_args.id
             elif parsed_args.team:
                 # Use positional parameter - team name first, then ID fallback if numeric
-                team_id = self._resolve_team_positional(client, parsed_args.team)
+                team_id = resolve_team_name(client, parsed_args.team)
             else:
                 raise AAPClientError("Team identifier is required")
 
@@ -705,42 +552,3 @@ class TeamDeleteCommand(Command):
             raise SystemExit(str(e))
         except Exception as e:
             raise SystemExit(f"Unexpected error: {e}")
-
-    def _resolve_team_positional(self, client, identifier):
-        """Resolve positional parameter - try team name first, then ID fallback if numeric."""
-        # First try as team name lookup
-        try:
-            return self._resolve_team_by_name(client, identifier)
-        except AAPClientError:
-            # If team name lookup fails and identifier is numeric, try as ID
-            try:
-                team_id = int(identifier)
-                # Verify the ID exists by trying to get it
-                endpoint = f"{GATEWAY_API_VERSION_ENDPOINT}teams/{team_id}/"
-                response = client.get(endpoint)
-                if response.status_code == HTTP_OK:
-                    return team_id
-                else:
-                    raise AAPResourceNotFoundError("Team", identifier)
-            except ValueError:
-                # Not a valid integer, and team name lookup already failed
-                raise AAPResourceNotFoundError("Team", identifier)
-            except Exception:
-                # Catch any other errors (like API errors) during ID lookup
-                raise AAPResourceNotFoundError("Team", identifier)
-
-    def _resolve_team_by_name(self, client, name):
-        """Resolve team name to ID."""
-        endpoint = f"{GATEWAY_API_VERSION_ENDPOINT}teams/"
-        params = {'name': name}
-        response = client.get(endpoint, params=params)
-
-        if response.status_code == HTTP_OK:
-            data = response.json()
-            results = data.get('results', [])
-            if results:
-                return results[0]['id']
-            else:
-                raise AAPResourceNotFoundError("Team", name)
-        else:
-            raise AAPClientError(f"Failed to search for team '{name}'")

@@ -13,6 +13,60 @@ from aapclient.common.constants import (
     HTTP_BAD_REQUEST
 )
 from aapclient.common.exceptions import AAPClientError, AAPResourceNotFoundError, AAPAPIError
+from aapclient.common.functions import resolve_organization_name, resolve_execution_environment_name
+from aapclient.controller.credential import resolve_credential_parameter
+
+
+def resolve_project_parameter(client, identifier):
+    """
+    Resolve project identifier (name or ID) to ID for use by other resource commands.
+
+    Args:
+        client: AAPHTTPClient instance
+        identifier: Project name or ID
+
+    Returns:
+        int: Project ID
+
+    Raises:
+        AAPResourceNotFoundError: If project not found by name or ID
+    """
+    # First try as project name lookup
+    try:
+        endpoint = f"{CONTROLLER_API_VERSION_ENDPOINT}projects/"
+        params = {'name': identifier}
+        response = client.get(endpoint, params=params)
+
+        if response.status_code == HTTP_OK:
+            data = response.json()
+            results = data.get('results', [])
+            if results:
+                return results[0]['id']
+            else:
+                # Name lookup failed, continue to ID lookup
+                pass
+        else:
+            raise AAPClientError(f"Failed to search for project '{identifier}'")
+    except AAPAPIError:
+        # API error during name lookup, continue to ID lookup
+        pass
+
+    # Name lookup failed, try as ID if it's numeric
+    try:
+        project_id = int(identifier)
+        # Verify the ID exists by trying to get it
+        endpoint = f"{CONTROLLER_API_VERSION_ENDPOINT}projects/{project_id}/"
+        response = client.get(endpoint)
+        if response.status_code == HTTP_OK:
+            return project_id
+        else:
+            raise AAPResourceNotFoundError("Project", identifier)
+    except ValueError:
+        # Not a valid integer, and name lookup already failed
+        raise AAPResourceNotFoundError("Project", identifier)
+    except AAPAPIError:
+        # API error during ID lookup
+        raise AAPResourceNotFoundError("Project", identifier)
 
 
 def _format_project_data(project_data):
@@ -72,128 +126,6 @@ def _format_project_data(project_data):
 
     return (field_data.keys(), field_data.values())
 
-
-def _resolve_organization_by_name(client, name):
-    """Resolve organization name to ID."""
-    endpoint = f"{CONTROLLER_API_VERSION_ENDPOINT}organizations/"
-    params = {'name': name}
-    response = client.get(endpoint, params=params)
-
-    if response.status_code == HTTP_OK:
-        data = response.json()
-        results = data.get('results', [])
-        if results:
-            return results[0]['id']
-        else:
-            raise AAPResourceNotFoundError("Organization", name)
-    else:
-        raise AAPClientError(f"Failed to search for organization '{name}'")
-
-
-def _resolve_organization(client, identifier):
-    """Resolve organization identifier (name or ID) to ID. Try name first, then ID if it's numeric."""
-    # Always try name lookup first
-    try:
-        return _resolve_organization_by_name(client, identifier)
-    except AAPResourceNotFoundError:
-        # Name lookup failed, try as ID if it looks like a number
-        try:
-            org_id = int(identifier)
-            # Verify the ID exists by trying to get it
-            try:
-                verify_endpoint = f"{CONTROLLER_API_VERSION_ENDPOINT}organizations/{org_id}/"
-                verify_response = client.get(verify_endpoint)
-                return org_id
-            except AAPAPIError as api_error:
-                if api_error.status_code == HTTP_NOT_FOUND:
-                    raise AAPResourceNotFoundError("Organization", identifier)
-                else:
-                    raise AAPClientError(f"Failed to verify organization ID {org_id}")
-        except ValueError:
-            # Not a number, so both name and ID lookup failed
-            raise AAPResourceNotFoundError("Organization", identifier)
-
-
-def _resolve_credential_by_name(client, name):
-    """Resolve credential name to ID."""
-    endpoint = f"{CONTROLLER_API_VERSION_ENDPOINT}credentials/"
-    params = {'name': name}
-    response = client.get(endpoint, params=params)
-
-    if response.status_code == HTTP_OK:
-        data = response.json()
-        results = data.get('results', [])
-        if results:
-            return results[0]['id']
-        else:
-            raise AAPResourceNotFoundError("Credential", name)
-    else:
-        raise AAPClientError(f"Failed to search for credential '{name}'")
-
-
-def _resolve_credential(client, identifier):
-    """Resolve credential identifier (name or ID) to ID. Try name first, then ID if it's numeric."""
-    # Always try name lookup first
-    try:
-        return _resolve_credential_by_name(client, identifier)
-    except AAPResourceNotFoundError:
-        # Name lookup failed, try as ID if it looks like a number
-        try:
-            credential_id = int(identifier)
-            # Verify the ID exists by trying to get it
-            try:
-                verify_endpoint = f"{CONTROLLER_API_VERSION_ENDPOINT}credentials/{credential_id}/"
-                verify_response = client.get(verify_endpoint)
-                return credential_id
-            except AAPAPIError as api_error:
-                if api_error.status_code == HTTP_NOT_FOUND:
-                    raise AAPResourceNotFoundError("Credential", identifier)
-                else:
-                    raise AAPClientError(f"Failed to verify credential ID {credential_id}")
-        except ValueError:
-            # Not a number, so both name and ID lookup failed
-            raise AAPResourceNotFoundError("Credential", identifier)
-
-
-def _resolve_execution_environment_by_name(client, name):
-    """Resolve execution environment name to ID."""
-    endpoint = f"{CONTROLLER_API_VERSION_ENDPOINT}execution_environments/"
-    params = {'name': name}
-    response = client.get(endpoint, params=params)
-
-    if response.status_code == HTTP_OK:
-        data = response.json()
-        results = data.get('results', [])
-        if results:
-            return results[0]['id']
-        else:
-            raise AAPResourceNotFoundError("Execution Environment", name)
-    else:
-        raise AAPClientError(f"Failed to search for execution environment '{name}'")
-
-
-def _resolve_execution_environment(client, identifier):
-    """Resolve execution environment identifier (name or ID) to ID. Try name first, then ID if it's numeric."""
-    # Always try name lookup first
-    try:
-        return _resolve_execution_environment_by_name(client, identifier)
-    except AAPResourceNotFoundError:
-        # Name lookup failed, try as ID if it looks like a number
-        try:
-            ee_id = int(identifier)
-            # Verify the ID exists by trying to get it
-            try:
-                verify_endpoint = f"{CONTROLLER_API_VERSION_ENDPOINT}execution_environments/{ee_id}/"
-                verify_response = client.get(verify_endpoint)
-                return ee_id
-            except AAPAPIError as api_error:
-                if api_error.status_code == HTTP_NOT_FOUND:
-                    raise AAPResourceNotFoundError("Execution Environment", identifier)
-                else:
-                    raise AAPClientError(f"Failed to verify execution environment ID {ee_id}")
-        except ValueError:
-            # Not a number, so both name and ID lookup failed
-            raise AAPResourceNotFoundError("Execution Environment", identifier)
 
 
 class ProjectListCommand(Lister):
@@ -327,7 +259,7 @@ class ProjectShowCommand(ShowOne):
                 project_id = parsed_args.id
             elif parsed_args.project:
                 # Use positional parameter - name first, then ID fallback if numeric
-                project_id = self._resolve_project_positional(client, parsed_args.project)
+                project_id = resolve_project_parameter(client, parsed_args.project)
             else:
                 raise AAPClientError("Project identifier is required")
 
@@ -355,45 +287,6 @@ class ProjectShowCommand(ShowOne):
             raise SystemExit(str(e))
         except Exception as e:
             raise SystemExit(f"Unexpected error: {e}")
-
-    def _resolve_project_positional(self, client, identifier):
-        """Resolve positional parameter - try name first, then ID fallback if numeric."""
-        # First try as name lookup
-        try:
-            return self._resolve_project_by_name(client, identifier)
-        except AAPClientError:
-            # If name lookup fails and identifier is numeric, try as ID
-            try:
-                project_id = int(identifier)
-                # Verify the ID exists by trying to get it
-                endpoint = f"{CONTROLLER_API_VERSION_ENDPOINT}projects/{project_id}/"
-                response = client.get(endpoint)
-                if response.status_code == HTTP_OK:
-                    return project_id
-                else:
-                    raise AAPResourceNotFoundError("Project", identifier)
-            except ValueError:
-                # Not a valid integer, and name lookup already failed
-                raise AAPResourceNotFoundError("Project", identifier)
-            except Exception:
-                # Catch any other errors (like API errors) during ID lookup
-                raise AAPResourceNotFoundError("Project", identifier)
-
-    def _resolve_project_by_name(self, client, name):
-        """Resolve project name to ID."""
-        endpoint = f"{CONTROLLER_API_VERSION_ENDPOINT}projects/"
-        params = {'name': name}
-        response = client.get(endpoint, params=params)
-
-        if response.status_code == HTTP_OK:
-            data = response.json()
-            results = data.get('results', [])
-            if results:
-                return results[0]['id']
-            else:
-                raise AAPResourceNotFoundError("Project", name)
-        else:
-            raise AAPClientError(f"Failed to search for project '{name}'")
 
 
 class ProjectCreateCommand(ShowOne):
@@ -504,17 +397,17 @@ class ProjectCreateCommand(ShowOne):
                     parser.error("argument --scm-credential is required when using SCM type 'insights'")
 
             # Resolve organization - handle both ID and name
-            org_id = _resolve_organization(client, parsed_args.organization)
+            org_id = resolve_organization_name(client, parsed_args.organization, api="controller")
 
             # Resolve credential - handle both ID and name (if provided)
             credential_id = None
             if getattr(parsed_args, 'credential', None):
-                credential_id = _resolve_credential(client, parsed_args.credential)
+                credential_id = resolve_credential_parameter(client, parsed_args.credential)
 
             # Resolve execution environment - handle both ID and name (if provided)
             execution_environment_id = None
             if getattr(parsed_args, 'execution_environment', None):
-                execution_environment_id = _resolve_execution_environment(client, parsed_args.execution_environment)
+                execution_environment_id = resolve_execution_environment_name(client, parsed_args.execution_environment, api="controller")
 
             project_data = {
                 'name': parsed_args.name,
@@ -741,25 +634,25 @@ class ProjectSetCommand(ShowOne):
                 project_id = parsed_args.id
             elif parsed_args.project:
                 # Use positional parameter - name first, then ID fallback if numeric
-                project_id = self._resolve_project_positional(client, parsed_args.project)
+                project_id = resolve_project_parameter(client, parsed_args.project)
             else:
                 raise AAPClientError("Project identifier is required")
 
             # Resolve organization if provided
             if getattr(parsed_args, 'organization', None):
-                org_id = _resolve_organization(client, parsed_args.organization)
+                org_id = resolve_organization_name(client, parsed_args.organization, api="controller")
             else:
                 org_id = None
 
             # Resolve credential if provided
             if getattr(parsed_args, 'credential', None):
-                credential_id = _resolve_credential(client, parsed_args.credential)
+                credential_id = resolve_credential_parameter(client, parsed_args.credential)
             else:
                 credential_id = None
 
             # Resolve execution environment if provided
             if getattr(parsed_args, 'execution_environment', None):
-                execution_environment_id = _resolve_execution_environment(client, parsed_args.execution_environment)
+                execution_environment_id = resolve_execution_environment_name(client, parsed_args.execution_environment, api="controller")
             else:
                 execution_environment_id = None
 
@@ -843,45 +736,6 @@ class ProjectSetCommand(ShowOne):
         except Exception as e:
             raise SystemExit(f"Unexpected error: {e}")
 
-    def _resolve_project_positional(self, client, identifier):
-        """Resolve positional parameter - try name first, then ID fallback if numeric."""
-        # First try as name lookup
-        try:
-            return self._resolve_project_by_name(client, identifier)
-        except AAPClientError:
-            # If name lookup fails and identifier is numeric, try as ID
-            try:
-                project_id = int(identifier)
-                # Verify the ID exists by trying to get it
-                endpoint = f"{CONTROLLER_API_VERSION_ENDPOINT}projects/{project_id}/"
-                response = client.get(endpoint)
-                if response.status_code == HTTP_OK:
-                    return project_id
-                else:
-                    raise AAPResourceNotFoundError("Project", identifier)
-            except ValueError:
-                # Not a valid integer, and name lookup already failed
-                raise AAPResourceNotFoundError("Project", identifier)
-            except Exception:
-                # Catch any other errors (like API errors) during ID lookup
-                raise AAPResourceNotFoundError("Project", identifier)
-
-    def _resolve_project_by_name(self, client, name):
-        """Resolve project name to ID."""
-        endpoint = f"{CONTROLLER_API_VERSION_ENDPOINT}projects/"
-        params = {'name': name}
-        response = client.get(endpoint, params=params)
-
-        if response.status_code == HTTP_OK:
-            data = response.json()
-            results = data.get('results', [])
-            if results:
-                return results[0]['id']
-            else:
-                raise AAPResourceNotFoundError("Project", name)
-        else:
-            raise AAPClientError(f"Failed to search for project '{name}'")
-
 
 class ProjectDeleteCommand(Command):
     """Delete a project."""
@@ -921,7 +775,7 @@ class ProjectDeleteCommand(Command):
                 project_identifier = str(parsed_args.id)
             elif parsed_args.project:
                 # Use positional parameter - name first, then ID fallback if numeric
-                project_id = self._resolve_project_positional(client, parsed_args.project)
+                project_id = resolve_project_parameter(client, parsed_args.project)
                 project_identifier = parsed_args.project
             else:
                 raise AAPClientError("Project identifier is required")
@@ -972,42 +826,3 @@ class ProjectDeleteCommand(Command):
             raise SystemExit(str(e))
         except Exception as e:
             raise SystemExit(f"Unexpected error: {e}")
-
-    def _resolve_project_positional(self, client, identifier):
-        """Resolve positional parameter - try name first, then ID fallback if numeric."""
-        # First try as name lookup
-        try:
-            return self._resolve_project_by_name(client, identifier)
-        except AAPClientError:
-            # If name lookup fails and identifier is numeric, try as ID
-            try:
-                project_id = int(identifier)
-                # Verify the ID exists by trying to get it
-                endpoint = f"{CONTROLLER_API_VERSION_ENDPOINT}projects/{project_id}/"
-                response = client.get(endpoint)
-                if response.status_code == HTTP_OK:
-                    return project_id
-                else:
-                    raise AAPResourceNotFoundError("Project", identifier)
-            except ValueError:
-                # Not a valid integer, and name lookup already failed
-                raise AAPResourceNotFoundError("Project", identifier)
-            except Exception:
-                # Catch any other errors (like API errors) during ID lookup
-                raise AAPResourceNotFoundError("Project", identifier)
-
-    def _resolve_project_by_name(self, client, name):
-        """Resolve project name to ID."""
-        endpoint = f"{CONTROLLER_API_VERSION_ENDPOINT}projects/"
-        params = {'name': name}
-        response = client.get(endpoint, params=params)
-
-        if response.status_code == HTTP_OK:
-            data = response.json()
-            results = data.get('results', [])
-            if results:
-                return results[0]['id']
-            else:
-                raise AAPResourceNotFoundError("Project", name)
-        else:
-            raise AAPClientError(f"Failed to search for project '{name}'")

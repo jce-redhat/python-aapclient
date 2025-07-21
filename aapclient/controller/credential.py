@@ -13,6 +13,59 @@ from aapclient.common.constants import (
     HTTP_BAD_REQUEST
 )
 from aapclient.common.exceptions import AAPClientError, AAPResourceNotFoundError, AAPAPIError
+from aapclient.common.functions import resolve_organization_name
+
+
+def resolve_credential_parameter(client, identifier):
+    """
+    Resolve credential identifier (name or ID) to ID for use by other resource commands.
+
+    Args:
+        client: AAPHTTPClient instance
+        identifier: Credential name or ID
+
+    Returns:
+        int: Credential ID
+
+    Raises:
+        AAPResourceNotFoundError: If credential not found by name or ID
+    """
+    # First try as credential name lookup
+    try:
+        endpoint = f"{CONTROLLER_API_VERSION_ENDPOINT}credentials/"
+        params = {'name': identifier}
+        response = client.get(endpoint, params=params)
+
+        if response.status_code == HTTP_OK:
+            data = response.json()
+            results = data.get('results', [])
+            if results:
+                return results[0]['id']
+            else:
+                # Name lookup failed, continue to ID lookup
+                pass
+        else:
+            raise AAPClientError(f"Failed to search for credential '{identifier}'")
+    except AAPAPIError:
+        # API error during name lookup, continue to ID lookup
+        pass
+
+    # Name lookup failed, try as ID if it's numeric
+    try:
+        credential_id = int(identifier)
+        # Verify the ID exists by trying to get it
+        endpoint = f"{CONTROLLER_API_VERSION_ENDPOINT}credentials/{credential_id}/"
+        response = client.get(endpoint)
+        if response.status_code == HTTP_OK:
+            return credential_id
+        else:
+            raise AAPResourceNotFoundError("Credential", identifier)
+    except ValueError:
+        # Not a valid integer, and name lookup already failed
+        raise AAPResourceNotFoundError("Credential", identifier)
+    except AAPAPIError:
+        # API error during ID lookup
+        raise AAPResourceNotFoundError("Credential", identifier)
 
 
 def _format_credential_data(credential_data):
@@ -50,47 +103,6 @@ def _format_credential_data(credential_data):
 
     # Return all fields, displaying "None" for null values instead of filtering them out
     return list(field_data.keys()), list(field_data.values())
-
-
-def _resolve_organization(client, identifier):
-    """Resolve organization identifier (name or ID) to ID. Try name first, then ID if it's numeric."""
-    # Always try name lookup first
-    try:
-        return _resolve_organization_by_name(client, identifier)
-    except AAPResourceNotFoundError:
-        # Name lookup failed, try as ID if it looks like a number
-        try:
-            org_id = int(identifier)
-            # Verify the ID exists by trying to get it
-            try:
-                verify_endpoint = f"{CONTROLLER_API_VERSION_ENDPOINT}organizations/{org_id}/"
-                verify_response = client.get(verify_endpoint)
-                return org_id
-            except AAPAPIError as api_error:
-                if api_error.status_code == HTTP_NOT_FOUND:
-                    raise AAPResourceNotFoundError("Organization", identifier)
-                else:
-                    raise AAPClientError(f"Failed to verify organization ID {org_id}")
-        except ValueError:
-            # Not a number, so both name and ID lookup failed
-            raise AAPResourceNotFoundError("Organization", identifier)
-
-
-def _resolve_organization_by_name(client, name):
-    """Resolve organization name to ID."""
-    endpoint = f"{CONTROLLER_API_VERSION_ENDPOINT}organizations/"
-    params = {'name': name}
-    response = client.get(endpoint, params=params)
-
-    if response.status_code == HTTP_OK:
-        data = response.json()
-        results = data.get('results', [])
-        if results:
-            return results[0]['id']
-        else:
-            raise AAPResourceNotFoundError("Organization", name)
-    else:
-        raise AAPClientError(f"Failed to search for organization '{name}'")
 
 
 class CredentialListCommand(Lister):
@@ -219,7 +231,7 @@ class CredentialShowCommand(ShowOne):
                 credential_id = parsed_args.id
             elif parsed_args.credential:
                 # Use positional parameter - name first, then ID fallback if numeric
-                credential_id = self._resolve_credential_positional(client, parsed_args.credential)
+                credential_id = resolve_credential_parameter(client, parsed_args.credential)
             else:
                 raise AAPClientError("Credential identifier is required")
 
@@ -254,45 +266,6 @@ class CredentialShowCommand(ShowOne):
             raise SystemExit(str(e))
         except Exception as e:
             raise SystemExit(f"Unexpected error: {e}")
-
-    def _resolve_credential_positional(self, client, identifier):
-        """Resolve positional parameter - try name first, then ID fallback if numeric."""
-        # First try as name lookup
-        try:
-            return self._resolve_credential_by_name(client, identifier)
-        except AAPClientError:
-            # If name lookup fails and identifier is numeric, try as ID
-            try:
-                credential_id = int(identifier)
-                # Verify the ID exists by trying to get it
-                endpoint = f"{CONTROLLER_API_VERSION_ENDPOINT}credentials/{credential_id}/"
-                response = client.get(endpoint)
-                if response.status_code == HTTP_OK:
-                    return credential_id
-                else:
-                    raise AAPResourceNotFoundError("Credential", identifier)
-            except ValueError:
-                # Not a valid integer, and name lookup already failed
-                raise AAPResourceNotFoundError("Credential", identifier)
-            except Exception:
-                # Catch any other errors (like API errors) during ID lookup
-                raise AAPResourceNotFoundError("Credential", identifier)
-
-    def _resolve_credential_by_name(self, client, name):
-        """Resolve credential name to ID."""
-        endpoint = f"{CONTROLLER_API_VERSION_ENDPOINT}credentials/"
-        params = {'name': name}
-        response = client.get(endpoint, params=params)
-
-        if response.status_code == HTTP_OK:
-            data = response.json()
-            results = data.get('results', [])
-            if results:
-                return results[0]['id']
-            else:
-                raise AAPResourceNotFoundError("Credential", name)
-        else:
-            raise AAPClientError(f"Failed to search for credential '{name}'")
 
 
 class CredentialCreateCommand(ShowOne):
@@ -339,7 +312,7 @@ class CredentialCreateCommand(ShowOne):
             # Resolve organization if provided
             org_id = None
             if getattr(parsed_args, 'organization', None):
-                org_id = _resolve_organization(client, parsed_args.organization)
+                org_id = resolve_organization_name(client, parsed_args.organization, api="controller")
 
             credential_data = {
                 'name': parsed_args.name,
@@ -459,14 +432,14 @@ class CredentialSetCommand(ShowOne):
                 credential_id = parsed_args.id
             elif parsed_args.credential:
                 # Use positional parameter - name first, then ID fallback if numeric
-                credential_id = self._resolve_credential_positional(client, parsed_args.credential)
+                credential_id = resolve_credential_parameter(client, parsed_args.credential)
             else:
                 raise AAPClientError("Credential identifier is required")
 
             # Resolve organization if provided
             org_id = None
             if getattr(parsed_args, 'organization', None):
-                org_id = _resolve_organization(client, parsed_args.organization)
+                org_id = resolve_organization_name(client, parsed_args.organization, api="controller")
 
             # Prepare credential update data
             credential_data = {}
@@ -526,45 +499,6 @@ class CredentialSetCommand(ShowOne):
         except Exception as e:
             raise SystemExit(f"Unexpected error: {e}")
 
-    def _resolve_credential_positional(self, client, identifier):
-        """Resolve positional parameter - try name first, then ID fallback if numeric."""
-        # First try as name lookup
-        try:
-            return self._resolve_credential_by_name(client, identifier)
-        except AAPClientError:
-            # If name lookup fails and identifier is numeric, try as ID
-            try:
-                credential_id = int(identifier)
-                # Verify the ID exists by trying to get it
-                endpoint = f"{CONTROLLER_API_VERSION_ENDPOINT}credentials/{credential_id}/"
-                response = client.get(endpoint)
-                if response.status_code == HTTP_OK:
-                    return credential_id
-                else:
-                    raise AAPResourceNotFoundError("Credential", identifier)
-            except ValueError:
-                # Not a valid integer, and name lookup already failed
-                raise AAPResourceNotFoundError("Credential", identifier)
-            except Exception:
-                # Catch any other errors (like API errors) during ID lookup
-                raise AAPResourceNotFoundError("Credential", identifier)
-
-    def _resolve_credential_by_name(self, client, name):
-        """Resolve credential name to ID."""
-        endpoint = f"{CONTROLLER_API_VERSION_ENDPOINT}credentials/"
-        params = {'name': name}
-        response = client.get(endpoint, params=params)
-
-        if response.status_code == HTTP_OK:
-            data = response.json()
-            results = data.get('results', [])
-            if results:
-                return results[0]['id']
-            else:
-                raise AAPResourceNotFoundError("Credential", name)
-        else:
-            raise AAPClientError(f"Failed to search for credential '{name}'")
-
 
 class CredentialDeleteCommand(Command):
     """Delete a credential."""
@@ -604,7 +538,7 @@ class CredentialDeleteCommand(Command):
                 credential_identifier = str(parsed_args.id)
             elif parsed_args.credential:
                 # Use positional parameter - name first, then ID fallback if numeric
-                credential_id = self._resolve_credential_positional(client, parsed_args.credential)
+                credential_id = resolve_credential_parameter(client, parsed_args.credential)
                 credential_identifier = parsed_args.credential
             else:
                 raise AAPClientError("Credential identifier is required")
@@ -662,42 +596,3 @@ class CredentialDeleteCommand(Command):
             raise SystemExit(str(e))
         except Exception as e:
             raise SystemExit(f"Unexpected error: {e}")
-
-    def _resolve_credential_positional(self, client, identifier):
-        """Resolve positional parameter - try name first, then ID fallback if numeric."""
-        # First try as name lookup
-        try:
-            return self._resolve_credential_by_name(client, identifier)
-        except AAPClientError:
-            # If name lookup fails and identifier is numeric, try as ID
-            try:
-                credential_id = int(identifier)
-                # Verify the ID exists by trying to get it
-                endpoint = f"{CONTROLLER_API_VERSION_ENDPOINT}credentials/{credential_id}/"
-                response = client.get(endpoint)
-                if response.status_code == HTTP_OK:
-                    return credential_id
-                else:
-                    raise AAPResourceNotFoundError("Credential", identifier)
-            except ValueError:
-                # Not a valid integer, and name lookup already failed
-                raise AAPResourceNotFoundError("Credential", identifier)
-            except Exception:
-                # Catch any other errors (like API errors) during ID lookup
-                raise AAPResourceNotFoundError("Credential", identifier)
-
-    def _resolve_credential_by_name(self, client, name):
-        """Resolve credential name to ID."""
-        endpoint = f"{CONTROLLER_API_VERSION_ENDPOINT}credentials/"
-        params = {'name': name}
-        response = client.get(endpoint, params=params)
-
-        if response.status_code == HTTP_OK:
-            data = response.json()
-            results = data.get('results', [])
-            if results:
-                return results[0]['id']
-            else:
-                raise AAPResourceNotFoundError("Credential", name)
-        else:
-            raise AAPClientError(f"Failed to search for credential '{name}'")

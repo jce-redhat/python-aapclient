@@ -13,6 +13,8 @@ from aapclient.common.constants import (
     HTTP_BAD_REQUEST
 )
 from aapclient.common.exceptions import AAPClientError, AAPResourceNotFoundError, AAPAPIError
+from aapclient.common.functions import resolve_organization_name
+
 
 
 class OrganizationListCommand(Lister):
@@ -133,7 +135,7 @@ class OrganizationShowCommand(ShowOne):
                 organization_id = parsed_args.id
             elif parsed_args.organization:
                 # Use positional parameter - name first, then ID fallback if numeric
-                organization_id = self._resolve_organization_positional(client, parsed_args.organization)
+                organization_id = resolve_organization_name(client, parsed_args.organization)
             else:
                 raise AAPClientError("Organization identifier is required")
 
@@ -189,45 +191,6 @@ class OrganizationShowCommand(ShowOne):
             raise SystemExit(str(e))
         except Exception as e:
             raise SystemExit(f"Unexpected error: {e}")
-
-    def _resolve_organization_positional(self, client, identifier):
-        """Resolve positional parameter - try name first, then ID fallback if numeric."""
-        # First try as name lookup
-        try:
-            return self._resolve_organization_by_name(client, identifier)
-        except AAPClientError:
-            # If name lookup fails and identifier is numeric, try as ID
-            try:
-                org_id = int(identifier)
-                # Verify the ID exists by trying to get it
-                endpoint = f"{GATEWAY_API_VERSION_ENDPOINT}organizations/{org_id}/"
-                response = client.get(endpoint)
-                if response.status_code == HTTP_OK:
-                    return org_id
-                else:
-                    raise AAPResourceNotFoundError("Organization", identifier)
-            except ValueError:
-                # Not a valid integer, and name lookup already failed
-                raise AAPResourceNotFoundError("Organization", identifier)
-            except Exception:
-                # Catch any other errors (like API errors) during ID lookup
-                raise AAPResourceNotFoundError("Organization", identifier)
-
-    def _resolve_organization_by_name(self, client, name):
-        """Resolve organization name to ID."""
-        endpoint = f"{GATEWAY_API_VERSION_ENDPOINT}organizations/"
-        params = {'name': name}
-        response = client.get(endpoint, params=params)
-
-        if response.status_code == HTTP_OK:
-            data = response.json()
-            results = data.get('results', [])
-            if results:
-                return results[0]['id']
-            else:
-                raise AAPResourceNotFoundError("Organization", name)
-        else:
-            raise AAPClientError(f"Failed to search for organization '{name}'")
 
 
 class OrganizationCreateCommand(ShowOne):
@@ -376,7 +339,7 @@ class OrganizationSetCommand(ShowOne):
                 organization_id = parsed_args.id
             elif parsed_args.organization:
                 # Use positional parameter - name first, then ID fallback if numeric
-                organization_id = self._resolve_organization_positional(client, parsed_args.organization)
+                organization_id = resolve_organization_name(client, parsed_args.organization)
             else:
                 raise AAPClientError("Organization identifier is required")
 
@@ -471,45 +434,6 @@ class OrganizationSetCommand(ShowOne):
         except Exception as e:
             raise SystemExit(f"Unexpected error: {e}")
 
-    def _resolve_organization_positional(self, client, identifier):
-        """Resolve positional parameter - try name first, then ID fallback if numeric."""
-        # First try as name lookup
-        try:
-            return self._resolve_organization_by_name(client, identifier)
-        except AAPClientError:
-            # If name lookup fails and identifier is numeric, try as ID
-            try:
-                org_id = int(identifier)
-                # Verify the ID exists by trying to get it
-                endpoint = f"{GATEWAY_API_VERSION_ENDPOINT}organizations/{org_id}/"
-                response = client.get(endpoint)
-                if response.status_code == HTTP_OK:
-                    return org_id
-                else:
-                    raise AAPResourceNotFoundError("Organization", identifier)
-            except ValueError:
-                # Not a valid integer, and name lookup already failed
-                raise AAPResourceNotFoundError("Organization", identifier)
-            except Exception:
-                # Catch any other errors (like API errors) during ID lookup
-                raise AAPResourceNotFoundError("Organization", identifier)
-
-    def _resolve_organization_by_name(self, client, name):
-        """Resolve organization name to ID."""
-        endpoint = f"{GATEWAY_API_VERSION_ENDPOINT}organizations/"
-        params = {'name': name}
-        response = client.get(endpoint, params=params)
-
-        if response.status_code == HTTP_OK:
-            data = response.json()
-            results = data.get('results', [])
-            if results:
-                return results[0]['id']
-            else:
-                raise AAPResourceNotFoundError("Organization", name)
-        else:
-            raise AAPClientError(f"Failed to search for organization '{name}'")
-
 
 class OrganizationDeleteCommand(Command):
     """Delete an organization."""
@@ -550,7 +474,7 @@ class OrganizationDeleteCommand(Command):
                 organization_id = parsed_args.id
             elif parsed_args.organization:
                 # Use positional parameter - name first, then ID fallback if numeric
-                organization_id = self._resolve_organization_positional(client, parsed_args.organization)
+                organization_id = resolve_organization_name(client, parsed_args.organization)
             else:
                 raise AAPClientError("Organization identifier is required")
 
@@ -597,42 +521,3 @@ class OrganizationDeleteCommand(Command):
             raise SystemExit(str(e))
         except Exception as e:
             raise SystemExit(f"Unexpected error: {e}")
-
-    def _resolve_organization_positional(self, client, identifier):
-        """Resolve positional parameter - try name first, then ID fallback if numeric."""
-        # First try as name lookup
-        try:
-            return self._resolve_organization_by_name(client, identifier)
-        except AAPClientError:
-            # If name lookup fails and identifier is numeric, try as ID
-            try:
-                org_id = int(identifier)
-                # Verify the ID exists by trying to get it
-                endpoint = f"{GATEWAY_API_VERSION_ENDPOINT}organizations/{org_id}/"
-                response = client.get(endpoint)
-                if response.status_code == HTTP_OK:
-                    return org_id
-                else:
-                    raise AAPResourceNotFoundError("Organization", identifier)
-            except ValueError:
-                # Not a valid integer, and name lookup already failed
-                raise AAPResourceNotFoundError("Organization", identifier)
-            except Exception:
-                # Catch any other errors (like API errors) during ID lookup
-                raise AAPResourceNotFoundError("Organization", identifier)
-
-    def _resolve_organization_by_name(self, client, name):
-        """Resolve organization name to ID."""
-        endpoint = f"{GATEWAY_API_VERSION_ENDPOINT}organizations/"
-        params = {'name': name}
-        response = client.get(endpoint, params=params)
-
-        if response.status_code == HTTP_OK:
-            data = response.json()
-            results = data.get('results', [])
-            if results:
-                return results[0]['id']
-            else:
-                raise AAPResourceNotFoundError("Organization", name)
-        else:
-            raise AAPClientError(f"Failed to search for organization '{name}'")

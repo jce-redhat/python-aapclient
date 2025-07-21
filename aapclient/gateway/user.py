@@ -13,6 +13,7 @@ from aapclient.common.constants import (
     HTTP_BAD_REQUEST
 )
 from aapclient.common.exceptions import AAPClientError, AAPResourceNotFoundError, AAPAPIError
+from aapclient.common.functions import resolve_user_name
 
 
 class UserListCommand(Lister):
@@ -145,7 +146,7 @@ class UserShowCommand(ShowOne):
                 user_id = parsed_args.id
             elif parsed_args.user:
                 # Use positional parameter - username first, then ID fallback if numeric
-                user_id = self._resolve_user_positional(client, parsed_args.user)
+                user_id = resolve_user_name(client, parsed_args.user)
             else:
                 raise AAPClientError("User identifier is required")
 
@@ -203,45 +204,6 @@ class UserShowCommand(ShowOne):
             raise SystemExit(str(e))
         except Exception as e:
             raise SystemExit(f"Unexpected error: {e}")
-
-    def _resolve_user_positional(self, client, identifier):
-        """Resolve positional parameter - try username first, then ID fallback if numeric."""
-        # First try as username lookup
-        try:
-            return self._resolve_user_by_username(client, identifier)
-        except AAPClientError:
-            # If username lookup fails and identifier is numeric, try as ID
-            try:
-                user_id = int(identifier)
-                # Verify the ID exists by trying to get it
-                endpoint = f"{GATEWAY_API_VERSION_ENDPOINT}users/{user_id}/"
-                response = client.get(endpoint)
-                if response.status_code == HTTP_OK:
-                    return user_id
-                else:
-                    raise AAPResourceNotFoundError("User", identifier)
-            except ValueError:
-                # Not a valid integer, and username lookup already failed
-                raise AAPResourceNotFoundError("User", identifier)
-            except Exception:
-                # Catch any other errors (like API errors) during ID lookup
-                raise AAPResourceNotFoundError("User", identifier)
-
-    def _resolve_user_by_username(self, client, username):
-        """Resolve username to ID."""
-        endpoint = f"{GATEWAY_API_VERSION_ENDPOINT}users/"
-        params = {'username': username}
-        response = client.get(endpoint, params=params)
-
-        if response.status_code == HTTP_OK:
-            data = response.json()
-            results = data.get('results', [])
-            if results:
-                return results[0]['id']
-            else:
-                raise AAPResourceNotFoundError("User", username)
-        else:
-            raise AAPClientError(f"Failed to search for user '{username}'")
 
 
 class UserCreateCommand(ShowOne):
@@ -468,7 +430,7 @@ class UserSetCommand(ShowOne):
                 user_id = parsed_args.id
             elif parsed_args.user:
                 # Use positional parameter - username first, then ID fallback if numeric
-                user_id = self._resolve_user_positional(client, parsed_args.user)
+                user_id = resolve_user_name(client, parsed_args.user)
             else:
                 raise AAPClientError("User identifier is required")
 
@@ -590,45 +552,6 @@ class UserSetCommand(ShowOne):
         except Exception as e:
             raise SystemExit(f"Unexpected error: {e}")
 
-    def _resolve_user_positional(self, client, identifier):
-        """Resolve positional parameter - try username first, then ID fallback if numeric."""
-        # First try as username lookup
-        try:
-            return self._resolve_user_by_username(client, identifier)
-        except AAPClientError:
-            # If username lookup fails and identifier is numeric, try as ID
-            try:
-                user_id = int(identifier)
-                # Verify the ID exists by trying to get it
-                endpoint = f"{GATEWAY_API_VERSION_ENDPOINT}users/{user_id}/"
-                response = client.get(endpoint)
-                if response.status_code == HTTP_OK:
-                    return user_id
-                else:
-                    raise AAPResourceNotFoundError("User", identifier)
-            except ValueError:
-                # Not a valid integer, and username lookup already failed
-                raise AAPResourceNotFoundError("User", identifier)
-            except Exception:
-                # Catch any other errors (like API errors) during ID lookup
-                raise AAPResourceNotFoundError("User", identifier)
-
-    def _resolve_user_by_username(self, client, username):
-        """Resolve username to ID."""
-        endpoint = f"{GATEWAY_API_VERSION_ENDPOINT}users/"
-        params = {'username': username}
-        response = client.get(endpoint, params=params)
-
-        if response.status_code == HTTP_OK:
-            data = response.json()
-            results = data.get('results', [])
-            if results:
-                return results[0]['id']
-            else:
-                raise AAPResourceNotFoundError("User", username)
-        else:
-            raise AAPClientError(f"Failed to search for user '{username}'")
-
 
 class UserDeleteCommand(Command):
     """Delete a user."""
@@ -668,7 +591,7 @@ class UserDeleteCommand(Command):
                 user_id = parsed_args.id
             elif parsed_args.user:
                 # Use positional parameter - username first, then ID fallback if numeric
-                user_id = self._resolve_user_positional(client, parsed_args.user)
+                user_id = resolve_user_name(client, parsed_args.user)
             else:
                 raise AAPClientError("User identifier is required")
 
@@ -731,42 +654,3 @@ class UserDeleteCommand(Command):
             raise SystemExit(str(e))
         except Exception as e:
             raise SystemExit(f"Unexpected error: {e}")
-
-    def _resolve_user_positional(self, client, identifier):
-        """Resolve positional parameter - try username first, then ID fallback if numeric."""
-        # First try as username lookup
-        try:
-            return self._resolve_user_by_username(client, identifier)
-        except AAPClientError:
-            # If username lookup fails and identifier is numeric, try as ID
-            try:
-                user_id = int(identifier)
-                # Verify the ID exists by trying to get it
-                endpoint = f"{GATEWAY_API_VERSION_ENDPOINT}users/{user_id}/"
-                response = client.get(endpoint)
-                if response.status_code == HTTP_OK:
-                    return user_id
-                else:
-                    raise AAPResourceNotFoundError("User", identifier)
-            except ValueError:
-                # Not a valid integer, and username lookup already failed
-                raise AAPResourceNotFoundError("User", identifier)
-            except Exception:
-                # Catch any other errors (like API errors) during ID lookup
-                raise AAPResourceNotFoundError("User", identifier)
-
-    def _resolve_user_by_username(self, client, username):
-        """Resolve username to ID."""
-        endpoint = f"{GATEWAY_API_VERSION_ENDPOINT}users/"
-        params = {'username': username}
-        response = client.get(endpoint, params=params)
-
-        if response.status_code == HTTP_OK:
-            data = response.json()
-            results = data.get('results', [])
-            if results:
-                return results[0]['id']
-            else:
-                raise AAPResourceNotFoundError("User", username)
-        else:
-            raise AAPClientError(f"Failed to search for user '{username}'")
