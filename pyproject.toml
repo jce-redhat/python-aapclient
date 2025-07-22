@@ -86,6 +86,10 @@ whoami = "aapclient.common.whoami:WhoamiCommand"
 "inventory create" = "aapclient.controller.inventory:InventoryCreateCommand"
 "inventory set" = "aapclient.controller.inventory:InventorySetCommand"
 "inventory delete" = "aapclient.controller.inventory:InventoryDeleteCommand"
+"instance list" = "aapclient.controller.instance:InstanceListCommand"
+"instance show" = "aapclient.controller.instance:InstanceShowCommand"
+"instance create" = "aapclient.controller.instance:InstanceCreateCommand"
+"instance set" = "aapclient.controller.instance:InstanceSetCommand"
 
 [project.scripts]
 aap = "aapclient.shell:main"
