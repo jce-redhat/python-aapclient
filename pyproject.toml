@@ -81,6 +81,11 @@ whoami = "aapclient.common.whoami:WhoamiCommand"
 "execution-environment create" = "aapclient.controller.execution_environment:ExecutionEnvironmentCreateCommand"
 "execution-environment set" = "aapclient.controller.execution_environment:ExecutionEnvironmentSetCommand"
 "execution-environment delete" = "aapclient.controller.execution_environment:ExecutionEnvironmentDeleteCommand"
+"inventory list" = "aapclient.controller.inventory:InventoryListCommand"
+"inventory show" = "aapclient.controller.inventory:InventoryShowCommand"
+"inventory create" = "aapclient.controller.inventory:InventoryCreateCommand"
+"inventory set" = "aapclient.controller.inventory:InventorySetCommand"
+"inventory delete" = "aapclient.controller.inventory:InventoryDeleteCommand"
 
 [project.scripts]
 aap = "aapclient.shell:main"
