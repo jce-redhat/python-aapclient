@@ -260,3 +260,67 @@ def resolve_execution_environment_name(client, identifier, api="controller"):
     except AAPAPIError:
         # API error during ID lookup
         raise AAPResourceNotFoundError("Execution Environment", identifier)
+
+
+def resolve_credential_name(client, identifier, api="controller"):
+    """
+    Resolve credential identifier (name or ID) to ID for use by other resource commands.
+
+    Args:
+        client: AAPHTTPClient instance
+        identifier: Credential name or ID
+        api: API to use for resolution ("gateway" or "controller"). Defaults to "controller".
+             Note: Credentials are only available in Controller API.
+
+    Returns:
+        int: Credential ID
+
+    Raises:
+        AAPResourceNotFoundError: If credential not found by name or ID
+        AAPClientError: If invalid API type specified or API error occurs
+    """
+    # Determine which API endpoint to use
+    if api == "controller":
+        api_endpoint = CONTROLLER_API_VERSION_ENDPOINT
+    elif api == "gateway":
+        # Credentials are not available in Gateway API
+        raise AAPClientError("Credentials are only available in Controller API. Use api='controller'.")
+    else:
+        raise AAPClientError(f"Invalid API type '{api}'. Must be 'gateway' or 'controller'.")
+
+    # First try as credential name lookup
+    try:
+        endpoint = f"{api_endpoint}credentials/"
+        params = {'name': identifier}
+        response = client.get(endpoint, params=params)
+
+        if response.status_code == HTTP_OK:
+            data = response.json()
+            results = data.get('results', [])
+            if results:
+                return results[0]['id']
+            else:
+                # Name lookup failed, continue to ID lookup
+                pass
+        else:
+            raise AAPClientError(f"Failed to search for credential '{identifier}'")
+    except AAPAPIError:
+        # API error during name lookup, continue to ID lookup
+        pass
+
+    # Name lookup failed, try as ID if it's numeric
+    try:
+        credential_id = int(identifier)
+        # Verify the ID exists by trying to get it
+        endpoint = f"{api_endpoint}credentials/{credential_id}/"
+        response = client.get(endpoint)
+        if response.status_code == HTTP_OK:
+            return credential_id
+        else:
+            raise AAPResourceNotFoundError("Credential", identifier)
+    except ValueError:
+        # Not a valid integer, and name lookup already failed
+        raise AAPResourceNotFoundError("Credential", identifier)
+    except AAPAPIError:
+        # API error during ID lookup
+        raise AAPResourceNotFoundError("Credential", identifier)

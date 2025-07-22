@@ -76,6 +76,11 @@ whoami = "aapclient.common.whoami:WhoamiCommand"
 "credential create" = "aapclient.controller.credential:CredentialCreateCommand"
 "credential set" = "aapclient.controller.credential:CredentialSetCommand"
 "credential delete" = "aapclient.controller.credential:CredentialDeleteCommand"
+"execution-environment list" = "aapclient.controller.execution_environment:ExecutionEnvironmentListCommand"
+"execution-environment show" = "aapclient.controller.execution_environment:ExecutionEnvironmentShowCommand"
+"execution-environment create" = "aapclient.controller.execution_environment:ExecutionEnvironmentCreateCommand"
+"execution-environment set" = "aapclient.controller.execution_environment:ExecutionEnvironmentSetCommand"
+"execution-environment delete" = "aapclient.controller.execution_environment:ExecutionEnvironmentDeleteCommand"
 
 [project.scripts]
 aap = "aapclient.shell:main"

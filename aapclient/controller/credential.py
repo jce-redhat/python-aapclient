@@ -101,7 +101,7 @@ def _format_credential_data(credential_data):
         'Modified By': modified_by.get('username', ''),
     }
 
-    # Return all fields, displaying "None" for null values instead of filtering them out
+    # Return all fields
     return list(field_data.keys()), list(field_data.values())
 
 
