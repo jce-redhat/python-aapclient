@@ -434,6 +434,8 @@ class InstanceGroupSetCommand(ShowOne):
                 try:
                     credential_id = resolve_credential_name(client, parsed_args.credential, api="controller")
                     instance_group_data['credential'] = credential_id
+                    # API requires is_container_group to be explicitly set when setting credential
+                    instance_group_data['is_container_group'] = True
                 except AAPResourceNotFoundError:
                     parser.error(f"Credential '{parsed_args.credential}' not found")
             if parsed_args.policy_instance_percentage is not None:
@@ -442,6 +444,8 @@ class InstanceGroupSetCommand(ShowOne):
                 instance_group_data['policy_instance_minimum'] = parsed_args.policy_instance_minimum
             if parsed_args.pod_spec_override is not None:
                 instance_group_data['pod_spec_override'] = parsed_args.pod_spec_override
+                # API requires is_container_group to be explicitly set when setting container-specific fields
+                instance_group_data['is_container_group'] = True
 
             if not instance_group_data:
                 parser.error("At least one field must be specified to update")
