@@ -13,7 +13,7 @@ from aapclient.common.constants import (
     HTTP_BAD_REQUEST
 )
 from aapclient.common.exceptions import AAPClientError, AAPResourceNotFoundError, AAPAPIError
-from aapclient.common.functions import resolve_organization_name, resolve_execution_environment_name
+from aapclient.common.functions import resolve_organization_name, resolve_execution_environment_name, resolve_credential_name
 from aapclient.controller.credential import resolve_credential_parameter
 
 
@@ -409,6 +409,14 @@ class ProjectCreateCommand(ShowOne):
             if getattr(parsed_args, 'execution_environment', None):
                 execution_environment_id = resolve_execution_environment_name(client, parsed_args.execution_environment, api="controller")
 
+            # Resolve signature validation credential - handle both ID and name (if provided)
+            signature_validation_credential_id = None
+            if getattr(parsed_args, 'signature_validation_credential', None):
+                try:
+                    signature_validation_credential_id = resolve_credential_name(client, parsed_args.signature_validation_credential, api="controller")
+                except AAPResourceNotFoundError:
+                    parser.error(f"Signature validation credential '{parsed_args.signature_validation_credential}' not found")
+
             project_data = {
                 'name': parsed_args.name,
                 'organization': org_id,
@@ -422,6 +430,10 @@ class ProjectCreateCommand(ShowOne):
             # Add execution environment if provided
             if execution_environment_id is not None:
                 project_data['default_environment'] = execution_environment_id
+
+            # Add signature validation credential if provided
+            if signature_validation_credential_id is not None:
+                project_data['signature_validation_credential'] = signature_validation_credential_id
 
             if parsed_args.description:
                 project_data['description'] = parsed_args.description
@@ -443,8 +455,6 @@ class ProjectCreateCommand(ShowOne):
                 project_data['scm_delete_on_update'] = parsed_args.scm_delete_on_update
             if getattr(parsed_args, 'scm_update_cache_timeout', None):
                 project_data['scm_update_cache_timeout'] = parsed_args.scm_update_cache_timeout
-            if getattr(parsed_args, 'signature_validation_credential', None):
-                project_data['signature_validation_credential'] = parsed_args.signature_validation_credential
 
             # Create project
             endpoint = f"{CONTROLLER_API_VERSION_ENDPOINT}projects/"
@@ -455,8 +465,9 @@ class ProjectCreateCommand(ShowOne):
                     # Handle 404 error with proper message
                     raise AAPResourceNotFoundError("Project", parsed_args.name)
                 elif api_error.status_code == HTTP_BAD_REQUEST:
-                    # Pass through 400 status messages directly to user
-                    raise SystemExit(str(api_error))
+                    # Format 400 errors properly using parser.error
+                    parser = self.get_parser('aap project create')
+                    parser.error(f"Bad request: {api_error}")
                 else:
                     # Re-raise other errors
                     raise
@@ -473,8 +484,9 @@ class ProjectCreateCommand(ShowOne):
             raise SystemExit(str(e))
         except AAPAPIError as api_error:
             if api_error.status_code == HTTP_BAD_REQUEST:
-                # Pass through 400 status messages directly to user
-                raise SystemExit(str(api_error))
+                # Format 400 errors properly using parser.error
+                parser = self.get_parser('aap project create')
+                parser.error(f"Bad request: {api_error}")
             else:
                 # Re-raise other API errors as client errors with context
                 raise SystemExit(f"API Error: {api_error}")
@@ -656,6 +668,16 @@ class ProjectSetCommand(ShowOne):
             else:
                 execution_environment_id = None
 
+            # Resolve signature validation credential if provided
+            if getattr(parsed_args, 'signature_validation_credential', None):
+                try:
+                    signature_validation_credential_id = resolve_credential_name(client, parsed_args.signature_validation_credential, api="controller")
+                except AAPResourceNotFoundError:
+                    parser = self.get_parser('aap project set')
+                    parser.error(f"Signature validation credential '{parsed_args.signature_validation_credential}' not found")
+            else:
+                signature_validation_credential_id = None
+
             # Prepare project update data
             project_data = {}
 
@@ -669,8 +691,8 @@ class ProjectSetCommand(ShowOne):
                 project_data['credential'] = credential_id
             if execution_environment_id is not None:
                 project_data['default_environment'] = execution_environment_id
-            if getattr(parsed_args, 'signature_validation_credential', None):
-                project_data['signature_validation_credential'] = parsed_args.signature_validation_credential
+            if signature_validation_credential_id is not None:
+                project_data['signature_validation_credential'] = signature_validation_credential_id
             if getattr(parsed_args, 'scm_type', None):
                 project_data['scm_type'] = parsed_args.scm_type
             if getattr(parsed_args, 'scm_url', None):
@@ -715,8 +737,9 @@ class ProjectSetCommand(ShowOne):
                     # Handle 404 error with proper message
                     raise AAPResourceNotFoundError("Project", parsed_args.project or parsed_args.id)
                 elif api_error.status_code == HTTP_BAD_REQUEST:
-                    # Pass through 400 status messages directly to user
-                    raise SystemExit(str(api_error))
+                    # Format 400 errors properly using parser.error
+                    parser = self.get_parser('aap project set')
+                    parser.error(f"Bad request: {api_error}")
                 else:
                     # Re-raise other errors
                     raise
