@@ -388,3 +388,63 @@ def resolve_inventory_name(client, identifier, api="controller"):
     except AAPAPIError:
         # API error during ID lookup
         raise AAPResourceNotFoundError("Inventory", identifier)
+
+
+def resolve_instance_group_name(client, identifier, api="controller"):
+    """Resolve instance group identifier to instance group ID.
+
+    Args:
+        client: AAPHTTPClient instance
+        identifier: Instance group name or ID
+        api: API to use for resolution ("controller"). Defaults to "controller".
+             Note: Instance groups are only available in Controller API.
+
+    Returns:
+        int: Instance group ID
+
+    Raises:
+        AAPResourceNotFoundError: If instance group not found by name or ID
+        AAPClientError: If invalid API type specified or API error occurs
+    """
+    # Determine which API endpoint to use
+    if api == "controller":
+        api_endpoint = CONTROLLER_API_VERSION_ENDPOINT
+    else:
+        raise AAPClientError("Instance groups are only available in Controller API. Use api='controller'.")
+
+    # Try name-based lookup first
+    endpoint = f"{api_endpoint}instance_groups/"
+    params = {'name': identifier}
+
+    try:
+        response = client.get(endpoint, params=params)
+        if response.status_code == HTTP_OK:
+            data = response.json()
+            if data['count'] == 1:
+                return data['results'][0]['id']
+            elif data['count'] == 0:
+                # Name not found, try ID lookup if it's numeric
+                pass
+            else:
+                raise AAPClientError(f"Multiple instance groups found with name '{identifier}'")
+        else:
+            raise AAPAPIError("Failed to search instance groups", response.status_code)
+    except AAPAPIError:
+        # If name lookup fails, try ID lookup
+        pass
+
+    # Try ID lookup if name lookup failed or if identifier is numeric
+    try:
+        instance_group_id = int(identifier)
+        endpoint = f"{api_endpoint}instance_groups/{instance_group_id}/"
+        response = client.get(endpoint)
+        if response.status_code == HTTP_OK:
+            return instance_group_id
+        else:
+            raise AAPResourceNotFoundError("Instance Group", identifier)
+    except ValueError:
+        # Not a valid integer, and name lookup already failed
+        raise AAPResourceNotFoundError("Instance Group", identifier)
+    except AAPAPIError:
+        # API error during ID lookup
+        raise AAPResourceNotFoundError("Instance Group", identifier)

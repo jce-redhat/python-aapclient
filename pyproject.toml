@@ -90,6 +90,11 @@ whoami = "aapclient.common.whoami:WhoamiCommand"
 "instance show" = "aapclient.controller.instance:InstanceShowCommand"
 "instance create" = "aapclient.controller.instance:InstanceCreateCommand"
 "instance set" = "aapclient.controller.instance:InstanceSetCommand"
+"instance-group list" = "aapclient.controller.instance_group:InstanceGroupListCommand"
+"instance-group show" = "aapclient.controller.instance_group:InstanceGroupShowCommand"
+"instance-group create" = "aapclient.controller.instance_group:InstanceGroupCreateCommand"
+"instance-group set" = "aapclient.controller.instance_group:InstanceGroupSetCommand"
+"instance-group delete" = "aapclient.controller.instance_group:InstanceGroupDeleteCommand"
 
 [project.scripts]
 aap = "aapclient.shell:main"
