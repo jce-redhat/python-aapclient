@@ -640,3 +640,67 @@ def resolve_project_name(client, identifier, api="controller"):
     except AAPAPIError:
         # API error during ID lookup
         raise AAPResourceNotFoundError("Project", identifier)
+
+
+def resolve_group_name(client, identifier, api="controller"):
+    """
+    Resolve group identifier (name or ID) to ID for use by other resource commands.
+
+    Args:
+        client: AAPHTTPClient instance
+        identifier: Group name or ID
+        api: API to use for resolution ("controller"). Defaults to "controller".
+             Note: Groups are only available in Controller API.
+
+    Returns:
+        int: Group ID
+
+    Raises:
+        AAPResourceNotFoundError: If group not found by name or ID
+        AAPClientError: If invalid API type specified or API error occurs
+    """
+    # Determine which API endpoint to use
+    if api == "controller":
+        api_endpoint = CONTROLLER_API_VERSION_ENDPOINT
+    elif api == "gateway":
+        # Groups are not available in Gateway API
+        raise AAPClientError("Groups are only available in Controller API. Use api='controller'.")
+    else:
+        raise AAPClientError(f"Invalid API type '{api}'. Must be 'gateway' or 'controller'.")
+
+    # First try as group name lookup
+    try:
+        endpoint = f"{api_endpoint}groups/"
+        params = {'name': identifier}
+        response = client.get(endpoint, params=params)
+
+        if response.status_code == HTTP_OK:
+            data = response.json()
+            results = data.get('results', [])
+            if results:
+                return results[0]['id']
+            else:
+                # Name lookup failed, continue to ID lookup
+                pass
+        else:
+            raise AAPClientError(f"Failed to search for group '{identifier}'")
+    except AAPAPIError:
+        # API error during name lookup, continue to ID lookup
+        pass
+
+    # Name lookup failed, try as ID if it's numeric
+    try:
+        group_id = int(identifier)
+        # Verify the ID exists by trying to get it
+        endpoint = f"{api_endpoint}groups/{group_id}/"
+        response = client.get(endpoint)
+        if response.status_code == HTTP_OK:
+            return group_id
+        else:
+            raise AAPResourceNotFoundError("Group", identifier)
+    except ValueError:
+        # Not a valid integer, and name lookup already failed
+        raise AAPResourceNotFoundError("Group", identifier)
+    except AAPAPIError:
+        # API error during ID lookup
+        raise AAPResourceNotFoundError("Group", identifier)
