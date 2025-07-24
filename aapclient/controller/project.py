@@ -104,15 +104,7 @@ class ProjectListCommand(AAPListCommand):
             try:
                 response = client.get(endpoint, params=params)
             except AAPAPIError as api_error:
-                if api_error.status_code == HTTP_NOT_FOUND:
-                    # Handle 404 error with proper message
-                    raise AAPResourceNotFoundError("Project", "projects endpoint")
-                elif api_error.status_code == HTTP_BAD_REQUEST:
-                    # Pass through 400 status messages directly to user
-                    raise SystemExit(str(api_error))
-                else:
-                    # Re-raise other errors
-                    raise
+                self.handle_api_error(api_error, "Controller API", "projects endpoint")
 
             if response.status_code == HTTP_OK:
                 data = response.json()
@@ -211,14 +203,7 @@ class ProjectShowCommand(AAPShowCommand):
                 return _format_project_data(project_data)
 
             except AAPAPIError as api_error:
-                if api_error.status_code == HTTP_NOT_FOUND:
-                    raise AAPResourceNotFoundError("Project", parsed_args.project or parsed_args.id)
-                elif api_error.status_code == HTTP_BAD_REQUEST:
-                    # Pass through 400 status messages directly to user
-                    raise SystemExit(str(api_error))
-                else:
-                    # Re-raise other errors
-                    raise
+                self.handle_api_error(api_error, "Controller API", parsed_args.project or parsed_args.id)
 
         except AAPResourceNotFoundError as e:
             raise SystemExit(str(e))
@@ -396,16 +381,7 @@ class ProjectCreateCommand(AAPShowCommand):
             try:
                 response = client.post(endpoint, json=project_data)
             except AAPAPIError as api_error:
-                if api_error.status_code == HTTP_NOT_FOUND:
-                    # Handle 404 error with proper message
-                    raise AAPResourceNotFoundError("Project", parsed_args.name)
-                elif api_error.status_code == HTTP_BAD_REQUEST:
-                    # Format 400 errors properly using parser.error
-                    parser = self.get_parser('aap project create')
-                    parser.error(f"Bad request: {api_error}")
-                else:
-                    # Re-raise other errors
-                    raise
+                self.handle_api_error(api_error, "Controller API", parsed_args.name)
 
             if response.status_code == HTTP_CREATED:
                 project_data = response.json()
@@ -417,14 +393,6 @@ class ProjectCreateCommand(AAPShowCommand):
 
         except AAPResourceNotFoundError as e:
             raise SystemExit(str(e))
-        except AAPAPIError as api_error:
-            if api_error.status_code == HTTP_BAD_REQUEST:
-                # Format 400 errors properly using parser.error
-                parser = self.get_parser('aap project create')
-                parser.error(f"Bad request: {api_error}")
-            else:
-                # Re-raise other API errors as client errors with context
-                raise SystemExit(f"API Error: {api_error}")
         except AAPClientError as e:
             raise SystemExit(str(e))
         except Exception as e:
@@ -665,16 +633,7 @@ class ProjectSetCommand(AAPShowCommand):
             try:
                 response = client.patch(endpoint, json=project_data)
             except AAPAPIError as api_error:
-                if api_error.status_code == HTTP_NOT_FOUND:
-                    # Handle 404 error with proper message
-                    raise AAPResourceNotFoundError("Project", parsed_args.project or parsed_args.id)
-                elif api_error.status_code == HTTP_BAD_REQUEST:
-                    # Format 400 errors properly using parser.error
-                    parser = self.get_parser('aap project set')
-                    parser.error(f"Bad request: {api_error}")
-                else:
-                    # Re-raise other errors
-                    raise
+                self.handle_api_error(api_error, "Controller API", parsed_args.project or parsed_args.id)
 
             if response.status_code == HTTP_OK:
                 project_data = response.json()

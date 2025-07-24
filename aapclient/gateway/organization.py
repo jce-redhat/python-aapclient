@@ -42,15 +42,7 @@ class OrganizationListCommand(AAPListCommand):
             try:
                 response = client.get(endpoint, params=params)
             except AAPAPIError as api_error:
-                if api_error.status_code == HTTP_NOT_FOUND:
-                    # Handle 404 error with proper message
-                    raise AAPResourceNotFoundError("Organization", "organizations endpoint")
-                elif api_error.status_code == HTTP_BAD_REQUEST:
-                    # Pass through 400 status messages directly to user
-                    raise SystemExit(str(api_error))
-                else:
-                    # Re-raise other errors
-                    raise
+                self.handle_api_error(api_error, "Gateway API", "organizations endpoint")
 
             if response.status_code == HTTP_OK:
                 data = response.json()

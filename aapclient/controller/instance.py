@@ -106,15 +106,7 @@ class InstanceListCommand(AAPListCommand):
             try:
                 response = client.get(endpoint, params=params)
             except AAPAPIError as api_error:
-                if api_error.status_code == HTTP_NOT_FOUND:
-                    # Handle 404 error with proper message
-                    raise AAPResourceNotFoundError("Instance", "instances endpoint")
-                elif api_error.status_code == HTTP_BAD_REQUEST:
-                    # Pass through 400 status messages directly to user
-                    raise SystemExit(str(api_error))
-                else:
-                    # Re-raise other errors
-                    raise
+                self.handle_api_error(api_error, "Controller API", "instances endpoint")
 
             if response.status_code == HTTP_OK:
                 data = response.json()
@@ -266,16 +258,7 @@ class InstanceCreateCommand(AAPShowCommand):
             try:
                 response = client.post(endpoint, json=instance_data)
             except AAPAPIError as api_error:
-                if api_error.status_code == HTTP_NOT_FOUND:
-                    # Handle 404 error with proper message
-                    raise AAPResourceNotFoundError("Instance", parsed_args.hostname)
-                elif api_error.status_code == HTTP_BAD_REQUEST:
-                    # Format 400 errors properly using parser.error
-                    parser = self.get_parser('aap instance create')
-                    parser.error(f"Bad request: {api_error}")
-                else:
-                    # Re-raise other errors
-                    raise
+                self.handle_api_error(api_error, "Controller API", parsed_args.hostname)
 
             if response.status_code == HTTP_CREATED:
                 instance_data = response.json()
@@ -407,16 +390,7 @@ class InstanceSetCommand(AAPShowCommand):
             try:
                 response = client.patch(endpoint, json=instance_data)
             except AAPAPIError as api_error:
-                if api_error.status_code == HTTP_NOT_FOUND:
-                    # Handle 404 error with proper message
-                    raise AAPResourceNotFoundError("Instance", parsed_args.instance)
-                elif api_error.status_code == HTTP_BAD_REQUEST:
-                    # Format 400 errors properly using parser.error
-                    parser = self.get_parser('aap instance set')
-                    parser.error(f"Bad request: {api_error}")
-                else:
-                    # Re-raise other errors
-                    raise
+                self.handle_api_error(api_error, "Controller API", parsed_args.instance)
 
             if response.status_code == HTTP_OK:
                 instance_data = response.json()

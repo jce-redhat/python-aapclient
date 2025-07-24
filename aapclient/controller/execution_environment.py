@@ -104,15 +104,7 @@ class ExecutionEnvironmentListCommand(AAPListCommand):
             try:
                 response = client.get(endpoint, params=params)
             except AAPAPIError as api_error:
-                if api_error.status_code == HTTP_NOT_FOUND:
-                    # Handle 404 error with proper message
-                    raise AAPResourceNotFoundError("Execution Environment", "execution_environments endpoint")
-                elif api_error.status_code == HTTP_BAD_REQUEST:
-                    # Pass through 400 status messages directly to user
-                    raise SystemExit(str(api_error))
-                else:
-                    # Re-raise other errors
-                    raise
+                self.handle_api_error(api_error, "Controller API", "execution_environments endpoint")
 
             if response.status_code == HTTP_OK:
                 data = response.json()
@@ -278,16 +270,7 @@ class ExecutionEnvironmentCreateCommand(AAPShowCommand):
             try:
                 response = client.post(endpoint, json=ee_data)
             except AAPAPIError as api_error:
-                if api_error.status_code == HTTP_NOT_FOUND:
-                    # Handle 404 error with proper message
-                    raise AAPResourceNotFoundError("Execution Environment", parsed_args.name)
-                elif api_error.status_code == HTTP_BAD_REQUEST:
-                    # Format 400 errors properly using parser.error
-                    parser = self.get_parser('aap execution-environment create')
-                    parser.error(f"Bad request: {api_error}")
-                else:
-                    # Re-raise other errors
-                    raise
+                self.handle_api_error(api_error, "Controller API", parsed_args.name)
 
             if response.status_code == HTTP_CREATED:
                 ee_data = response.json()
@@ -402,16 +385,7 @@ class ExecutionEnvironmentSetCommand(AAPShowCommand):
             try:
                 response = client.patch(endpoint, json=ee_data)
             except AAPAPIError as api_error:
-                if api_error.status_code == HTTP_NOT_FOUND:
-                    # Handle 404 error with proper message
-                    raise AAPResourceNotFoundError("Execution Environment", parsed_args.execution_environment)
-                elif api_error.status_code == HTTP_BAD_REQUEST:
-                    # Format 400 errors properly using parser.error
-                    parser = self.get_parser('aap execution-environment set')
-                    parser.error(f"Bad request: {api_error}")
-                else:
-                    # Re-raise other errors
-                    raise
+                self.handle_api_error(api_error, "Controller API", parsed_args.execution_environment)
 
             if response.status_code == HTTP_OK:
                 ee_data = response.json()

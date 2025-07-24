@@ -113,15 +113,7 @@ class InstanceGroupListCommand(AAPListCommand):
             try:
                 response = client.get(endpoint, params=params)
             except AAPAPIError as api_error:
-                if api_error.status_code == HTTP_NOT_FOUND:
-                    # Handle 404 error with proper message
-                    raise AAPResourceNotFoundError("Instance Group", "instance_groups endpoint")
-                elif api_error.status_code == HTTP_BAD_REQUEST:
-                    # Pass through 400 status messages directly to user
-                    raise SystemExit(str(api_error))
-                else:
-                    # Re-raise other errors
-                    raise
+                self.handle_api_error(api_error, "Controller API", "instance_groups endpoint")
 
             if response.status_code == HTTP_OK:
                 data = response.json()
@@ -332,15 +324,7 @@ class InstanceGroupCreateCommand(AAPShowCommand):
             try:
                 response = client.post(endpoint, json=instance_group_data)
             except AAPAPIError as api_error:
-                if api_error.status_code == HTTP_NOT_FOUND:
-                    # Handle 404 error with proper message
-                    raise AAPResourceNotFoundError("Instance Group", parsed_args.name)
-                elif api_error.status_code == HTTP_BAD_REQUEST:
-                    # Pass through 400 status messages directly to user
-                    raise SystemExit(str(api_error))
-                else:
-                    # Re-raise other errors
-                    raise
+                self.handle_api_error(api_error, "Controller API", parsed_args.name)
 
             if response.status_code == HTTP_CREATED:
                 instance_group_data = response.json()
@@ -493,15 +477,7 @@ class InstanceGroupSetCommand(AAPShowCommand):
             try:
                 response = client.patch(endpoint, json=instance_group_data)
             except AAPAPIError as api_error:
-                if api_error.status_code == HTTP_NOT_FOUND:
-                    # Handle 404 error with proper message
-                    raise AAPResourceNotFoundError("Instance Group", parsed_args.instance_group)
-                elif api_error.status_code == HTTP_BAD_REQUEST:
-                    # Pass through 400 status messages directly to user
-                    raise SystemExit(str(api_error))
-                else:
-                    # Re-raise other errors
-                    raise
+                self.handle_api_error(api_error, "Controller API", parsed_args.instance_group)
 
             if response.status_code == HTTP_OK:
                 instance_group_data = response.json()

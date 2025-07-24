@@ -94,15 +94,7 @@ class CredentialListCommand(AAPListCommand):
             try:
                 response = client.get(endpoint, params=params)
             except AAPAPIError as api_error:
-                if api_error.status_code == HTTP_NOT_FOUND:
-                    # Handle 404 error with proper message
-                    raise AAPResourceNotFoundError("Credential", "credentials endpoint")
-                elif api_error.status_code == HTTP_BAD_REQUEST:
-                    # Pass through 400 status messages directly to user
-                    raise SystemExit(str(api_error))
-                else:
-                    # Re-raise other errors
-                    raise
+                self.handle_api_error(api_error, "Controller API", "credentials endpoint")
 
             if response.status_code == HTTP_OK:
                 data = response.json()
@@ -377,15 +369,7 @@ class CredentialSetCommand(AAPShowCommand):
             try:
                 response = client.patch(endpoint, json=credential_data)
             except AAPAPIError as api_error:
-                if api_error.status_code == HTTP_NOT_FOUND:
-                    # Handle 404 error with proper message
-                    raise AAPResourceNotFoundError("Credential", parsed_args.credential)
-                elif api_error.status_code == HTTP_BAD_REQUEST:
-                    # Pass through 400 status messages directly to user
-                    raise SystemExit(str(api_error))
-                else:
-                    # Re-raise other errors
-                    raise
+                self.handle_api_error(api_error, "Controller API", parsed_args.credential)
 
             if response.status_code == HTTP_OK:
                 credential_data = response.json()

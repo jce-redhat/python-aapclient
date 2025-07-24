@@ -26,7 +26,10 @@ class WhoamiCommand(AAPShowCommand):
             me_endpoint = f"{GATEWAY_API_VERSION_ENDPOINT}me/"
 
             # Call the API
-            response = client.get(me_endpoint)
+            try:
+                response = client.get(me_endpoint)
+            except AAPAPIError as api_error:
+                self.handle_api_error(api_error, "Gateway API", "me endpoint")
 
             if response.status_code == HTTP_OK:
                 data = response.json()

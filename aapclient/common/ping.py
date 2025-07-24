@@ -39,11 +39,17 @@ class PingCommand(AAPShowCommand):
             start_time = time.time()
 
             # Call Gateway API ping
-            gateway_response = gateway_client.get(gateway_ping_endpoint)
+            try:
+                gateway_response = gateway_client.get(gateway_ping_endpoint)
+            except AAPAPIError as api_error:
+                self.handle_api_error(api_error, "Gateway API", "ping endpoint")
             gateway_time = time.time()
 
             # Call Controller API ping
-            controller_response = controller_client.get(controller_ping_endpoint)
+            try:
+                controller_response = controller_client.get(controller_ping_endpoint)
+            except AAPAPIError as api_error:
+                self.handle_api_error(api_error, "Controller", "ping endpoint")
             end_time = time.time()
 
             # Calculate response times in milliseconds

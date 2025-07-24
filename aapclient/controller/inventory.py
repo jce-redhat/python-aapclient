@@ -100,15 +100,7 @@ class InventoryListCommand(AAPListCommand):
             try:
                 response = client.get(endpoint, params=params)
             except AAPAPIError as api_error:
-                if api_error.status_code == HTTP_NOT_FOUND:
-                    # Handle 404 error with proper message
-                    raise AAPResourceNotFoundError("Inventory", "inventories endpoint")
-                elif api_error.status_code == HTTP_BAD_REQUEST:
-                    # Pass through 400 status messages directly to user
-                    raise SystemExit(str(api_error))
-                else:
-                    # Re-raise other errors
-                    raise
+                self.handle_api_error(api_error, "Controller API", "inventories endpoint")
 
             if response.status_code == HTTP_OK:
                 data = response.json()
@@ -292,15 +284,7 @@ class InventoryCreateCommand(AAPShowCommand):
             try:
                 response = client.post(endpoint, json=inventory_data)
             except AAPAPIError as api_error:
-                if api_error.status_code == HTTP_NOT_FOUND:
-                    # Handle 404 error with proper message
-                    raise AAPResourceNotFoundError("Inventory", parsed_args.name)
-                elif api_error.status_code == HTTP_BAD_REQUEST:
-                    # Pass through 400 status messages directly to user
-                    raise SystemExit(str(api_error))
-                else:
-                    # Re-raise other errors
-                    raise
+                self.handle_api_error(api_error, "Controller API", parsed_args.name)
 
             if response.status_code == HTTP_CREATED:
                 inventory_data = response.json()
@@ -421,15 +405,7 @@ class InventorySetCommand(AAPShowCommand):
             try:
                 response = client.patch(endpoint, json=inventory_data)
             except AAPAPIError as api_error:
-                if api_error.status_code == HTTP_NOT_FOUND:
-                    # Handle 404 error with proper message
-                    raise AAPResourceNotFoundError("Inventory", parsed_args.inventory)
-                elif api_error.status_code == HTTP_BAD_REQUEST:
-                    # Pass through 400 status messages directly to user
-                    raise SystemExit(str(api_error))
-                else:
-                    # Re-raise other errors
-                    raise
+                self.handle_api_error(api_error, "Controller API", parsed_args.inventory)
 
             if response.status_code == HTTP_OK:
                 inventory_data = response.json()

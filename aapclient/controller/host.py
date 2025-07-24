@@ -105,15 +105,7 @@ class HostListCommand(AAPListCommand):
             try:
                 response = client.get(endpoint, params=params)
             except AAPAPIError as api_error:
-                if api_error.status_code == HTTP_NOT_FOUND:
-                    # Handle 404 error with proper message
-                    raise AAPResourceNotFoundError("Host", "hosts endpoint")
-                elif api_error.status_code == HTTP_BAD_REQUEST:
-                    # Pass through 400 status messages directly to user
-                    raise SystemExit(str(api_error))
-                else:
-                    # Re-raise other errors
-                    raise
+                self.handle_api_error(api_error, "Controller API", "hosts endpoint")
 
             if response.status_code == HTTP_OK:
                 data = response.json()
@@ -124,7 +116,7 @@ class HostListCommand(AAPListCommand):
                 rows = []
 
                 for host in hosts:
-                    # Get inventory name from summary_fields if available
+                    # Get inventory name from summary_fields
                     inventory_name = ''
                     if 'summary_fields' in host and 'inventory' in host['summary_fields']:
                         if host['summary_fields']['inventory']:
@@ -135,7 +127,7 @@ class HostListCommand(AAPListCommand):
                         host.get('name', ''),
                         host.get('description', ''),
                         inventory_name,
-                        "Yes" if host.get('enabled', False) else "No"
+                        'Yes' if host.get('enabled', False) else 'No'
                     ]
                     rows.append(row)
 
@@ -263,15 +255,7 @@ class HostCreateCommand(AAPShowCommand):
             try:
                 response = client.post(endpoint, json=host_data)
             except AAPAPIError as api_error:
-                if api_error.status_code == HTTP_NOT_FOUND:
-                    # Handle 404 error with proper message
-                    raise AAPResourceNotFoundError("Host", parsed_args.name)
-                elif api_error.status_code == HTTP_BAD_REQUEST:
-                    # Pass through 400 status messages directly to user
-                    raise SystemExit(str(api_error))
-                else:
-                    # Re-raise other errors
-                    raise
+                self.handle_api_error(api_error, "Controller API", parsed_args.name)
 
             if response.status_code == HTTP_CREATED:
                 host_data = response.json()
@@ -380,15 +364,7 @@ class HostSetCommand(AAPShowCommand):
             try:
                 response = client.patch(endpoint, json=host_data)
             except AAPAPIError as api_error:
-                if api_error.status_code == HTTP_NOT_FOUND:
-                    # Handle 404 error with proper message
-                    raise AAPResourceNotFoundError("Host", parsed_args.host)
-                elif api_error.status_code == HTTP_BAD_REQUEST:
-                    # Pass through 400 status messages directly to user
-                    raise SystemExit(str(api_error))
-                else:
-                    # Re-raise other errors
-                    raise
+                self.handle_api_error(api_error, "Controller API", parsed_args.host)
 
             if response.status_code == HTTP_OK:
                 host_data = response.json()
