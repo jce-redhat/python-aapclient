@@ -314,7 +314,8 @@ class OrganizationSetCommand(ShowOne):
 
         # Set fields
         parser.add_argument(
-            '--name',
+            '--set-name',
+            dest='set_name',
             help='Set organization name'
         )
         parser.add_argument(
@@ -345,8 +346,8 @@ class OrganizationSetCommand(ShowOne):
 
             # Prepare data to set
             set_data = {}
-            if parsed_args.name:
-                set_data['name'] = parsed_args.name
+            if parsed_args.set_name:
+                set_data['name'] = parsed_args.set_name
             if parsed_args.description is not None:  # Allow empty string to clear description
                 set_data['description'] = parsed_args.description
 

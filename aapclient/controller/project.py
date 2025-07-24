@@ -13,60 +13,11 @@ from aapclient.common.constants import (
     HTTP_BAD_REQUEST
 )
 from aapclient.common.exceptions import AAPClientError, AAPResourceNotFoundError, AAPAPIError
-from aapclient.common.functions import resolve_organization_name, resolve_execution_environment_name, resolve_credential_name
-from aapclient.controller.credential import resolve_credential_parameter
+from aapclient.common.functions import resolve_organization_name, resolve_execution_environment_name, resolve_credential_name, resolve_project_name
 
 
-def resolve_project_parameter(client, identifier):
-    """
-    Resolve project identifier (name or ID) to ID for use by other resource commands.
 
-    Args:
-        client: AAPHTTPClient instance
-        identifier: Project name or ID
 
-    Returns:
-        int: Project ID
-
-    Raises:
-        AAPResourceNotFoundError: If project not found by name or ID
-    """
-    # First try as project name lookup
-    try:
-        endpoint = f"{CONTROLLER_API_VERSION_ENDPOINT}projects/"
-        params = {'name': identifier}
-        response = client.get(endpoint, params=params)
-
-        if response.status_code == HTTP_OK:
-            data = response.json()
-            results = data.get('results', [])
-            if results:
-                return results[0]['id']
-            else:
-                # Name lookup failed, continue to ID lookup
-                pass
-        else:
-            raise AAPClientError(f"Failed to search for project '{identifier}'")
-    except AAPAPIError:
-        # API error during name lookup, continue to ID lookup
-        pass
-
-    # Name lookup failed, try as ID if it's numeric
-    try:
-        project_id = int(identifier)
-        # Verify the ID exists by trying to get it
-        endpoint = f"{CONTROLLER_API_VERSION_ENDPOINT}projects/{project_id}/"
-        response = client.get(endpoint)
-        if response.status_code == HTTP_OK:
-            return project_id
-        else:
-            raise AAPResourceNotFoundError("Project", identifier)
-    except ValueError:
-        # Not a valid integer, and name lookup already failed
-        raise AAPResourceNotFoundError("Project", identifier)
-    except AAPAPIError:
-        # API error during ID lookup
-        raise AAPResourceNotFoundError("Project", identifier)
 
 
 def _format_project_data(project_data):
@@ -259,7 +210,7 @@ class ProjectShowCommand(ShowOne):
                 project_id = parsed_args.id
             elif parsed_args.project:
                 # Use positional parameter - name first, then ID fallback if numeric
-                project_id = resolve_project_parameter(client, parsed_args.project)
+                project_id = resolve_project_name(client, parsed_args.project, api="controller")
             else:
                 raise AAPClientError("Project identifier is required")
 
@@ -402,7 +353,7 @@ class ProjectCreateCommand(ShowOne):
             # Resolve credential - handle both ID and name (if provided)
             credential_id = None
             if getattr(parsed_args, 'credential', None):
-                credential_id = resolve_credential_parameter(client, parsed_args.credential)
+                credential_id = resolve_credential_name(client, parsed_args.credential, api="controller")
 
             # Resolve execution environment - handle both ID and name (if provided)
             execution_environment_id = None
@@ -518,7 +469,8 @@ class ProjectSetCommand(ShowOne):
 
         # Update fields
         parser.add_argument(
-            '--name',
+            '--set-name',
+            dest='set_name',
             help='Update project name'
         )
         parser.add_argument(
@@ -646,7 +598,7 @@ class ProjectSetCommand(ShowOne):
                 project_id = parsed_args.id
             elif parsed_args.project:
                 # Use positional parameter - name first, then ID fallback if numeric
-                project_id = resolve_project_parameter(client, parsed_args.project)
+                project_id = resolve_project_name(client, parsed_args.project, api="controller")
             else:
                 raise AAPClientError("Project identifier is required")
 
@@ -658,7 +610,7 @@ class ProjectSetCommand(ShowOne):
 
             # Resolve credential if provided
             if getattr(parsed_args, 'credential', None):
-                credential_id = resolve_credential_parameter(client, parsed_args.credential)
+                credential_id = resolve_credential_name(client, parsed_args.credential, api="controller")
             else:
                 credential_id = None
 
@@ -681,8 +633,8 @@ class ProjectSetCommand(ShowOne):
             # Prepare project update data
             project_data = {}
 
-            if parsed_args.name:
-                project_data['name'] = parsed_args.name
+            if parsed_args.set_name:
+                project_data['name'] = parsed_args.set_name
             if parsed_args.description:
                 project_data['description'] = parsed_args.description
             if org_id is not None:
@@ -798,7 +750,7 @@ class ProjectDeleteCommand(Command):
                 project_identifier = str(parsed_args.id)
             elif parsed_args.project:
                 # Use positional parameter - name first, then ID fallback if numeric
-                project_id = resolve_project_parameter(client, parsed_args.project)
+                project_id = resolve_project_name(client, parsed_args.project, api="controller")
                 project_identifier = parsed_args.project
             else:
                 raise AAPClientError("Project identifier is required")

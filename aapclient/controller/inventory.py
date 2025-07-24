@@ -19,9 +19,7 @@ from aapclient.common.exceptions import AAPClientError, AAPResourceNotFoundError
 from aapclient.common.functions import resolve_organization_name, resolve_inventory_name
 
 
-def resolve_inventory_parameter(client, identifier):
-    """Resolve inventory parameter using common function."""
-    return resolve_inventory_name(client, identifier, api="controller")
+
 
 
 def _format_inventory_data(inventory_data):
@@ -183,7 +181,7 @@ class InventoryShowCommand(ShowOne):
                 inventory_id = parsed_args.id
             elif parsed_args.inventory:
                 # Use positional parameter - name first, then ID fallback if numeric
-                inventory_id = resolve_inventory_parameter(client, parsed_args.inventory)
+                inventory_id = resolve_inventory_name(client, parsed_args.inventory, api="controller")
             else:
                 raise AAPClientError("Inventory identifier is required")
 
@@ -311,7 +309,8 @@ class InventorySetCommand(ShowOne):
             help='Inventory name or ID to update'
         )
         parser.add_argument(
-            '--name',
+            '--set-name',
+            dest='set_name',
             help='New name for the inventory'
         )
         parser.add_argument(
@@ -355,7 +354,7 @@ class InventorySetCommand(ShowOne):
             parser = self.get_parser('aap inventory set')
 
             # Resolve inventory - handle both ID and name
-            inventory_id = resolve_inventory_parameter(client, parsed_args.inventory)
+            inventory_id = resolve_inventory_name(client, parsed_args.inventory, api="controller")
 
             # Resolve organization if provided
             if getattr(parsed_args, 'organization', None):
@@ -366,8 +365,8 @@ class InventorySetCommand(ShowOne):
             # Prepare inventory update data
             inventory_data = {}
 
-            if parsed_args.name:
-                inventory_data['name'] = parsed_args.name
+            if parsed_args.set_name:
+                inventory_data['name'] = parsed_args.set_name
             if parsed_args.description is not None:  # Allow empty string
                 inventory_data['description'] = parsed_args.description
             if org_id is not None:
@@ -455,7 +454,7 @@ class InventoryDeleteCommand(Command):
                 inventory_id = parsed_args.id
             elif parsed_args.inventory:
                 # Use positional parameter - name first, then ID fallback if numeric
-                inventory_id = resolve_inventory_parameter(client, parsed_args.inventory)
+                inventory_id = resolve_inventory_name(client, parsed_args.inventory, api="controller")
             else:
                 raise AAPClientError("Inventory identifier is required")
 

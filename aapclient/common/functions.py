@@ -512,3 +512,131 @@ def resolve_host_name(client, identifier, api="controller"):
     except AAPAPIError:
         # API error during ID lookup
         raise AAPResourceNotFoundError("Host", identifier)
+
+
+def resolve_instance_name(client, identifier, api="controller"):
+    """
+    Resolve instance identifier (hostname or ID) to ID for use by other resource commands.
+
+    Args:
+        client: AAPHTTPClient instance
+        identifier: Instance hostname or ID
+        api: API to use for resolution ("controller"). Defaults to "controller".
+             Note: Instances are only available in Controller API.
+
+    Returns:
+        int: Instance ID
+
+    Raises:
+        AAPResourceNotFoundError: If instance not found by hostname or ID
+        AAPClientError: If invalid API type specified or API error occurs
+    """
+    # Determine which API endpoint to use
+    if api == "controller":
+        api_endpoint = CONTROLLER_API_VERSION_ENDPOINT
+    elif api == "gateway":
+        # Instances are not available in Gateway API
+        raise AAPClientError("Instances are only available in Controller API. Use api='controller'.")
+    else:
+        raise AAPClientError(f"Invalid API type '{api}'. Must be 'gateway' or 'controller'.")
+
+    # First try as instance hostname lookup
+    try:
+        endpoint = f"{api_endpoint}instances/"
+        params = {'hostname': identifier}
+        response = client.get(endpoint, params=params)
+
+        if response.status_code == HTTP_OK:
+            data = response.json()
+            results = data.get('results', [])
+            if results:
+                return results[0]['id']
+            else:
+                # Hostname lookup failed, continue to ID lookup
+                pass
+        else:
+            raise AAPClientError(f"Failed to search for instance '{identifier}'")
+    except AAPAPIError:
+        # API error during hostname lookup, continue to ID lookup
+        pass
+
+    # Hostname lookup failed, try as ID if it's numeric
+    try:
+        instance_id = int(identifier)
+        # Verify the ID exists by trying to get it
+        endpoint = f"{api_endpoint}instances/{instance_id}/"
+        response = client.get(endpoint)
+        if response.status_code == HTTP_OK:
+            return instance_id
+        else:
+            raise AAPResourceNotFoundError("Instance", identifier)
+    except ValueError:
+        # Not a valid integer, and hostname lookup already failed
+        raise AAPResourceNotFoundError("Instance", identifier)
+    except AAPAPIError:
+        # API error during ID lookup
+        raise AAPResourceNotFoundError("Instance", identifier)
+
+
+def resolve_project_name(client, identifier, api="controller"):
+    """
+    Resolve project identifier (name or ID) to ID for use by other resource commands.
+
+    Args:
+        client: AAPHTTPClient instance
+        identifier: Project name or ID
+        api: API to use for resolution ("controller"). Defaults to "controller".
+             Note: Projects are only available in Controller API.
+
+    Returns:
+        int: Project ID
+
+    Raises:
+        AAPResourceNotFoundError: If project not found by name or ID
+        AAPClientError: If invalid API type specified or API error occurs
+    """
+    # Determine which API endpoint to use
+    if api == "controller":
+        api_endpoint = CONTROLLER_API_VERSION_ENDPOINT
+    elif api == "gateway":
+        # Projects are not available in Gateway API
+        raise AAPClientError("Projects are only available in Controller API. Use api='controller'.")
+    else:
+        raise AAPClientError(f"Invalid API type '{api}'. Must be 'gateway' or 'controller'.")
+
+    # First try as project name lookup
+    try:
+        endpoint = f"{api_endpoint}projects/"
+        params = {'name': identifier}
+        response = client.get(endpoint, params=params)
+
+        if response.status_code == HTTP_OK:
+            data = response.json()
+            results = data.get('results', [])
+            if results:
+                return results[0]['id']
+            else:
+                # Name lookup failed, continue to ID lookup
+                pass
+        else:
+            raise AAPClientError(f"Failed to search for project '{identifier}'")
+    except AAPAPIError:
+        # API error during name lookup, continue to ID lookup
+        pass
+
+    # Name lookup failed, try as ID if it's numeric
+    try:
+        project_id = int(identifier)
+        # Verify the ID exists by trying to get it
+        endpoint = f"{api_endpoint}projects/{project_id}/"
+        response = client.get(endpoint)
+        if response.status_code == HTTP_OK:
+            return project_id
+        else:
+            raise AAPResourceNotFoundError("Project", identifier)
+    except ValueError:
+        # Not a valid integer, and name lookup already failed
+        raise AAPResourceNotFoundError("Project", identifier)
+    except AAPAPIError:
+        # API error during ID lookup
+        raise AAPResourceNotFoundError("Project", identifier)

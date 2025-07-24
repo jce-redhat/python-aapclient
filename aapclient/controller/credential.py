@@ -13,59 +13,10 @@ from aapclient.common.constants import (
     HTTP_BAD_REQUEST
 )
 from aapclient.common.exceptions import AAPClientError, AAPResourceNotFoundError, AAPAPIError
-from aapclient.common.functions import resolve_organization_name
+from aapclient.common.functions import resolve_organization_name, resolve_credential_name
 
 
-def resolve_credential_parameter(client, identifier):
-    """
-    Resolve credential identifier (name or ID) to ID for use by other resource commands.
 
-    Args:
-        client: AAPHTTPClient instance
-        identifier: Credential name or ID
-
-    Returns:
-        int: Credential ID
-
-    Raises:
-        AAPResourceNotFoundError: If credential not found by name or ID
-    """
-    # First try as credential name lookup
-    try:
-        endpoint = f"{CONTROLLER_API_VERSION_ENDPOINT}credentials/"
-        params = {'name': identifier}
-        response = client.get(endpoint, params=params)
-
-        if response.status_code == HTTP_OK:
-            data = response.json()
-            results = data.get('results', [])
-            if results:
-                return results[0]['id']
-            else:
-                # Name lookup failed, continue to ID lookup
-                pass
-        else:
-            raise AAPClientError(f"Failed to search for credential '{identifier}'")
-    except AAPAPIError:
-        # API error during name lookup, continue to ID lookup
-        pass
-
-    # Name lookup failed, try as ID if it's numeric
-    try:
-        credential_id = int(identifier)
-        # Verify the ID exists by trying to get it
-        endpoint = f"{CONTROLLER_API_VERSION_ENDPOINT}credentials/{credential_id}/"
-        response = client.get(endpoint)
-        if response.status_code == HTTP_OK:
-            return credential_id
-        else:
-            raise AAPResourceNotFoundError("Credential", identifier)
-    except ValueError:
-        # Not a valid integer, and name lookup already failed
-        raise AAPResourceNotFoundError("Credential", identifier)
-    except AAPAPIError:
-        # API error during ID lookup
-        raise AAPResourceNotFoundError("Credential", identifier)
 
 
 def _format_credential_data(credential_data):
@@ -231,7 +182,7 @@ class CredentialShowCommand(ShowOne):
                 credential_id = parsed_args.id
             elif parsed_args.credential:
                 # Use positional parameter - name first, then ID fallback if numeric
-                credential_id = resolve_credential_parameter(client, parsed_args.credential)
+                credential_id = resolve_credential_name(client, parsed_args.credential, api="controller")
             else:
                 raise AAPClientError("Credential identifier is required")
 
@@ -392,7 +343,8 @@ class CredentialSetCommand(ShowOne):
 
         # Update fields
         parser.add_argument(
-            '--name',
+            '--set-name',
+            dest='set_name',
             help='Update credential name'
         )
         parser.add_argument(
@@ -432,7 +384,7 @@ class CredentialSetCommand(ShowOne):
                 credential_id = parsed_args.id
             elif parsed_args.credential:
                 # Use positional parameter - name first, then ID fallback if numeric
-                credential_id = resolve_credential_parameter(client, parsed_args.credential)
+                credential_id = resolve_credential_name(client, parsed_args.credential, api="controller")
             else:
                 raise AAPClientError("Credential identifier is required")
 
@@ -444,8 +396,8 @@ class CredentialSetCommand(ShowOne):
             # Prepare credential update data
             credential_data = {}
 
-            if parsed_args.name:
-                credential_data['name'] = parsed_args.name
+            if parsed_args.set_name:
+                credential_data['name'] = parsed_args.set_name
             if parsed_args.description:
                 credential_data['description'] = parsed_args.description
             if org_id is not None:
@@ -538,7 +490,7 @@ class CredentialDeleteCommand(Command):
                 credential_identifier = str(parsed_args.id)
             elif parsed_args.credential:
                 # Use positional parameter - name first, then ID fallback if numeric
-                credential_id = resolve_credential_parameter(client, parsed_args.credential)
+                credential_id = resolve_credential_name(client, parsed_args.credential, api="controller")
                 credential_identifier = parsed_args.credential
             else:
                 raise AAPClientError("Credential identifier is required")

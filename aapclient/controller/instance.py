@@ -11,6 +11,7 @@ from aapclient.common.constants import (
     HTTP_BAD_REQUEST
 )
 from aapclient.common.exceptions import AAPClientError, AAPResourceNotFoundError, AAPAPIError
+from aapclient.common.functions import resolve_instance_name
 
 
 def _format_instance_data(instance_data):
@@ -158,47 +159,7 @@ def _format_instance_data(instance_data):
     return (columns, values)
 
 
-def resolve_instance_parameter(client, identifier):
-    """
-    Resolve instance identifier (hostname or ID) to ID.
 
-    Args:
-        client: AAPHTTPClient instance
-        identifier: Instance hostname or ID
-
-    Returns:
-        int: Instance ID
-
-    Raises:
-        AAPResourceNotFoundError: If instance not found
-    """
-    # First try as hostname lookup
-    try:
-        endpoint = f"{CONTROLLER_API_VERSION_ENDPOINT}instances/"
-        params = {'hostname': identifier}
-        response = client.get(endpoint, params=params)
-
-        if response.status_code == HTTP_OK:
-            data = response.json()
-            results = data.get('results', [])
-            if results:
-                return results[0]['id']
-    except AAPAPIError:
-        pass
-
-    # Try as ID if it's numeric
-    try:
-        instance_id = int(identifier)
-        endpoint = f"{CONTROLLER_API_VERSION_ENDPOINT}instances/{instance_id}/"
-        response = client.get(endpoint)
-        if response.status_code == HTTP_OK:
-            return instance_id
-        else:
-            raise AAPResourceNotFoundError("Instance", identifier)
-    except ValueError:
-        raise AAPResourceNotFoundError("Instance", identifier)
-    except AAPAPIError:
-        raise AAPResourceNotFoundError("Instance", identifier)
 
 
 class InstanceListCommand(Lister):
@@ -292,7 +253,7 @@ class InstanceShowCommand(ShowOne):
                 instance_id = parsed_args.id
             elif parsed_args.instance:
                 # Use positional parameter - hostname first, then ID fallback if numeric
-                instance_id = resolve_instance_parameter(client, parsed_args.instance)
+                instance_id = resolve_instance_name(client, parsed_args.instance, api="controller")
             else:
                 raise AAPClientError("Instance identifier is required")
 
@@ -489,7 +450,7 @@ class InstanceSetCommand(ShowOne):
             if parsed_args.id:
                 instance_id = parsed_args.id
             elif parsed_args.instance:
-                instance_id = resolve_instance_parameter(client, parsed_args.instance)
+                instance_id = resolve_instance_name(client, parsed_args.instance, api="controller")
             else:
                 parser.error("Instance identifier is required")
 

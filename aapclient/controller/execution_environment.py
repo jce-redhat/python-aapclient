@@ -18,22 +18,7 @@ from aapclient.common.exceptions import AAPClientError, AAPResourceNotFoundError
 from aapclient.common.functions import resolve_organization_name, resolve_execution_environment_name, resolve_credential_name
 
 
-def resolve_execution_environment_parameter(client, identifier):
-    """
-    Resolve execution environment identifier (name or ID) to ID for use by other resource commands.
 
-    Args:
-        client: AAPHTTPClient instance
-        identifier: Execution environment name or ID
-
-    Returns:
-        int: Execution environment ID
-
-    Raises:
-        AAPResourceNotFoundError: If execution environment not found by name or ID
-        AAPClientError: If API error occurs
-    """
-    return resolve_execution_environment_name(client, identifier, api="controller")
 
 
 def _format_execution_environment_data(execution_environment_data):
@@ -165,7 +150,7 @@ class ExecutionEnvironmentShowCommand(ShowOne):
                 execution_environment_id = parsed_args.id
             elif parsed_args.execution_environment:
                 # Use positional parameter - name first, then ID fallback if numeric
-                execution_environment_id = resolve_execution_environment_parameter(client, parsed_args.execution_environment)
+                execution_environment_id = resolve_execution_environment_name(client, parsed_args.execution_environment, api="controller")
             else:
                 raise AAPClientError("Execution environment identifier is required")
 
@@ -297,7 +282,8 @@ class ExecutionEnvironmentSetCommand(ShowOne):
             help='Execution environment name or ID to update'
         )
         parser.add_argument(
-            '--name',
+            '--set-name',
+            dest='set_name',
             help='New name for the execution environment'
         )
         parser.add_argument(
@@ -335,7 +321,7 @@ class ExecutionEnvironmentSetCommand(ShowOne):
             parser = self.get_parser('aap execution-environment set')
 
             # Resolve execution environment - handle both ID and name
-            execution_environment_id = resolve_execution_environment_parameter(client, parsed_args.execution_environment)
+            execution_environment_id = resolve_execution_environment_name(client, parsed_args.execution_environment, api="controller")
 
             # Resolve organization if provided
             if getattr(parsed_args, 'organization', None):
@@ -346,8 +332,8 @@ class ExecutionEnvironmentSetCommand(ShowOne):
             # Prepare execution environment update data
             execution_environment_data = {}
 
-            if parsed_args.name:
-                execution_environment_data['name'] = parsed_args.name
+            if parsed_args.set_name:
+                execution_environment_data['name'] = parsed_args.set_name
             if parsed_args.image:
                 execution_environment_data['image'] = parsed_args.image
             if parsed_args.description:
@@ -434,7 +420,7 @@ class ExecutionEnvironmentDeleteCommand(Command):
                 execution_environment_id = parsed_args.id
             elif parsed_args.execution_environment:
                 # Use positional parameter - name first, then ID fallback if numeric
-                execution_environment_id = resolve_execution_environment_parameter(client, parsed_args.execution_environment)
+                execution_environment_id = resolve_execution_environment_name(client, parsed_args.execution_environment, api="controller")
             else:
                 raise AAPClientError("Execution environment identifier is required")
 

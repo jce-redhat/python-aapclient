@@ -515,7 +515,7 @@ class HostGroupsListCommand(Lister):
                 groups_data = summary_fields.get('groups', {})
                 groups = groups_data.get('results', [])
 
-                columns = ['Group ID', 'Name']
+                columns = ['Group ID', 'Group Name']
                 group_list = []
 
                 for group in groups:
