@@ -1,1 +1,1 @@
-"""Controller API client for Ansible Automation Platform."""
+"""Controller API modules."""

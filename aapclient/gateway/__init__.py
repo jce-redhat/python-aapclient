@@ -1,1 +1,1 @@
-"""Gateway API client for Ansible Automation Platform."""
+"""Gateway API modules."""
