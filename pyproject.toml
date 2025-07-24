@@ -95,6 +95,13 @@ whoami = "aapclient.common.whoami:WhoamiCommand"
 "instance-group create" = "aapclient.controller.instance_group:InstanceGroupCreateCommand"
 "instance-group set" = "aapclient.controller.instance_group:InstanceGroupSetCommand"
 "instance-group delete" = "aapclient.controller.instance_group:InstanceGroupDeleteCommand"
+"host list" = "aapclient.controller.host:HostListCommand"
+"host show" = "aapclient.controller.host:HostShowCommand"
+"host create" = "aapclient.controller.host:HostCreateCommand"
+"host set" = "aapclient.controller.host:HostSetCommand"
+"host delete" = "aapclient.controller.host:HostDeleteCommand"
+"host groups list" = "aapclient.controller.host:HostGroupsListCommand"
+"host variables show" = "aapclient.controller.host:HostVariablesShowCommand"
 
 [project.scripts]
 aap = "aapclient.shell:main"

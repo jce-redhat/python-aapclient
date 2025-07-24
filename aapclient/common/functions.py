@@ -448,3 +448,67 @@ def resolve_instance_group_name(client, identifier, api="controller"):
     except AAPAPIError:
         # API error during ID lookup
         raise AAPResourceNotFoundError("Instance Group", identifier)
+
+
+def resolve_host_name(client, identifier, api="controller"):
+    """
+    Resolve host identifier (name or ID) to ID for use by other resource commands.
+
+    Args:
+        client: AAPHTTPClient instance
+        identifier: Host name or ID
+        api: API to use for resolution ("controller"). Defaults to "controller".
+             Note: Hosts are only available in Controller API.
+
+    Returns:
+        int: Host ID
+
+    Raises:
+        AAPResourceNotFoundError: If host not found by name or ID
+        AAPClientError: If invalid API type specified or API error occurs
+    """
+    # Determine which API endpoint to use
+    if api == "controller":
+        api_endpoint = CONTROLLER_API_VERSION_ENDPOINT
+    elif api == "gateway":
+        # Hosts are not available in Gateway API
+        raise AAPClientError("Hosts are only available in Controller API. Use api='controller'.")
+    else:
+        raise AAPClientError(f"Invalid API type '{api}'. Must be 'gateway' or 'controller'.")
+
+    # First try as host name lookup
+    try:
+        endpoint = f"{api_endpoint}hosts/"
+        params = {'name': identifier}
+        response = client.get(endpoint, params=params)
+
+        if response.status_code == HTTP_OK:
+            data = response.json()
+            results = data.get('results', [])
+            if results:
+                return results[0]['id']
+            else:
+                # Name lookup failed, continue to ID lookup
+                pass
+        else:
+            raise AAPClientError(f"Failed to search for host '{identifier}'")
+    except AAPAPIError:
+        # API error during name lookup, continue to ID lookup
+        pass
+
+    # Name lookup failed, try as ID if it's numeric
+    try:
+        host_id = int(identifier)
+        # Verify the ID exists by trying to get it
+        endpoint = f"{api_endpoint}hosts/{host_id}/"
+        response = client.get(endpoint)
+        if response.status_code == HTTP_OK:
+            return host_id
+        else:
+            raise AAPResourceNotFoundError("Host", identifier)
+    except ValueError:
+        # Not a valid integer, and name lookup already failed
+        raise AAPResourceNotFoundError("Host", identifier)
+    except AAPAPIError:
+        # API error during ID lookup
+        raise AAPResourceNotFoundError("Host", identifier)
