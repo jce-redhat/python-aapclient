@@ -11,21 +11,31 @@ load_dotenv()
 class AAPConfig:
     """Configuration class for AAP client."""
 
-    def __init__(self):
-        self.host = os.getenv(AAP_HOST)
-        self.username = os.getenv(AAP_USERNAME)
-        self.password = os.getenv(AAP_PASSWORD)
-        self.token = os.getenv(AAP_TOKEN)
-        self._timeout = os.getenv(AAP_TIMEOUT)
+    def __init__(self, config_overrides=None):
+        """
+        Initialize configuration.
+
+        Args:
+            config_overrides: Dict of configuration overrides from command-line arguments.
+                             Keys can be 'host', 'username', 'password', 'token', 'timeout'.
+        """
+        overrides = config_overrides or {}
+
+        # Apply overrides with precedence: command-line > environment variables
+        self.host = overrides.get('host') or os.getenv(AAP_HOST)
+        self.username = overrides.get('username') or os.getenv(AAP_USERNAME)
+        self.password = overrides.get('password') or os.getenv(AAP_PASSWORD)
+        self.token = overrides.get('token') or os.getenv(AAP_TOKEN)
+        self._timeout = overrides.get('timeout') or os.getenv(AAP_TIMEOUT)
 
     def validate(self):
         """Validate configuration."""
         if not self.host:
-            raise AAPClientError("AAP_HOST environment variable is required")
+            raise AAPClientError("AAP_HOST environment variable or --aap-host argument is required")
 
         if not (self.token or (self.username and self.password)):
             raise AAPClientError(
-                "Either AAP_TOKEN or both AAP_USERNAME and AAP_PASSWORD are required"
+                "Either AAP_TOKEN/--aap-token or both AAP_USERNAME/--aap-username and AAP_PASSWORD/--aap-password are required"
             )
 
     @property

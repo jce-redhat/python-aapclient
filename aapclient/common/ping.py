@@ -1,13 +1,17 @@
-"""Ping command for testing AAP API connectivity."""
+"""Ping commands."""
 import time
-from cliff.show import ShowOne
-from aapclient.common.client import AAPHTTPClient
-from aapclient.common.config import AAPConfig
-from aapclient.common.constants import GATEWAY_API_VERSION_ENDPOINT, CONTROLLER_API_VERSION_ENDPOINT, HTTP_OK
-from aapclient.common.exceptions import AAPClientError
+from aapclient.common.basecommands import AAPShowCommand
+from aapclient.common.constants import (
+    GATEWAY_API_VERSION_ENDPOINT,
+    CONTROLLER_API_VERSION_ENDPOINT,
+    HTTP_OK,
+    HTTP_NOT_FOUND,
+    HTTP_BAD_REQUEST
+)
+from aapclient.common.exceptions import AAPClientError, AAPResourceNotFoundError, AAPAPIError
 
 
-class PingCommand(ShowOne):
+class PingCommand(AAPShowCommand):
     """Test connectivity to AAP API."""
 
     def get_parser(self, prog_name):
@@ -23,12 +27,9 @@ class PingCommand(ShowOne):
     def take_action(self, parsed_args):
         """Execute the ping command."""
         try:
-            # Initialize configuration and validate
-            config = AAPConfig()
-            config.validate()
-
-            # Create HTTP client
-            client = AAPHTTPClient(config)
+            # Get clients from centralized client manager
+            gateway_client = self.gateway_client
+            controller_client = self.controller_client
 
             # Test connectivity using both Gateway and Controller API ping endpoints
             gateway_ping_endpoint = f"{GATEWAY_API_VERSION_ENDPOINT}ping/"
@@ -38,11 +39,11 @@ class PingCommand(ShowOne):
             start_time = time.time()
 
             # Call Gateway API ping
-            gateway_response = client.get(gateway_ping_endpoint)
+            gateway_response = gateway_client.get(gateway_ping_endpoint)
             gateway_time = time.time()
 
             # Call Controller API ping
-            controller_response = client.get(controller_ping_endpoint)
+            controller_response = controller_client.get(controller_ping_endpoint)
             end_time = time.time()
 
             # Calculate response times in milliseconds
@@ -61,7 +62,7 @@ class PingCommand(ShowOne):
 
                 # Host
                 columns.append('Host')
-                values.append(config.host)
+                values.append(self.client_manager.config.host)
 
                 # Service Status (from Gateway API)
                 if 'status' in gateway_data:

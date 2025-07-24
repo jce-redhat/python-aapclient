@@ -1,12 +1,15 @@
-"""Whoami command for getting current user information from AAP."""
-from cliff.show import ShowOne
-from aapclient.common.client import AAPHTTPClient
-from aapclient.common.config import AAPConfig
-from aapclient.common.constants import GATEWAY_API_VERSION_ENDPOINT, HTTP_OK
-from aapclient.common.exceptions import AAPClientError
+"""Whoami commands."""
+from aapclient.common.basecommands import AAPShowCommand
+from aapclient.common.constants import (
+    GATEWAY_API_VERSION_ENDPOINT,
+    HTTP_OK,
+    HTTP_NOT_FOUND,
+    HTTP_BAD_REQUEST
+)
+from aapclient.common.exceptions import AAPClientError, AAPResourceNotFoundError, AAPAPIError
 
 
-class WhoamiCommand(ShowOne):
+class WhoamiCommand(AAPShowCommand):
     """Get current user information."""
 
     def get_parser(self, prog_name):
@@ -16,12 +19,8 @@ class WhoamiCommand(ShowOne):
     def take_action(self, parsed_args):
         """Execute the whoami command."""
         try:
-            # Initialize configuration and validate
-            config = AAPConfig()
-            config.validate()
-
-            # Create HTTP client
-            client = AAPHTTPClient(config)
+            # Get client from centralized client manager
+            client = self.gateway_client
 
             # Get current user information from Gateway API me endpoint
             me_endpoint = f"{GATEWAY_API_VERSION_ENDPOINT}me/"

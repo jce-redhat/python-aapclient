@@ -1,9 +1,5 @@
 """Project commands."""
-from cliff.command import Command
-from cliff.lister import Lister
-from cliff.show import ShowOne
-from aapclient.common.client import AAPHTTPClient
-from aapclient.common.config import AAPConfig
+from aapclient.common.basecommands import AAPShowCommand, AAPListCommand, AAPCommand
 from aapclient.common.constants import (
     CONTROLLER_API_VERSION_ENDPOINT,
     HTTP_OK,
@@ -79,7 +75,7 @@ def _format_project_data(project_data):
 
 
 
-class ProjectListCommand(Lister):
+class ProjectListCommand(AAPListCommand):
     """List projects."""
 
     def get_parser(self, prog_name):
@@ -95,12 +91,8 @@ class ProjectListCommand(Lister):
     def take_action(self, parsed_args):
         """Execute the project list command."""
         try:
-            # Initialize configuration and validate
-            config = AAPConfig()
-            config.validate()
-
-            # Create HTTP client
-            client = AAPHTTPClient(config)
+            # Get client from centralized client manager
+            client = self.controller_client
 
             # Build query parameters
             params = {'order_by': 'id'}  # Sort by ID on server side
@@ -173,7 +165,7 @@ class ProjectListCommand(Lister):
             raise SystemExit(f"Unexpected error: {e}")
 
 
-class ProjectShowCommand(ShowOne):
+class ProjectShowCommand(AAPShowCommand):
     """Show details of a specific project."""
 
     def get_parser(self, prog_name):
@@ -197,12 +189,8 @@ class ProjectShowCommand(ShowOne):
     def take_action(self, parsed_args):
         """Execute the project show command."""
         try:
-            # Initialize configuration and validate
-            config = AAPConfig()
-            config.validate()
-
-            # Create HTTP client
-            client = AAPHTTPClient(config)
+            # Get client from centralized client manager
+            client = self.controller_client
 
             # Determine how to resolve the project
             if parsed_args.id:
@@ -240,7 +228,7 @@ class ProjectShowCommand(ShowOne):
             raise SystemExit(f"Unexpected error: {e}")
 
 
-class ProjectCreateCommand(ShowOne):
+class ProjectCreateCommand(AAPShowCommand):
     """Create a new project."""
 
     def get_parser(self, prog_name):
@@ -329,12 +317,8 @@ class ProjectCreateCommand(ShowOne):
     def take_action(self, parsed_args):
         """Execute the project create command."""
         try:
-            # Initialize configuration and validate
-            config = AAPConfig()
-            config.validate()
-
-            # Create HTTP client
-            client = AAPHTTPClient(config)
+            # Get client from centralized client manager
+            client = self.controller_client
 
             # Get parser for usage message
             parser = self.get_parser('aap project create')
@@ -447,7 +431,7 @@ class ProjectCreateCommand(ShowOne):
             raise SystemExit(f"Unexpected error: {e}")
 
 
-class ProjectSetCommand(ShowOne):
+class ProjectSetCommand(AAPShowCommand):
     """Update an existing project."""
 
     def get_parser(self, prog_name):
@@ -585,12 +569,8 @@ class ProjectSetCommand(ShowOne):
     def take_action(self, parsed_args):
         """Execute the project set command."""
         try:
-            # Initialize configuration and validate
-            config = AAPConfig()
-            config.validate()
-
-            # Create HTTP client
-            client = AAPHTTPClient(config)
+            # Get client from centralized client manager
+            client = self.controller_client
 
             # Determine how to resolve the project
             if parsed_args.id:
@@ -712,7 +692,7 @@ class ProjectSetCommand(ShowOne):
             raise SystemExit(f"Unexpected error: {e}")
 
 
-class ProjectDeleteCommand(Command):
+class ProjectDeleteCommand(AAPCommand):
     """Delete a project."""
 
     def get_parser(self, prog_name):
@@ -736,12 +716,8 @@ class ProjectDeleteCommand(Command):
     def take_action(self, parsed_args):
         """Execute the project delete command."""
         try:
-            # Initialize configuration and validate
-            config = AAPConfig()
-            config.validate()
-
-            # Create HTTP client
-            client = AAPHTTPClient(config)
+            # Get client from centralized client manager
+            client = self.controller_client
 
             # Determine how to resolve the project
             if parsed_args.id:

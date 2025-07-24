@@ -1,16 +1,13 @@
 """Team commands."""
-from cliff.command import Command
-from cliff.lister import Lister
-from cliff.show import ShowOne
-from aapclient.common.client import AAPHTTPClient
-from aapclient.common.config import AAPConfig
+from aapclient.common.basecommands import AAPShowCommand, AAPListCommand, AAPCommand
 from aapclient.common.constants import (
     GATEWAY_API_VERSION_ENDPOINT,
     HTTP_OK,
     HTTP_CREATED,
     HTTP_NO_CONTENT,
     HTTP_NOT_FOUND,
-    HTTP_BAD_REQUEST
+    HTTP_BAD_REQUEST,
+    HTTP_ACCEPTED
 )
 from aapclient.common.exceptions import AAPClientError, AAPResourceNotFoundError, AAPAPIError
 from aapclient.common.functions import resolve_organization_name, resolve_team_name
@@ -18,7 +15,53 @@ from aapclient.common.functions import resolve_organization_name, resolve_team_n
 
 
 
-class TeamListCommand(Lister):
+def _format_team_data(team_data):
+    """
+    Format team data consistently
+
+    Args:
+        team_data (dict): Team data from API response
+
+    Returns:
+        tuple: (field_names, field_values) for ShowOne display
+    """
+    # Extract team details
+    id_value = team_data.get('id', '')
+    name = team_data.get('name', '')
+    description = team_data.get('description', '')
+    organization_name = ''
+
+    # Resolve organization name if available
+    if 'summary_fields' in team_data and 'organization' in team_data['summary_fields']:
+        if team_data['summary_fields']['organization']:
+            organization_name = team_data['summary_fields']['organization'].get('name', '')
+
+    created = team_data.get('created', '')
+    modified = team_data.get('modified', '')
+
+    # Format fields for display
+    columns = [
+        'ID',
+        'Name',
+        'Description',
+        'Organization',
+        'Created',
+        'Modified'
+    ]
+
+    values = [
+        id_value,
+        name,
+        description,
+        organization_name,
+        created,
+        modified
+    ]
+
+    return (columns, values)
+
+
+class TeamListCommand(AAPListCommand):
     """List teams."""
 
     def get_parser(self, prog_name):
@@ -34,12 +77,8 @@ class TeamListCommand(Lister):
     def take_action(self, parsed_args):
         """Execute the team list command."""
         try:
-            # Initialize configuration and validate
-            config = AAPConfig()
-            config.validate()
-
-            # Create HTTP client
-            client = AAPHTTPClient(config)
+            # Get client from centralized client manager
+            client = self.gateway_client
 
             # Build query parameters
             params = {'order_by': 'id'}  # Sort by ID on server side
@@ -63,28 +102,23 @@ class TeamListCommand(Lister):
 
             if response.status_code == HTTP_OK:
                 data = response.json()
-
-                # Extract teams from results (already sorted by API)
                 teams = data.get('results', [])
 
-                # Define columns for table display
-                columns = [
-                    'ID',
-                    'Name',
-                    'Organization'
-                ]
-
-                # Build rows data
+                # Define columns for output
+                columns = ['ID', 'Name', 'Description', 'Organization']
                 rows = []
+
                 for team in teams:
-                    # Get organization name from summary_fields
+                    # Get organization name from summary_fields if available
                     org_name = ''
                     if 'summary_fields' in team and 'organization' in team['summary_fields']:
-                        org_name = team['summary_fields']['organization'].get('name', '')
+                        if team['summary_fields']['organization']:
+                            org_name = team['summary_fields']['organization'].get('name', '')
 
                     row = [
                         team.get('id', ''),
                         team.get('name', ''),
+                        team.get('description', ''),
                         org_name
                     ]
                     rows.append(row)
@@ -101,7 +135,7 @@ class TeamListCommand(Lister):
             raise SystemExit(f"Unexpected error: {e}")
 
 
-class TeamShowCommand(ShowOne):
+class TeamShowCommand(AAPShowCommand):
     """Show details of a specific team."""
 
     def get_parser(self, prog_name):
@@ -114,92 +148,55 @@ class TeamShowCommand(ShowOne):
             help='Team ID (overrides positional parameter)'
         )
 
-        # Positional parameter for team name lookup with ID fallback
+        # Positional parameter for name lookup with ID fallback
         parser.add_argument(
             'team',
             nargs='?',
-            help='Team name or ID'
+            metavar='<team>',
+            help='Team name or ID to display'
         )
         return parser
 
     def take_action(self, parsed_args):
         """Execute the team show command."""
         try:
-            # Initialize configuration and validate
-            config = AAPConfig()
-            config.validate()
-
-            # Create HTTP client
-            client = AAPHTTPClient(config)
+            # Get client from centralized client manager
+            client = self.gateway_client
 
             # Determine how to resolve the team
             if parsed_args.id:
                 # Use explicit ID (ignores positional parameter)
                 team_id = parsed_args.id
             elif parsed_args.team:
-                # Use positional parameter - team name first, then ID fallback if numeric
-                team_id = resolve_team_name(client, parsed_args.team)
+                # Use positional parameter - name first, then ID fallback if numeric
+                team_id = resolve_team_name(client, parsed_args.team, api="gateway")
             else:
                 raise AAPClientError("Team identifier is required")
 
-            # Get specific team
             endpoint = f"{GATEWAY_API_VERSION_ENDPOINT}teams/{team_id}/"
-            try:
-                response = client.get(endpoint)
+            response = client.get(endpoint)
+
+            if response.status_code == HTTP_OK:
                 team_data = response.json()
+                return _format_team_data(team_data)
+            elif response.status_code == HTTP_NOT_FOUND:
+                raise AAPResourceNotFoundError("Team", parsed_args.team or parsed_args.id)
+            else:
+                raise AAPClientError(f"Failed to get team: {response.status_code}")
 
-                # Prepare data using dictionary for cleaner code
-                org_info = team_data.get('summary_fields', {}).get('organization', {})
-                created_by = team_data.get('summary_fields', {}).get('created_by', {})
-                modified_by = team_data.get('summary_fields', {}).get('modified_by', {})
-
-                # Define field mappings as ordered dictionary
-                field_data = {
-                    'ID': str(team_data.get('id', '')),
-                    'Name': team_data.get('name', ''),
-                    'Description': team_data.get('description', ''),
-                    'Organization': org_info.get('name', '') or str(team_data.get('organization', '')),
-                    'Created': team_data.get('created', ''),
-                    'Created By': created_by.get('username', '') if created_by else '',
-                    'Modified': team_data.get('modified', ''),
-                    'Modified By': modified_by.get('username', '') if modified_by else ''
-                }
-
-                # Convert to columns and values for Cliff formatting
-                columns = []
-                values = []
-                for column_name, value in field_data.items():
-                    columns.append(column_name)
-                    values.append(value)
-
-                return (columns, values)
-            except AAPAPIError as api_error:
-                # Check if it's a 404 error from the API
-                if api_error.status_code == HTTP_NOT_FOUND:
-                    # Use consistent error message for both --id and positional parameter
-                    identifier = str(parsed_args.id) if parsed_args.id else parsed_args.team
-                    raise AAPResourceNotFoundError("Team", identifier)
-                elif api_error.status_code == HTTP_BAD_REQUEST:
-                    # Pass through 400 status messages directly to user
-                    raise SystemExit(str(api_error))
-                else:
-                    # Re-raise other errors
-                    raise
-
-        except AAPResourceNotFoundError as e:
-            raise SystemExit(str(e))
-        except AAPClientError as e:
-            raise SystemExit(str(e))
+        except AAPResourceNotFoundError:
+            raise
+        except AAPClientError:
+            raise
         except Exception as e:
-            raise SystemExit(f"Unexpected error: {e}")
+            raise AAPClientError(f"Unexpected error: {e}")
 
 
-class TeamCreateCommand(ShowOne):
-    """Create a team."""
+class TeamCreateCommand(AAPShowCommand):
+    """Create a new team."""
 
     def get_parser(self, prog_name):
         parser = super().get_parser(prog_name)
-
         parser.add_argument(
             'name',
             help='Team name'
@@ -213,30 +210,28 @@ class TeamCreateCommand(ShowOne):
             required=True,
             help='Organization name or ID'
         )
-
         return parser
 
     def take_action(self, parsed_args):
         """Execute the team create command."""
         try:
-            # Initialize configuration and validate
-            config = AAPConfig()
-            config.validate()
+            # Get client from centralized client manager
+            client = self.gateway_client
 
-            # Create HTTP client
-            client = AAPHTTPClient(config)
+            # Get parser for usage message
+            parser = self.get_parser('aap team create')
 
-            # Prepare team data
+            # Resolve organization
+            org_id = resolve_organization_name(client, parsed_args.organization, api="gateway")
+
             team_data = {
-                'name': parsed_args.name
+                'name': parsed_args.name,
+                'organization': org_id
             }
 
+            # Add optional fields
             if parsed_args.description:
                 team_data['description'] = parsed_args.description
-
-            # Resolve organization name/ID to ID (organization is required)
-            org_id = resolve_organization_name(client, parsed_args.organization)
-            team_data['organization'] = org_id
 
             # Create team
             endpoint = f"{GATEWAY_API_VERSION_ENDPOINT}teams/"
@@ -255,50 +250,11 @@ class TeamCreateCommand(ShowOne):
 
             if response.status_code == HTTP_CREATED:
                 team_data = response.json()
+                print(f"Team '{team_data.get('name', '')}' created successfully")
 
-                # Prepare columns and data for Cliff formatting
-                columns = []
-                values = []
-
-                # Basic information
-                columns.append('ID')
-                values.append(str(team_data.get('id', '')))
-
-                columns.append('Name')
-                values.append(team_data.get('name', ''))
-
-                columns.append('Description')
-                values.append(team_data.get('description', ''))
-
-                # Organization information
-                columns.append('Organization')
-                org_info = team_data.get('summary_fields', {}).get('organization', {})
-                values.append(org_info.get('name', '') or str(team_data.get('organization', '')))
-
-                columns.append('Created')
-                values.append(team_data.get('created', ''))
-
-                columns.append('Created By')
-                created_by = team_data.get('summary_fields', {}).get('created_by', {})
-                values.append(created_by.get('username', '') if created_by else '')
-
-                return (columns, values)
+                return _format_team_data(team_data)
             else:
-                error_msg = f"Failed to create team: HTTP {response.status_code}"
-                try:
-                    error_data = response.json()
-                    if 'detail' in error_data:
-                        error_msg += f" - {error_data['detail']}"
-                    elif isinstance(error_data, dict):
-                        # Handle field-specific errors
-                        for field, errors in error_data.items():
-                            if isinstance(errors, list):
-                                error_msg += f" - {field}: {', '.join(errors)}"
-                            else:
-                                error_msg += f" - {field}: {errors}"
-                except:
-                    pass
-                raise AAPClientError(error_msg)
+                raise AAPClientError(f"Team creation failed with status {response.status_code}")
 
         except AAPResourceNotFoundError as e:
             raise SystemExit(str(e))
@@ -308,8 +264,8 @@ class TeamCreateCommand(ShowOne):
             raise SystemExit(f"Unexpected error: {e}")
 
 
-class TeamSetCommand(ShowOne):
-    """Set team properties."""
+class TeamSetCommand(AAPShowCommand):
+    """Update an existing team."""
 
     def get_parser(self, prog_name):
         parser = super().get_parser(prog_name)
@@ -321,72 +277,68 @@ class TeamSetCommand(ShowOne):
             help='Team ID (overrides positional parameter)'
         )
 
-        # Positional parameter for team name lookup with ID fallback
+        # Positional parameter for name lookup with ID fallback
         parser.add_argument(
             'team',
             nargs='?',
-            help='Team name or ID'
+            metavar='<team>',
+            help='Team name or ID to update'
         )
 
         parser.add_argument(
             '--set-name',
             dest='set_name',
-            help='Set team name'
+            help='New team name'
         )
         parser.add_argument(
             '--description',
-            help='Set team description (use empty string to clear)'
+            help='Team description'
         )
         parser.add_argument(
             '--organization',
-            help='Set organization name or ID'
+            help='Organization name or ID'
         )
-
         return parser
 
     def take_action(self, parsed_args):
         """Execute the team set command."""
         try:
-            # Initialize configuration and validate
-            config = AAPConfig()
-            config.validate()
+            # Get client from centralized client manager
+            client = self.gateway_client
 
-            # Create HTTP client
-            client = AAPHTTPClient(config)
+            # Get parser for usage message
+            parser = self.get_parser('aap team set')
 
-            # Determine how to resolve the team
-            if parsed_args.id:
-                # Use explicit ID (ignores positional parameter)
-                team_id = parsed_args.id
-            elif parsed_args.team:
-                # Use positional parameter - team name first, then ID fallback if numeric
-                team_id = resolve_team_name(client, parsed_args.team)
+            # Resolve team - handle both ID and name
+            team_id = resolve_team_name(client, parsed_args.team, api="gateway")
+
+            # Resolve organization if provided
+            if getattr(parsed_args, 'organization', None):
+                org_id = resolve_organization_name(client, parsed_args.organization, api="gateway")
             else:
-                raise AAPClientError("Team identifier is required")
+                org_id = None
 
-            # Prepare data to set
-            set_data = {}
+            # Prepare team update data
+            team_data = {}
+
             if parsed_args.set_name:
-                set_data['name'] = parsed_args.set_name
-            if parsed_args.description is not None:  # Allow empty string to clear description
-                set_data['description'] = parsed_args.description
-            if parsed_args.organization:
-                # Resolve organization name/ID to ID
-                org_id = resolve_organization_name(client, parsed_args.organization)
-                set_data['organization'] = org_id
+                team_data['name'] = parsed_args.set_name
+            if parsed_args.description is not None:  # Allow empty string
+                team_data['description'] = parsed_args.description
+            if org_id is not None:
+                team_data['organization'] = org_id
 
-            if not set_data:
-                raise AAPClientError("At least one field must be specified to set")
+            if not team_data:
+                parser.error("No update fields provided")
 
             # Update team
             endpoint = f"{GATEWAY_API_VERSION_ENDPOINT}teams/{team_id}/"
             try:
-                response = client.patch(endpoint, json=set_data)
+                response = client.patch(endpoint, json=team_data)
             except AAPAPIError as api_error:
                 if api_error.status_code == HTTP_NOT_FOUND:
                     # Handle 404 error with proper message
-                    identifier = str(parsed_args.id) if parsed_args.id else parsed_args.team
-                    raise AAPResourceNotFoundError("Team", identifier)
+                    raise AAPResourceNotFoundError("Team", parsed_args.team)
                 elif api_error.status_code == HTTP_BAD_REQUEST:
                     # Pass through 400 status messages directly to user
                     raise SystemExit(str(api_error))
@@ -396,57 +348,11 @@ class TeamSetCommand(ShowOne):
 
             if response.status_code == HTTP_OK:
                 team_data = response.json()
+                print(f"Team '{team_data.get('name', '')}' updated successfully")
 
-                # Prepare columns and data for Cliff formatting
-                columns = []
-                values = []
-
-                # Basic information
-                columns.append('ID')
-                values.append(str(team_data.get('id', '')))
-
-                columns.append('Name')
-                values.append(team_data.get('name', ''))
-
-                columns.append('Description')
-                values.append(team_data.get('description', ''))
-
-                # Organization information
-                columns.append('Organization')
-                org_info = team_data.get('summary_fields', {}).get('organization', {})
-                values.append(org_info.get('name', '') or str(team_data.get('organization', '')))
-
-                columns.append('Created')
-                values.append(team_data.get('created', ''))
-
-                columns.append('Created By')
-                created_by = team_data.get('summary_fields', {}).get('created_by', {})
-                values.append(created_by.get('username', '') if created_by else '')
-
-                columns.append('Modified')
-                values.append(team_data.get('modified', ''))
-
-                columns.append('Modified By')
-                modified_by = team_data.get('summary_fields', {}).get('modified_by', {})
-                values.append(modified_by.get('username', '') if modified_by else '')
-
-                return (columns, values)
+                return _format_team_data(team_data)
             else:
-                error_msg = f"Failed to set team: HTTP {response.status_code}"
-                try:
-                    error_data = response.json()
-                    if 'detail' in error_data:
-                        error_msg += f" - {error_data['detail']}"
-                    elif isinstance(error_data, dict):
-                        # Handle field-specific errors
-                        for field, errors in error_data.items():
-                            if isinstance(errors, list):
-                                error_msg += f" - {field}: {', '.join(errors)}"
-                            else:
-                                error_msg += f" - {field}: {errors}"
-                except:
-                    pass
-                raise AAPClientError(error_msg)
+                raise AAPClientError(f"Team update failed with status {response.status_code}")
 
         except AAPResourceNotFoundError as e:
             raise SystemExit(str(e))
@@ -456,7 +362,7 @@ class TeamSetCommand(ShowOne):
             raise SystemExit(f"Unexpected error: {e}")
 
 
-class TeamDeleteCommand(Command):
+class TeamDeleteCommand(AAPCommand):
     """Delete a team."""
 
     def get_parser(self, prog_name):
@@ -469,87 +375,44 @@ class TeamDeleteCommand(Command):
             help='Team ID (overrides positional parameter)'
         )
 
-        # Positional parameter for team name lookup with ID fallback
+        # Positional parameter for name lookup with ID fallback
         parser.add_argument(
             'team',
             nargs='?',
+            metavar='<team>',
             help='Team name or ID'
         )
-
         return parser
 
     def take_action(self, parsed_args):
         """Execute the team delete command."""
         try:
-            # Initialize configuration and validate
-            config = AAPConfig()
-            config.validate()
-
-            # Create HTTP client
-            client = AAPHTTPClient(config)
+            # Get client from centralized client manager
+            client = self.gateway_client
 
             # Determine how to resolve the team
             if parsed_args.id:
                 # Use explicit ID (ignores positional parameter)
                 team_id = parsed_args.id
             elif parsed_args.team:
-                # Use positional parameter - team name first, then ID fallback if numeric
-                team_id = resolve_team_name(client, parsed_args.team)
+                # Use positional parameter - name first, then ID fallback if numeric
+                team_id = resolve_team_name(client, parsed_args.team, api="gateway")
             else:
                 raise AAPClientError("Team identifier is required")
 
-            # Get team info first to confirm it exists and get the name
             endpoint = f"{GATEWAY_API_VERSION_ENDPOINT}teams/{team_id}/"
-            try:
-                response = client.get(endpoint)
-            except AAPAPIError as api_error:
-                if api_error.status_code == HTTP_NOT_FOUND:
-                    # Handle 404 error with proper message
-                    identifier = str(parsed_args.id) if parsed_args.id else parsed_args.team
-                    raise AAPResourceNotFoundError("Team", identifier)
-                elif api_error.status_code == HTTP_BAD_REQUEST:
-                    # Pass through 400 status messages directly to user
-                    raise SystemExit(str(api_error))
-                else:
-                    # Re-raise other errors
-                    raise
+            response = client.delete(endpoint)
 
-            if response.status_code == HTTP_OK:
-                team_data = response.json()
-                team_name = team_data.get('name', str(team_id))
-
-                # Delete team
-                try:
-                    response = client.delete(endpoint)
-                except AAPAPIError as api_error:
-                    if api_error.status_code == HTTP_NOT_FOUND:
-                        # Handle 404 error with proper message
-                        identifier = str(parsed_args.id) if parsed_args.id else parsed_args.team
-                        raise AAPResourceNotFoundError("Team", identifier)
-                    elif api_error.status_code == HTTP_BAD_REQUEST:
-                        # Pass through 400 status messages directly to user
-                        raise SystemExit(str(api_error))
-                    else:
-                        # Re-raise other errors
-                        raise
-
-                if response.status_code == HTTP_NO_CONTENT:
-                    print(f"Team '{team_name}' deleted successfully.")
-                else:
-                    error_msg = f"Failed to delete team: HTTP {response.status_code}"
-                    try:
-                        error_data = response.json()
-                        if 'detail' in error_data:
-                            error_msg += f" - {error_data['detail']}"
-                    except:
-                        pass
-                    raise AAPClientError(error_msg)
+            if response.status_code in (HTTP_NO_CONTENT, HTTP_ACCEPTED):
+                print(f"Team '{parsed_args.team or parsed_args.id}' deleted successfully")
+            elif response.status_code == HTTP_NOT_FOUND:
+                raise AAPResourceNotFoundError("Team", parsed_args.team or parsed_args.id)
             else:
-                raise AAPResourceNotFoundError("Team", parsed_args.team or str(parsed_args.id))
+                raise AAPClientError(f"Failed to delete team: {response.status_code}")
 
-        except AAPResourceNotFoundError as e:
-            raise SystemExit(str(e))
-        except AAPClientError as e:
-            raise SystemExit(str(e))
+        except AAPResourceNotFoundError:
+            raise
+        except AAPClientError:
+            raise
         except Exception as e:
-            raise SystemExit(f"Unexpected error: {e}")
+            raise AAPClientError(f"Unexpected error: {e}")

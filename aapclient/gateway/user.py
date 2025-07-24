@@ -1,22 +1,70 @@
 """User commands."""
-from cliff.command import Command
-from cliff.lister import Lister
-from cliff.show import ShowOne
-from aapclient.common.client import AAPHTTPClient
-from aapclient.common.config import AAPConfig
+from aapclient.common.basecommands import AAPShowCommand, AAPListCommand, AAPCommand
 from aapclient.common.constants import (
     GATEWAY_API_VERSION_ENDPOINT,
     HTTP_OK,
     HTTP_CREATED,
     HTTP_NO_CONTENT,
     HTTP_NOT_FOUND,
-    HTTP_BAD_REQUEST
+    HTTP_BAD_REQUEST,
+    HTTP_ACCEPTED
 )
 from aapclient.common.exceptions import AAPClientError, AAPResourceNotFoundError, AAPAPIError
 from aapclient.common.functions import resolve_user_name
 
 
-class UserListCommand(Lister):
+
+
+def _format_user_data(user_data):
+    """
+    Format user data consistently
+
+    Args:
+        user_data (dict): User data from API response
+
+    Returns:
+        tuple: (field_names, field_values) for ShowOne display
+    """
+    # Extract user details
+    id_value = user_data.get('id', '')
+    username = user_data.get('username', '')
+    email = user_data.get('email', '')
+    first_name = user_data.get('first_name', '')
+    last_name = user_data.get('last_name', '')
+    is_superuser = user_data.get('is_superuser', False)
+    is_system_auditor = user_data.get('is_system_auditor', False)
+    date_joined = user_data.get('date_joined', '')
+    last_login = user_data.get('last_login', '')
+
+    # Format fields for display
+    columns = [
+        'ID',
+        'Username',
+        'Email',
+        'First Name',
+        'Last Name',
+        'Superuser',
+        'System Auditor',
+        'Date Joined',
+        'Last Login'
+    ]
+
+    values = [
+        id_value,
+        username,
+        email,
+        first_name,
+        last_name,
+        "Yes" if is_superuser else "No",
+        "Yes" if is_system_auditor else "No",
+        date_joined,
+        last_login
+    ]
+
+    return (columns, values)
+
+
+class UserListCommand(AAPListCommand):
     """List users."""
 
     def get_parser(self, prog_name):
@@ -32,12 +80,8 @@ class UserListCommand(Lister):
     def take_action(self, parsed_args):
         """Execute the user list command."""
         try:
-            # Initialize configuration and validate
-            config = AAPConfig()
-            config.validate()
-
-            # Create HTTP client
-            client = AAPHTTPClient(config)
+            # Get client from centralized client manager
+            client = self.gateway_client
 
             # Build query parameters
             params = {'order_by': 'id'}  # Sort by ID on server side
@@ -61,39 +105,20 @@ class UserListCommand(Lister):
 
             if response.status_code == HTTP_OK:
                 data = response.json()
-
-                # Extract users from results (already sorted by API)
                 users = data.get('results', [])
 
-                # Define columns for table display
-                columns = [
-                    'ID',
-                    'Username',
-                    'User Type',
-                    'Email',
-                    'First Name',
-                    'Last Name',
-                    'Last Login'
-                ]
-
-                # Build rows data
+                # Define columns for output
+                columns = ['ID', 'Username', 'Email', 'First Name', 'Last Name', 'Superuser']
                 rows = []
-                for user in users:
-                    # Determine user type based on permissions
-                    user_type = 'Normal User'
-                    if user.get('is_superuser', False):
-                        user_type = 'Superuser'
-                    elif user.get('is_platform_auditor', False):
-                        user_type = 'Platform Auditor'
 
+                for user in users:
                     row = [
                         user.get('id', ''),
                         user.get('username', ''),
-                        user_type,
                         user.get('email', ''),
                         user.get('first_name', ''),
                         user.get('last_name', ''),
-                        user.get('last_login', '') or ''
+                        "Yes" if user.get('is_superuser', False) else "No"
                     ]
                     rows.append(row)
 
@@ -109,7 +134,7 @@ class UserListCommand(Lister):
             raise SystemExit(f"Unexpected error: {e}")
 
 
-class UserShowCommand(ShowOne):
+class UserShowCommand(AAPShowCommand):
     """Show details of a specific user."""
 
     def get_parser(self, prog_name):
@@ -126,19 +151,16 @@ class UserShowCommand(ShowOne):
         parser.add_argument(
             'user',
             nargs='?',
-            help='Username or ID'
+            metavar='<user>',
+            help='Username or ID to display'
         )
         return parser
 
     def take_action(self, parsed_args):
         """Execute the user show command."""
         try:
-            # Initialize configuration and validate
-            config = AAPConfig()
-            config.validate()
-
-            # Create HTTP client
-            client = AAPHTTPClient(config)
+            # Get client from centralized client manager
+            client = self.gateway_client
 
             # Determine how to resolve the user
             if parsed_args.id:
@@ -146,67 +168,30 @@ class UserShowCommand(ShowOne):
                 user_id = parsed_args.id
             elif parsed_args.user:
                 # Use positional parameter - username first, then ID fallback if numeric
-                user_id = resolve_user_name(client, parsed_args.user)
+                user_id = resolve_user_name(client, parsed_args.user, api="gateway")
             else:
                 raise AAPClientError("User identifier is required")
 
-            # Get specific user
             endpoint = f"{GATEWAY_API_VERSION_ENDPOINT}users/{user_id}/"
-            try:
-                response = client.get(endpoint)
+            response = client.get(endpoint)
+
+            if response.status_code == HTTP_OK:
                 user_data = response.json()
+                return _format_user_data(user_data)
+            elif response.status_code == HTTP_NOT_FOUND:
+                raise AAPResourceNotFoundError("User", parsed_args.user or parsed_args.id)
+            else:
+                raise AAPClientError(f"Failed to get user: {response.status_code}")
 
-                # Prepare data using dictionary for cleaner code
-                created_by = user_data.get('summary_fields', {}).get('created_by', {})
-                modified_by = user_data.get('summary_fields', {}).get('modified_by', {})
-
-                # Define field mappings as ordered dictionary
-                field_data = {
-                    'ID': str(user_data.get('id', '')),
-                    'Username': user_data.get('username', ''),
-                    'Email': user_data.get('email', ''),
-                    'First Name': user_data.get('first_name', '').strip(),
-                    'Last Name': user_data.get('last_name', '').strip(),
-                    'Superuser': 'Yes' if user_data.get('is_superuser', False) else 'No',
-                    'Platform Auditor': 'Yes' if user_data.get('is_platform_auditor', False) else 'No',
-                    'Managed Account': 'Yes' if user_data.get('managed', False) else 'No',
-                    'Last Login': user_data.get('last_login', ''),
-                    'Created': user_data.get('created', ''),
-                    'Created By': created_by.get('username', '') if created_by else '',
-                    'Modified': user_data.get('modified', ''),
-                    'Modified By': modified_by.get('username', '') if modified_by else ''
-                }
-
-                # Convert to columns and values for Cliff formatting
-                columns = []
-                values = []
-                for column_name, value in field_data.items():
-                    columns.append(column_name)
-                    values.append(value)
-
-                return (columns, values)
-            except AAPAPIError as api_error:
-                # Check if it's a 404 error from the API
-                if api_error.status_code == HTTP_NOT_FOUND:
-                    # Use consistent error message for both --id and positional parameter
-                    identifier = str(parsed_args.id) if parsed_args.id else parsed_args.user
-                    raise AAPResourceNotFoundError("User", identifier)
-                elif api_error.status_code == HTTP_BAD_REQUEST:
-                    # Pass through 400 status messages directly to user
-                    raise SystemExit(str(api_error))
-                else:
-                    # Re-raise other errors
-                    raise
-
-        except AAPResourceNotFoundError as e:
-            raise SystemExit(str(e))
-        except AAPClientError as e:
-            raise SystemExit(str(e))
+        except AAPResourceNotFoundError:
+            raise
+        except AAPClientError:
+            raise
         except Exception as e:
-            raise SystemExit(f"Unexpected error: {e}")
+            raise AAPClientError(f"Unexpected error: {e}")
 
 
-class UserCreateCommand(ShowOne):
+class UserCreateCommand(AAPShowCommand):
     """Create a new user."""
 
     def get_parser(self, prog_name):
@@ -221,10 +206,12 @@ class UserCreateCommand(ShowOne):
         )
         parser.add_argument(
             '--first-name',
+            dest='first_name',
             help='First name'
         )
         parser.add_argument(
             '--last-name',
+            dest='last_name',
             help='Last name'
         )
         parser.add_argument(
@@ -232,44 +219,44 @@ class UserCreateCommand(ShowOne):
             help='Password'
         )
         parser.add_argument(
-            '--is-superuser',
+            '--superuser',
             action='store_true',
-            help='Make user a superuser'
+            help='Grant superuser privileges'
         )
         parser.add_argument(
-            '--is-platform-auditor',
+            '--system-auditor',
             action='store_true',
-            help='Make user a platform auditor'
+            dest='system_auditor',
+            help='Grant system auditor privileges'
         )
         return parser
 
     def take_action(self, parsed_args):
         """Execute the user create command."""
         try:
-            # Initialize configuration and validate
-            config = AAPConfig()
-            config.validate()
+            # Get client from centralized client manager
+            client = self.gateway_client
 
-            # Create HTTP client
-            client = AAPHTTPClient(config)
+            # Get parser for usage message
+            parser = self.get_parser('aap user create')
 
-            # Prepare user data
             user_data = {
                 'username': parsed_args.username
             }
 
-            if parsed_args.email:
+            # Add optional fields
+            if getattr(parsed_args, 'email', None):
                 user_data['email'] = parsed_args.email
-            if parsed_args.first_name:
+            if getattr(parsed_args, 'first_name', None):
                 user_data['first_name'] = parsed_args.first_name
-            if parsed_args.last_name:
+            if getattr(parsed_args, 'last_name', None):
                 user_data['last_name'] = parsed_args.last_name
-            if parsed_args.password:
+            if getattr(parsed_args, 'password', None):
                 user_data['password'] = parsed_args.password
-            if parsed_args.is_superuser:
+            if parsed_args.superuser:
                 user_data['is_superuser'] = True
-            if parsed_args.is_platform_auditor:
-                user_data['is_platform_auditor'] = True
+            if parsed_args.system_auditor:
+                user_data['is_system_auditor'] = True
 
             # Create user
             endpoint = f"{GATEWAY_API_VERSION_ENDPOINT}users/"
@@ -288,60 +275,11 @@ class UserCreateCommand(ShowOne):
 
             if response.status_code == HTTP_CREATED:
                 user_data = response.json()
+                print(f"User '{user_data.get('username', '')}' created successfully")
 
-                # Prepare columns and data for Cliff formatting
-                columns = []
-                values = []
-
-                # Basic information
-                columns.append('ID')
-                values.append(str(user_data.get('id', '')))
-
-                columns.append('Username')
-                values.append(user_data.get('username', ''))
-
-                columns.append('Email')
-                values.append(user_data.get('email', ''))
-
-                # Name fields (always show)
-                columns.append('First Name')
-                values.append(user_data.get('first_name', '').strip())
-
-                columns.append('Last Name')
-                values.append(user_data.get('last_name', '').strip())
-
-                # Permission flags
-                columns.append('Superuser')
-                values.append('Yes' if user_data.get('is_superuser', False) else 'No')
-
-                columns.append('Platform Auditor')
-                values.append('Yes' if user_data.get('is_platform_auditor', False) else 'No')
-
-                # Creation info
-                columns.append('Created')
-                values.append(user_data.get('created', ''))
-
-                columns.append('Created By')
-                created_by = user_data.get('summary_fields', {}).get('created_by', {})
-                values.append(created_by.get('username', '') if created_by else '')
-
-                return (columns, values)
+                return _format_user_data(user_data)
             else:
-                error_msg = f"Failed to create user: HTTP {response.status_code}"
-                try:
-                    error_data = response.json()
-                    if 'detail' in error_data:
-                        error_msg += f" - {error_data['detail']}"
-                    elif isinstance(error_data, dict):
-                        # Handle field-specific errors
-                        for field, errors in error_data.items():
-                            if isinstance(errors, list):
-                                error_msg += f" - {field}: {', '.join(errors)}"
-                            else:
-                                error_msg += f" - {field}: {errors}"
-                except:
-                    pass
-                raise AAPClientError(error_msg)
+                raise AAPClientError(f"User creation failed with status {response.status_code}")
 
         except AAPResourceNotFoundError as e:
             raise SystemExit(str(e))
@@ -351,8 +289,8 @@ class UserCreateCommand(ShowOne):
             raise SystemExit(f"Unexpected error: {e}")
 
 
-class UserSetCommand(ShowOne):
-    """Set/update an existing user."""
+class UserSetCommand(AAPShowCommand):
+    """Update an existing user."""
 
     def get_parser(self, prog_name):
         parser = super().get_parser(prog_name)
@@ -368,105 +306,112 @@ class UserSetCommand(ShowOne):
         parser.add_argument(
             'user',
             nargs='?',
-            help='Username or ID'
+            metavar='<user>',
+            help='Username or ID to update'
         )
 
-        # Set fields
         parser.add_argument(
             '--username',
-            help='Set username'
+            help='New username'
         )
         parser.add_argument(
             '--email',
-            help='Set email address'
+            help='Email address'
         )
         parser.add_argument(
             '--first-name',
-            help='Set first name'
+            dest='first_name',
+            help='First name'
         )
         parser.add_argument(
             '--last-name',
-            help='Set last name'
+            dest='last_name',
+            help='Last name'
         )
         parser.add_argument(
             '--password',
-            help='Set password'
+            help='New password'
         )
-        parser.add_argument(
-            '--is-superuser',
+
+        # Enable/disable flags for privileges
+        superuser_group = parser.add_mutually_exclusive_group()
+        superuser_group.add_argument(
+            '--enable-superuser',
             action='store_true',
-            help='Make user a superuser'
+            dest='enable_superuser',
+            help='Grant superuser privileges'
         )
-        parser.add_argument(
-            '--no-is-superuser',
+        superuser_group.add_argument(
+            '--disable-superuser',
             action='store_true',
-            help='Remove superuser privileges'
+            dest='disable_superuser',
+            help='Revoke superuser privileges'
         )
-        parser.add_argument(
-            '--is-platform-auditor',
+
+        auditor_group = parser.add_mutually_exclusive_group()
+        auditor_group.add_argument(
+            '--enable-system-auditor',
             action='store_true',
-            help='Make user a platform auditor'
+            dest='enable_auditor',
+            help='Grant system auditor privileges'
         )
-        parser.add_argument(
-            '--no-is-platform-auditor',
+        auditor_group.add_argument(
+            '--disable-system-auditor',
             action='store_true',
-            help='Remove platform auditor privileges'
+            dest='disable_auditor',
+            help='Revoke system auditor privileges'
         )
+
         return parser
 
     def take_action(self, parsed_args):
         """Execute the user set command."""
         try:
-            # Initialize configuration and validate
-            config = AAPConfig()
-            config.validate()
+            # Get client from centralized client manager
+            client = self.gateway_client
 
-            # Create HTTP client
-            client = AAPHTTPClient(config)
+            # Get parser for usage message
+            parser = self.get_parser('aap user set')
 
-            # Determine how to resolve the user
-            if parsed_args.id:
-                # Use explicit ID (ignores positional parameter)
-                user_id = parsed_args.id
-            elif parsed_args.user:
-                # Use positional parameter - username first, then ID fallback if numeric
-                user_id = resolve_user_name(client, parsed_args.user)
-            else:
-                raise AAPClientError("User identifier is required")
+            # Resolve user - handle both ID and username
+            user_id = resolve_user_name(client, parsed_args.user, api="gateway")
 
-            # Prepare data to set
-            set_data = {}
-            if parsed_args.username:
-                set_data['username'] = parsed_args.username
-            if parsed_args.email is not None:  # Allow empty string to clear email
-                set_data['email'] = parsed_args.email
-            if parsed_args.first_name is not None:  # Allow empty string to clear first name
-                set_data['first_name'] = parsed_args.first_name
-            if parsed_args.last_name is not None:  # Allow empty string to clear last name
-                set_data['last_name'] = parsed_args.last_name
-            if parsed_args.password:
-                set_data['password'] = parsed_args.password
-            if parsed_args.is_superuser:
-                set_data['is_superuser'] = True
-            if parsed_args.no_is_superuser:
-                set_data['is_superuser'] = False
-            if parsed_args.is_platform_auditor:
-                set_data['is_platform_auditor'] = True
-            if parsed_args.no_is_platform_auditor:
-                set_data['is_platform_auditor'] = False
+            # Prepare user update data
+            user_data = {}
 
-            if not set_data:
-                raise AAPClientError("At least one field must be specified to set")
+            if getattr(parsed_args, 'username', None):
+                user_data['username'] = parsed_args.username
+            if getattr(parsed_args, 'email', None):
+                user_data['email'] = parsed_args.email
+            if getattr(parsed_args, 'first_name', None):
+                user_data['first_name'] = parsed_args.first_name
+            if getattr(parsed_args, 'last_name', None):
+                user_data['last_name'] = parsed_args.last_name
+            if getattr(parsed_args, 'password', None):
+                user_data['password'] = parsed_args.password
+
+            # Handle enable/disable flags
+            if parsed_args.enable_superuser:
+                user_data['is_superuser'] = True
+            elif parsed_args.disable_superuser:
+                user_data['is_superuser'] = False
+
+            if parsed_args.enable_auditor:
+                user_data['is_system_auditor'] = True
+            elif parsed_args.disable_auditor:
+                user_data['is_system_auditor'] = False
+
+            if not user_data:
+                parser.error("No update fields provided")
 
             # Update user
             endpoint = f"{GATEWAY_API_VERSION_ENDPOINT}users/{user_id}/"
             try:
-                response = client.patch(endpoint, json=set_data)
+                response = client.patch(endpoint, json=user_data)
             except AAPAPIError as api_error:
                 if api_error.status_code == HTTP_NOT_FOUND:
                     # Handle 404 error with proper message
-                    identifier = str(parsed_args.id) if parsed_args.id else parsed_args.user
-                    raise AAPResourceNotFoundError("User", identifier)
+                    raise AAPResourceNotFoundError("User", parsed_args.user)
                 elif api_error.status_code == HTTP_BAD_REQUEST:
                     # Pass through 400 status messages directly to user
                     raise SystemExit(str(api_error))
@@ -476,74 +421,11 @@ class UserSetCommand(ShowOne):
 
             if response.status_code == HTTP_OK:
                 user_data = response.json()
+                print(f"User '{user_data.get('username', '')}' updated successfully")
 
-                # Prepare columns and data for Cliff formatting
-                columns = []
-                values = []
-
-                # Basic information
-                columns.append('ID')
-                values.append(str(user_data.get('id', '')))
-
-                columns.append('Username')
-                values.append(user_data.get('username', ''))
-
-                columns.append('Email')
-                values.append(user_data.get('email', ''))
-
-                # Name fields (always show)
-                columns.append('First Name')
-                values.append(user_data.get('first_name', '').strip())
-
-                columns.append('Last Name')
-                values.append(user_data.get('last_name', '').strip())
-
-                # Permission flags
-                columns.append('Superuser')
-                values.append('Yes' if user_data.get('is_superuser', False) else 'No')
-
-                columns.append('Platform Auditor')
-                values.append('Yes' if user_data.get('is_platform_auditor', False) else 'No')
-
-                columns.append('Managed Account')
-                values.append('Yes' if user_data.get('managed', False) else 'No')
-
-                # Timestamps
-                columns.append('Last Login')
-                values.append(user_data.get('last_login', ''))
-
-                columns.append('Created')
-                values.append(user_data.get('created', ''))
-
-                columns.append('Created By')
-                created_by = user_data.get('summary_fields', {}).get('created_by', {})
-                values.append(created_by.get('username', '') if created_by else '')
-
-                # Modifier info
-                columns.append('Modified')
-                values.append(user_data.get('modified', ''))
-
-                columns.append('Modified By')
-                modified_by = user_data.get('summary_fields', {}).get('modified_by', {})
-                values.append(modified_by.get('username', '') if modified_by else '')
-
-                return (columns, values)
+                return _format_user_data(user_data)
             else:
-                error_msg = f"Failed to set user: HTTP {response.status_code}"
-                try:
-                    error_data = response.json()
-                    if 'detail' in error_data:
-                        error_msg += f" - {error_data['detail']}"
-                    elif isinstance(error_data, dict):
-                        # Handle field-specific errors
-                        for field, errors in error_data.items():
-                            if isinstance(errors, list):
-                                error_msg += f" - {field}: {', '.join(errors)}"
-                            else:
-                                error_msg += f" - {field}: {errors}"
-                except:
-                    pass
-                raise AAPClientError(error_msg)
+                raise AAPClientError(f"User update failed with status {response.status_code}")
 
         except AAPResourceNotFoundError as e:
             raise SystemExit(str(e))
@@ -553,7 +435,7 @@ class UserSetCommand(ShowOne):
             raise SystemExit(f"Unexpected error: {e}")
 
 
-class UserDeleteCommand(Command):
+class UserDeleteCommand(AAPCommand):
     """Delete a user."""
 
     def get_parser(self, prog_name):
@@ -570,20 +452,16 @@ class UserDeleteCommand(Command):
         parser.add_argument(
             'user',
             nargs='?',
+            metavar='<user>',
             help='Username or ID'
         )
-
         return parser
 
     def take_action(self, parsed_args):
         """Execute the user delete command."""
         try:
-            # Initialize configuration and validate
-            config = AAPConfig()
-            config.validate()
-
-            # Create HTTP client
-            client = AAPHTTPClient(config)
+            # Get client from centralized client manager
+            client = self.gateway_client
 
             # Determine how to resolve the user
             if parsed_args.id:
@@ -591,66 +469,23 @@ class UserDeleteCommand(Command):
                 user_id = parsed_args.id
             elif parsed_args.user:
                 # Use positional parameter - username first, then ID fallback if numeric
-                user_id = resolve_user_name(client, parsed_args.user)
+                user_id = resolve_user_name(client, parsed_args.user, api="gateway")
             else:
                 raise AAPClientError("User identifier is required")
 
-            # Get user details first for confirmation
             endpoint = f"{GATEWAY_API_VERSION_ENDPOINT}users/{user_id}/"
-            try:
-                response = client.get(endpoint)
-            except AAPAPIError as api_error:
-                if api_error.status_code == HTTP_NOT_FOUND:
-                    # Handle 404 error with proper message
-                    identifier = str(parsed_args.id) if parsed_args.id else parsed_args.user
-                    raise AAPResourceNotFoundError("User", identifier)
-                elif api_error.status_code == HTTP_BAD_REQUEST:
-                    # Pass through 400 status messages directly to user
-                    raise SystemExit(str(api_error))
-                else:
-                    # Re-raise other errors
-                    raise
+            response = client.delete(endpoint)
 
-            if response.status_code == HTTP_OK:
-                user_data = response.json()
-                username = user_data.get('username', str(user_id))
-
-                # Check if user is managed
-                if user_data.get('managed', False):
-                    raise AAPClientError(f"Cannot delete managed user '{username}'")
-
-                # Delete user
-                try:
-                    response = client.delete(endpoint)
-                except AAPAPIError as api_error:
-                    if api_error.status_code == HTTP_NOT_FOUND:
-                        # Handle 404 error with proper message
-                        identifier = str(parsed_args.id) if parsed_args.id else parsed_args.user
-                        raise AAPResourceNotFoundError("User", identifier)
-                    elif api_error.status_code == HTTP_BAD_REQUEST:
-                        # Pass through 400 status messages directly to user
-                        raise SystemExit(str(api_error))
-                    else:
-                        # Re-raise other errors
-                        raise
-
-                if response.status_code == HTTP_NO_CONTENT:
-                    print(f"User '{username}' deleted successfully.")
-                else:
-                    error_msg = f"Failed to delete user: HTTP {response.status_code}"
-                    try:
-                        error_data = response.json()
-                        if 'detail' in error_data:
-                            error_msg += f" - {error_data['detail']}"
-                    except:
-                        pass
-                    raise AAPClientError(error_msg)
+            if response.status_code in (HTTP_NO_CONTENT, HTTP_ACCEPTED):
+                print(f"User '{parsed_args.user or parsed_args.id}' deleted successfully")
+            elif response.status_code == HTTP_NOT_FOUND:
+                raise AAPResourceNotFoundError("User", parsed_args.user or parsed_args.id)
             else:
-                raise AAPResourceNotFoundError("User", parsed_args.user or str(parsed_args.id))
+                raise AAPClientError(f"Failed to delete user: {response.status_code}")
 
-        except AAPResourceNotFoundError as e:
-            raise SystemExit(str(e))
-        except AAPClientError as e:
-            raise SystemExit(str(e))
+        except AAPResourceNotFoundError:
+            raise
+        except AAPClientError:
+            raise
         except Exception as e:
-            raise SystemExit(f"Unexpected error: {e}")
+            raise AAPClientError(f"Unexpected error: {e}")

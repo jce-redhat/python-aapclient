@@ -1,121 +1,156 @@
 """Execution Environment commands."""
-
-from cliff.command import Command
-from cliff.lister import Lister
-from cliff.show import ShowOne
-
-from aapclient.common.client import AAPHTTPClient
-from aapclient.common.config import AAPConfig
+from aapclient.common.basecommands import AAPShowCommand, AAPListCommand, AAPCommand
 from aapclient.common.constants import (
     CONTROLLER_API_VERSION_ENDPOINT,
     HTTP_OK,
     HTTP_CREATED,
     HTTP_NO_CONTENT,
     HTTP_NOT_FOUND,
-    HTTP_BAD_REQUEST
+    HTTP_BAD_REQUEST,
+    HTTP_ACCEPTED
 )
 from aapclient.common.exceptions import AAPClientError, AAPResourceNotFoundError, AAPAPIError
-from aapclient.common.functions import resolve_organization_name, resolve_execution_environment_name, resolve_credential_name
+from aapclient.common.functions import resolve_organization_name, resolve_credential_name, resolve_execution_environment_name
 
 
 
 
+def _format_execution_environment_data(ee_data):
+    """
+    Format execution environment data consistently
 
-def _format_execution_environment_data(execution_environment_data):
-    """Format execution environment data for display."""
-    # Extract helper variables from summary_fields
-    organization_info = execution_environment_data.get('summary_fields', {}).get('organization', {})
-    created_by = execution_environment_data.get('summary_fields', {}).get('created_by', {})
-    modified_by = execution_environment_data.get('summary_fields', {}).get('modified_by', {})
+    Args:
+        ee_data (dict): Execution environment data from API response
 
-    # Handle organization display using summary_fields pattern
-    org_display = organization_info.get('name', '')
-    if not org_display:
-        # Fall back to raw organization value, but handle None case
-        org_value = execution_environment_data.get('organization')
-        if org_value is not None:
-            org_display = str(org_value)
-        else:
-            org_display = "Global"
+    Returns:
+        tuple: (field_names, field_values) for ShowOne display
+    """
+    # Extract execution environment details
+    id_value = ee_data.get('id', '')
+    name = ee_data.get('name', '')
+    description = ee_data.get('description', '')
+    image = ee_data.get('image', '')
+    organization_name = ''
+    credential_name = ''
 
-    field_data = {
-        'ID': execution_environment_data.get('id', ''),
-        'Name': execution_environment_data.get('name', ''),
-        'Description': execution_environment_data.get('description', ''),
-        'Organization': org_display,
-        'Image': execution_environment_data.get('image', ''),
-        'Managed': "Yes" if execution_environment_data.get('managed', False) else "No",
-        'Pull': execution_environment_data.get('pull', ''),
-        'Credential': execution_environment_data.get('credential', ''),
-        'Created': execution_environment_data.get('created', ''),
-        'Created By': created_by.get('username', ''),
-        'Modified': execution_environment_data.get('modified', ''),
-        'Modified By': modified_by.get('username', ''),
-    }
+    # Resolve organization name if available
+    if 'summary_fields' in ee_data and 'organization' in ee_data['summary_fields']:
+        if ee_data['summary_fields']['organization']:
+            organization_name = ee_data['summary_fields']['organization'].get('name', '')
 
-    return (field_data.keys(), field_data.values())
+    # Resolve credential name if available
+    if 'summary_fields' in ee_data and 'credential' in ee_data['summary_fields']:
+        if ee_data['summary_fields']['credential']:
+            credential_name = ee_data['summary_fields']['credential'].get('name', '')
+
+    pull = ee_data.get('pull', '')
+    created = ee_data.get('created', '')
+    modified = ee_data.get('modified', '')
+
+    # Format fields for display
+    columns = [
+        'ID',
+        'Name',
+        'Description',
+        'Image',
+        'Organization',
+        'Credential',
+        'Pull',
+        'Created',
+        'Modified'
+    ]
+
+    values = [
+        id_value,
+        name,
+        description,
+        image,
+        organization_name,
+        credential_name,
+        pull,
+        created,
+        modified
+    ]
+
+    return (columns, values)
 
 
-class ExecutionEnvironmentListCommand(Lister):
+class ExecutionEnvironmentListCommand(AAPListCommand):
     """List execution environments."""
 
     def get_parser(self, prog_name):
         parser = super().get_parser(prog_name)
         parser.add_argument(
-            '--all',
-            action='store_true',
-            help='Show all execution environments (default behavior)'
+            '--limit',
+            type=int,
+            metavar='N',
+            help='Limit the number of results returned (default: 20)'
         )
         return parser
 
     def take_action(self, parsed_args):
-        config = AAPConfig()
-        config.validate()
-
-        # Create HTTP client
-        client = AAPHTTPClient(config)
-
+        """Execute the execution environment list command."""
         try:
-            endpoint = f"{CONTROLLER_API_VERSION_ENDPOINT}execution_environments/"
+            # Get client from centralized client manager
+            client = self.controller_client
+
+            # Build query parameters
             params = {'order_by': 'id'}  # Sort by ID on server side
-            response = client.get(endpoint, params=params)
+            if parsed_args.limit:
+                params['page_size'] = parsed_args.limit
+
+            # Query execution environments endpoint
+            endpoint = f"{CONTROLLER_API_VERSION_ENDPOINT}execution_environments/"
+            try:
+                response = client.get(endpoint, params=params)
+            except AAPAPIError as api_error:
+                if api_error.status_code == HTTP_NOT_FOUND:
+                    # Handle 404 error with proper message
+                    raise AAPResourceNotFoundError("Execution Environment", "execution_environments endpoint")
+                elif api_error.status_code == HTTP_BAD_REQUEST:
+                    # Pass through 400 status messages directly to user
+                    raise SystemExit(str(api_error))
+                else:
+                    # Re-raise other errors
+                    raise
 
             if response.status_code == HTTP_OK:
                 data = response.json()
-                results = data.get('results', [])
+                execution_environments = data.get('results', [])
 
-                columns = ('ID', 'Name', 'Image', 'Organization')
-                execution_environment_data = []
+                # Define columns for output
+                columns = ['ID', 'Name', 'Image', 'Organization']
+                rows = []
 
-                for execution_environment in results:
-                    # Get organization name from summary_fields, same pattern as show command
-                    organization_info = execution_environment.get('summary_fields', {}).get('organization', {})
-                    org_display = organization_info.get('name', '')
-                    if not org_display:
-                        # Fall back to raw organization value, but handle None case
-                        org_value = execution_environment.get('organization')
-                        if org_value is not None:
-                            org_display = str(org_value)
-                        else:
-                            org_display = "Global"
+                for ee in execution_environments:
+                    # Get organization name from summary_fields if available
+                    org_name = ''
+                    if 'summary_fields' in ee and 'organization' in ee['summary_fields']:
+                        if ee['summary_fields']['organization']:
+                            org_name = ee['summary_fields']['organization'].get('name', '')
 
-                    execution_environment_data.append((
-                        execution_environment.get('id', ''),
-                        execution_environment.get('name', ''),
-                        execution_environment.get('image', ''),
-                        org_display
-                    ))
+                    row = [
+                        ee.get('id', ''),
+                        ee.get('name', ''),
+                        ee.get('image', ''),
+                        org_name
+                    ]
+                    rows.append(row)
 
-                return (columns, execution_environment_data)
+                return (columns, rows)
             else:
-                raise AAPClientError(f"Failed to list execution environments: {response.status_code}")
+                raise AAPClientError(f"Controller API failed with status {response.status_code}")
 
-        except AAPAPIError as e:
-            raise AAPClientError(f"API error: {e}")
+        except AAPResourceNotFoundError as e:
+            raise SystemExit(str(e))
+        except AAPClientError as e:
+            raise SystemExit(str(e))
+        except Exception as e:
+            raise SystemExit(f"Unexpected error: {e}")
 
 
-class ExecutionEnvironmentShowCommand(ShowOne):
-    """Show execution environment details."""
+class ExecutionEnvironmentShowCommand(AAPShowCommand):
+    """Show details of a specific execution environment."""
 
     def get_parser(self, prog_name):
         parser = super().get_parser(prog_name)
@@ -124,7 +159,7 @@ class ExecutionEnvironmentShowCommand(ShowOne):
         parser.add_argument(
             '--id',
             type=int,
-            help='Execution environment ID (overrides positional parameter)'
+            help='Execution Environment ID (overrides positional parameter)'
         )
 
         # Positional parameter for name lookup with ID fallback
@@ -132,34 +167,32 @@ class ExecutionEnvironmentShowCommand(ShowOne):
             'execution_environment',
             nargs='?',
             metavar='<execution_environment>',
-            help='Execution environment name or ID to display'
+            help='Execution Environment name or ID to display'
         )
         return parser
 
     def take_action(self, parsed_args):
-        config = AAPConfig()
-        config.validate()
-
-        # Create HTTP client
-        client = AAPHTTPClient(config)
-
+        """Execute the execution environment show command."""
         try:
+            # Get client from centralized client manager
+            client = self.controller_client
+
             # Determine how to resolve the execution environment
             if parsed_args.id:
                 # Use explicit ID (ignores positional parameter)
-                execution_environment_id = parsed_args.id
+                ee_id = parsed_args.id
             elif parsed_args.execution_environment:
                 # Use positional parameter - name first, then ID fallback if numeric
-                execution_environment_id = resolve_execution_environment_name(client, parsed_args.execution_environment, api="controller")
+                ee_id = resolve_execution_environment_name(client, parsed_args.execution_environment, api="controller")
             else:
-                raise AAPClientError("Execution environment identifier is required")
+                raise AAPClientError("Execution Environment identifier is required")
 
-            endpoint = f"{CONTROLLER_API_VERSION_ENDPOINT}execution_environments/{execution_environment_id}/"
+            endpoint = f"{CONTROLLER_API_VERSION_ENDPOINT}execution_environments/{ee_id}/"
             response = client.get(endpoint)
 
             if response.status_code == HTTP_OK:
-                execution_environment_data = response.json()
-                return _format_execution_environment_data(execution_environment_data)
+                ee_data = response.json()
+                return _format_execution_environment_data(ee_data)
             elif response.status_code == HTTP_NOT_FOUND:
                 raise AAPResourceNotFoundError("Execution Environment", parsed_args.execution_environment or parsed_args.id)
             else:
@@ -167,56 +200,51 @@ class ExecutionEnvironmentShowCommand(ShowOne):
 
         except AAPResourceNotFoundError:
             raise
-        except AAPAPIError as e:
-            if e.status_code == HTTP_NOT_FOUND:
-                raise AAPResourceNotFoundError("Execution Environment", parsed_args.execution_environment or parsed_args.id)
-            else:
-                raise AAPClientError(f"API error: {e}")
+        except AAPClientError:
+            raise
+        except Exception as e:
+            raise AAPClientError(f"Unexpected error: {e}")
 
 
-class ExecutionEnvironmentCreateCommand(ShowOne):
-    """Create execution environment."""
+class ExecutionEnvironmentCreateCommand(AAPShowCommand):
+    """Create a new execution environment."""
 
     def get_parser(self, prog_name):
         parser = super().get_parser(prog_name)
         parser.add_argument(
             'name',
-            metavar='<name>',
-            help='Name of the execution environment'
+            help='Execution Environment name'
         )
         parser.add_argument(
             '--image',
             required=True,
-            help='Container image for the execution environment'
+            help='Container image for this execution environment'
         )
         parser.add_argument(
             '--description',
-            help='Description of the execution environment'
+            help='Execution Environment description'
         )
         parser.add_argument(
             '--organization',
-            help='Organization name or ID for the execution environment'
+            help='Organization name or ID'
         )
         parser.add_argument(
             '--credential',
-            help='Credential name or ID for pulling the container image'
+            help='Container Registry credential name or ID'
         )
         parser.add_argument(
             '--pull',
             choices=['always', 'missing', 'never'],
-            default='missing',
-            help='Pull policy for the container image (default: missing)'
+            help='Pull policy for execution environment image'
         )
         return parser
 
     def take_action(self, parsed_args):
-        config = AAPConfig()
-        config.validate()
-
-        # Create HTTP client
-        client = AAPHTTPClient(config)
-
+        """Execute the execution environment create command."""
         try:
+            # Get client from centralized client manager
+            client = self.controller_client
+
             # Get parser for usage message
             parser = self.get_parser('aap execution-environment create')
 
@@ -225,167 +253,60 @@ class ExecutionEnvironmentCreateCommand(ShowOne):
             if getattr(parsed_args, 'organization', None):
                 org_id = resolve_organization_name(client, parsed_args.organization, api="controller")
 
-            execution_environment_data = {
+            # Resolve credential if provided
+            credential_id = None
+            if getattr(parsed_args, 'credential', None):
+                credential_id = resolve_credential_name(client, parsed_args.credential, api="controller")
+
+            ee_data = {
                 'name': parsed_args.name,
-                'image': parsed_args.image,
-                'pull': parsed_args.pull
+                'image': parsed_args.image
             }
 
             # Add optional fields
-            if parsed_args.description:
-                execution_environment_data['description'] = parsed_args.description
             if org_id is not None:
-                execution_environment_data['organization'] = org_id
-            if parsed_args.credential:
-                credential_id = resolve_credential_name(client, parsed_args.credential, api="controller")
-                execution_environment_data['credential'] = credential_id
+                ee_data['organization'] = org_id
+            if credential_id is not None:
+                ee_data['credential'] = credential_id
+            if parsed_args.description:
+                ee_data['description'] = parsed_args.description
+            if getattr(parsed_args, 'pull', None):
+                ee_data['pull'] = parsed_args.pull
 
+            # Create execution environment
             endpoint = f"{CONTROLLER_API_VERSION_ENDPOINT}execution_environments/"
-            response = client.post(endpoint, json=execution_environment_data)
+            try:
+                response = client.post(endpoint, json=ee_data)
+            except AAPAPIError as api_error:
+                if api_error.status_code == HTTP_NOT_FOUND:
+                    # Handle 404 error with proper message
+                    raise AAPResourceNotFoundError("Execution Environment", parsed_args.name)
+                elif api_error.status_code == HTTP_BAD_REQUEST:
+                    # Format 400 errors properly using parser.error
+                    parser = self.get_parser('aap execution-environment create')
+                    parser.error(f"Bad request: {api_error}")
+                else:
+                    # Re-raise other errors
+                    raise
 
             if response.status_code == HTTP_CREATED:
-                execution_environment_data = response.json()
-                print(f"Execution environment '{parsed_args.name}' created successfully")
-                return _format_execution_environment_data(execution_environment_data)
-            elif response.status_code == HTTP_BAD_REQUEST:
-                error_data = response.json()
-                if isinstance(error_data, dict):
-                    for field, messages in error_data.items():
-                        if isinstance(messages, list):
-                            for message in messages:
-                                print(f"{field}: {message}")
-                        else:
-                            print(f"{field}: {messages}")
-                else:
-                    print(f"Error: {error_data}")
-                parser.error("Execution environment creation failed due to validation errors")
+                ee_data = response.json()
+                print(f"Execution Environment '{ee_data.get('name', '')}' created successfully")
+
+                return _format_execution_environment_data(ee_data)
             else:
-                raise AAPClientError(f"Failed to create execution environment: {response.status_code}")
+                raise AAPClientError(f"Execution Environment creation failed with status {response.status_code}")
 
         except AAPResourceNotFoundError as e:
-            parser.error(str(e))
-        except AAPAPIError as e:
-            if e.status_code == HTTP_BAD_REQUEST:
-                parser.error(f"Bad request: {e}")
-            else:
-                raise AAPClientError(f"API error: {e}")
+            raise SystemExit(str(e))
+        except AAPClientError as e:
+            raise SystemExit(str(e))
+        except Exception as e:
+            raise SystemExit(f"Unexpected error: {e}")
 
 
-class ExecutionEnvironmentSetCommand(ShowOne):
-    """Update execution environment."""
-
-    def get_parser(self, prog_name):
-        parser = super().get_parser(prog_name)
-        parser.add_argument(
-            'execution_environment',
-            metavar='<execution_environment>',
-            help='Execution environment name or ID to update'
-        )
-        parser.add_argument(
-            '--set-name',
-            dest='set_name',
-            help='New name for the execution environment'
-        )
-        parser.add_argument(
-            '--image',
-            help='New container image for the execution environment'
-        )
-        parser.add_argument(
-            '--description',
-            help='New description for the execution environment'
-        )
-        parser.add_argument(
-            '--organization',
-            help='New organization name or ID for the execution environment'
-        )
-        parser.add_argument(
-            '--credential',
-            help='New credential name or ID for pulling the container image'
-        )
-        parser.add_argument(
-            '--pull',
-            choices=['always', 'missing', 'never'],
-            help='New pull policy for the container image'
-        )
-        return parser
-
-    def take_action(self, parsed_args):
-        config = AAPConfig()
-        config.validate()
-
-        # Create HTTP client
-        client = AAPHTTPClient(config)
-
-        try:
-            # Get parser for usage message
-            parser = self.get_parser('aap execution-environment set')
-
-            # Resolve execution environment - handle both ID and name
-            execution_environment_id = resolve_execution_environment_name(client, parsed_args.execution_environment, api="controller")
-
-            # Resolve organization if provided
-            if getattr(parsed_args, 'organization', None):
-                org_id = resolve_organization_name(client, parsed_args.organization, api="controller")
-            else:
-                org_id = None
-
-            # Prepare execution environment update data
-            execution_environment_data = {}
-
-            if parsed_args.set_name:
-                execution_environment_data['name'] = parsed_args.set_name
-            if parsed_args.image:
-                execution_environment_data['image'] = parsed_args.image
-            if parsed_args.description:
-                execution_environment_data['description'] = parsed_args.description
-            if org_id is not None:
-                execution_environment_data['organization'] = org_id
-            if parsed_args.credential:
-                credential_id = resolve_credential_name(client, parsed_args.credential, api="controller")
-                execution_environment_data['credential'] = credential_id
-            if parsed_args.pull:
-                execution_environment_data['pull'] = parsed_args.pull
-
-            if not execution_environment_data:
-                parser.error("At least one field must be specified to update")
-
-            endpoint = f"{CONTROLLER_API_VERSION_ENDPOINT}execution_environments/{execution_environment_id}/"
-            response = client.patch(endpoint, json=execution_environment_data)
-
-            if response.status_code == HTTP_OK:
-                execution_environment_data = response.json()
-                print(f"Execution environment '{parsed_args.execution_environment}' updated successfully")
-                return _format_execution_environment_data(execution_environment_data)
-            elif response.status_code == HTTP_NOT_FOUND:
-                raise AAPResourceNotFoundError("Execution Environment", parsed_args.execution_environment)
-            elif response.status_code == HTTP_BAD_REQUEST:
-                error_data = response.json()
-                if isinstance(error_data, dict):
-                    for field, messages in error_data.items():
-                        if isinstance(messages, list):
-                            for message in messages:
-                                print(f"{field}: {message}")
-                        else:
-                            print(f"{field}: {messages}")
-                else:
-                    print(f"Error: {error_data}")
-                parser.error("Execution environment update failed due to validation errors")
-            else:
-                raise AAPClientError(f"Failed to update execution environment: {response.status_code}")
-
-        except AAPResourceNotFoundError as e:
-            parser.error(str(e))
-        except AAPAPIError as e:
-            if e.status_code == HTTP_NOT_FOUND:
-                raise AAPResourceNotFoundError("Execution Environment", parsed_args.execution_environment)
-            elif e.status_code == HTTP_BAD_REQUEST:
-                parser.error(f"Bad request: {e}")
-            else:
-                raise AAPClientError(f"API error: {e}")
-
-
-class ExecutionEnvironmentDeleteCommand(Command):
-    """Delete execution environment."""
+class ExecutionEnvironmentSetCommand(AAPShowCommand):
+    """Update an existing execution environment."""
 
     def get_parser(self, prog_name):
         parser = super().get_parser(prog_name)
@@ -394,7 +315,7 @@ class ExecutionEnvironmentDeleteCommand(Command):
         parser.add_argument(
             '--id',
             type=int,
-            help='Execution environment ID (overrides positional parameter)'
+            help='Execution Environment ID (overrides positional parameter)'
         )
 
         # Positional parameter for name lookup with ID fallback
@@ -402,43 +323,163 @@ class ExecutionEnvironmentDeleteCommand(Command):
             'execution_environment',
             nargs='?',
             metavar='<execution_environment>',
-            help='Execution environment name or ID to delete'
+            help='Execution Environment name or ID to update'
+        )
+
+        parser.add_argument(
+            '--set-name',
+            dest='set_name',
+            help='New execution environment name'
+        )
+        parser.add_argument(
+            '--image',
+            help='Container image for this execution environment'
+        )
+        parser.add_argument(
+            '--description',
+            help='Execution Environment description'
+        )
+        parser.add_argument(
+            '--organization',
+            help='Organization name or ID'
+        )
+        parser.add_argument(
+            '--credential',
+            help='Container Registry credential name or ID'
+        )
+        parser.add_argument(
+            '--pull',
+            choices=['always', 'missing', 'never'],
+            help='Pull policy for execution environment image'
         )
         return parser
 
     def take_action(self, parsed_args):
-        config = AAPConfig()
-        config.validate()
-
-        # Create HTTP client
-        client = AAPHTTPClient(config)
-
+        """Execute the execution environment set command."""
         try:
+            # Get client from centralized client manager
+            client = self.controller_client
+
+            # Get parser for usage message
+            parser = self.get_parser('aap execution-environment set')
+
+            # Resolve execution environment - handle both ID and name
+            ee_id = resolve_execution_environment_name(client, parsed_args.execution_environment, api="controller")
+
+            # Resolve organization if provided
+            if getattr(parsed_args, 'organization', None):
+                org_id = resolve_organization_name(client, parsed_args.organization, api="controller")
+            else:
+                org_id = None
+
+            # Resolve credential if provided
+            if getattr(parsed_args, 'credential', None):
+                credential_id = resolve_credential_name(client, parsed_args.credential, api="controller")
+            else:
+                credential_id = None
+
+            # Prepare execution environment update data
+            ee_data = {}
+
+            if parsed_args.set_name:
+                ee_data['name'] = parsed_args.set_name
+            if getattr(parsed_args, 'image', None):
+                ee_data['image'] = parsed_args.image
+            if parsed_args.description is not None:  # Allow empty string
+                ee_data['description'] = parsed_args.description
+            if org_id is not None:
+                ee_data['organization'] = org_id
+            if credential_id is not None:
+                ee_data['credential'] = credential_id
+            if getattr(parsed_args, 'pull', None):
+                ee_data['pull'] = parsed_args.pull
+
+            if not ee_data:
+                parser.error("No update fields provided")
+
+            # Update execution environment
+            endpoint = f"{CONTROLLER_API_VERSION_ENDPOINT}execution_environments/{ee_id}/"
+            try:
+                response = client.patch(endpoint, json=ee_data)
+            except AAPAPIError as api_error:
+                if api_error.status_code == HTTP_NOT_FOUND:
+                    # Handle 404 error with proper message
+                    raise AAPResourceNotFoundError("Execution Environment", parsed_args.execution_environment)
+                elif api_error.status_code == HTTP_BAD_REQUEST:
+                    # Format 400 errors properly using parser.error
+                    parser = self.get_parser('aap execution-environment set')
+                    parser.error(f"Bad request: {api_error}")
+                else:
+                    # Re-raise other errors
+                    raise
+
+            if response.status_code == HTTP_OK:
+                ee_data = response.json()
+                print(f"Execution Environment '{ee_data.get('name', '')}' updated successfully")
+
+                return _format_execution_environment_data(ee_data)
+            else:
+                raise AAPClientError(f"Execution Environment update failed with status {response.status_code}")
+
+        except AAPResourceNotFoundError as e:
+            raise SystemExit(str(e))
+        except AAPClientError as e:
+            raise SystemExit(str(e))
+        except Exception as e:
+            raise SystemExit(f"Unexpected error: {e}")
+
+
+class ExecutionEnvironmentDeleteCommand(AAPCommand):
+    """Delete an execution environment."""
+
+    def get_parser(self, prog_name):
+        parser = super().get_parser(prog_name)
+
+        # ID option to override positional parameter
+        parser.add_argument(
+            '--id',
+            type=int,
+            help='Execution Environment ID (overrides positional parameter)'
+        )
+
+        # Positional parameter for name lookup with ID fallback
+        parser.add_argument(
+            'execution_environment',
+            nargs='?',
+            metavar='<execution_environment>',
+            help='Execution Environment name or ID'
+        )
+        return parser
+
+    def take_action(self, parsed_args):
+        """Execute the execution environment delete command."""
+        try:
+            # Get client from centralized client manager
+            client = self.controller_client
+
             # Determine how to resolve the execution environment
             if parsed_args.id:
                 # Use explicit ID (ignores positional parameter)
-                execution_environment_id = parsed_args.id
+                ee_id = parsed_args.id
             elif parsed_args.execution_environment:
                 # Use positional parameter - name first, then ID fallback if numeric
-                execution_environment_id = resolve_execution_environment_name(client, parsed_args.execution_environment, api="controller")
+                ee_id = resolve_execution_environment_name(client, parsed_args.execution_environment, api="controller")
             else:
-                raise AAPClientError("Execution environment identifier is required")
+                raise AAPClientError("Execution Environment identifier is required")
 
-            endpoint = f"{CONTROLLER_API_VERSION_ENDPOINT}execution_environments/{execution_environment_id}/"
+            endpoint = f"{CONTROLLER_API_VERSION_ENDPOINT}execution_environments/{ee_id}/"
             response = client.delete(endpoint)
 
-            if response.status_code == HTTP_NO_CONTENT:
-                print(f"Execution environment '{parsed_args.execution_environment or parsed_args.id}' deleted successfully")
+            if response.status_code in (HTTP_NO_CONTENT, HTTP_ACCEPTED):
+                print(f"Execution Environment '{parsed_args.execution_environment or parsed_args.id}' deleted successfully")
             elif response.status_code == HTTP_NOT_FOUND:
                 raise AAPResourceNotFoundError("Execution Environment", parsed_args.execution_environment or parsed_args.id)
             else:
                 raise AAPClientError(f"Failed to delete execution environment: {response.status_code}")
 
-        except AAPResourceNotFoundError as e:
-            parser = self.get_parser('aap execution-environment delete')
-            parser.error(str(e))
-        except AAPAPIError as e:
-            if e.status_code == HTTP_NOT_FOUND:
-                raise AAPResourceNotFoundError("Execution Environment", parsed_args.execution_environment or parsed_args.id)
-            else:
-                raise AAPClientError(f"API error: {e}")
+        except AAPResourceNotFoundError:
+            raise
+        except AAPClientError:
+            raise
+        except Exception as e:
+            raise AAPClientError(f"Unexpected error: {e}")

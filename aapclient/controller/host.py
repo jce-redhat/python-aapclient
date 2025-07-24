@@ -1,83 +1,82 @@
 """Host commands."""
-
 import json
 import yaml
-from cliff.command import Command
-from cliff.lister import Lister
-from cliff.show import ShowOne
-
-from aapclient.common.config import AAPConfig
-from aapclient.common.client import AAPHTTPClient
+from aapclient.common.basecommands import AAPShowCommand, AAPListCommand, AAPCommand
 from aapclient.common.constants import (
     CONTROLLER_API_VERSION_ENDPOINT,
     HTTP_OK,
     HTTP_CREATED,
     HTTP_NO_CONTENT,
     HTTP_NOT_FOUND,
-    HTTP_BAD_REQUEST
+    HTTP_BAD_REQUEST,
+    HTTP_ACCEPTED
 )
-from aapclient.common.exceptions import (
-    AAPClientError,
-    AAPResourceNotFoundError,
-    AAPAPIError
-)
-from aapclient.common.functions import (
-    resolve_inventory_name,
-    resolve_host_name
-)
+from aapclient.common.exceptions import AAPClientError, AAPResourceNotFoundError, AAPAPIError
+from aapclient.common.functions import resolve_inventory_name, resolve_host_name
 
 
 
 
 
 def _format_host_data(host_data):
-    """Format host data for display."""
-    # Resolve inventory name from summary_fields
-    inventory_name = ""
-    if host_data.get('summary_fields', {}).get('inventory', {}).get('name'):
-        inventory_name = host_data['summary_fields']['inventory']['name']
-    elif host_data.get('inventory'):
-        inventory_name = str(host_data['inventory'])
+    """
+    Format host data consistently
 
+    Args:
+        host_data (dict): Host data from API response
+
+    Returns:
+        tuple: (field_names, field_values) for ShowOne display
+    """
+    # Extract host details
+    id_value = host_data.get('id', '')
+    name = host_data.get('name', '')
+    description = host_data.get('description', '')
+    inventory_name = ''
+    enabled = host_data.get('enabled', False)
+
+    # Resolve inventory name if available
+    if 'summary_fields' in host_data and 'inventory' in host_data['summary_fields']:
+        if host_data['summary_fields']['inventory']:
+            inventory_name = host_data['summary_fields']['inventory'].get('name', '')
+
+    # Handle variables with length check
+    variables_value = host_data.get('variables', '')
+    if len(str(variables_value)) > 120:
+        variables_display = "(Display with `host variables show` command)"
+    else:
+        variables_display = str(variables_value)
+
+    created = host_data.get('created', '')
+    modified = host_data.get('modified', '')
+
+    # Format fields for display
     columns = [
         'ID',
         'Name',
         'Description',
         'Inventory',
         'Enabled',
-        'Instance ID',
-        'Has Active Failures',
-        'Has Inventory Sources',
         'Variables',
         'Created',
-        'Modified',
+        'Modified'
     ]
 
-    # Handle variables display - check character count
-    variables_value = host_data.get('variables', '')
-    if len(str(variables_value)) > 120:
-        variables_display = "(Display with `host variables show` command)"
-    else:
-        variables_display = variables_value
-
     values = [
-        host_data.get('id', ''),
-        host_data.get('name', ''),
-        host_data.get('description', ''),
+        id_value,
+        name,
+        description,
         inventory_name,
-        'Yes' if host_data.get('enabled', False) else 'No',
-        host_data.get('instance_id', ''),
-        'Yes' if host_data.get('has_active_failures', False) else 'No',
-        'Yes' if host_data.get('has_inventory_sources', False) else 'No',
+        "Yes" if enabled else "No",
         variables_display,
-        host_data.get('created', ''),
-        host_data.get('modified', ''),
+        created,
+        modified
     ]
 
     return (columns, values)
 
 
-class HostListCommand(Lister):
+class HostListCommand(AAPListCommand):
     """List hosts."""
 
     def get_parser(self, prog_name):
@@ -91,49 +90,68 @@ class HostListCommand(Lister):
         return parser
 
     def take_action(self, parsed_args):
-        config = AAPConfig()
-        config.validate()
+        """Execute the host list command."""
+        try:
+            # Get client from centralized client manager
+            client = self.controller_client
 
-        # Create HTTP client
-        client = AAPHTTPClient(config)
+            # Build query parameters
+            params = {'order_by': 'id'}  # Sort by ID on server side
+            if parsed_args.limit:
+                params['page_size'] = parsed_args.limit
 
-        # Parameters for API request
-        params = {'order_by': 'id'}  # Server-side sorting by ID
-        if parsed_args.limit:
-            params['page_size'] = parsed_args.limit
+            # Query hosts endpoint
+            endpoint = f"{CONTROLLER_API_VERSION_ENDPOINT}hosts/"
+            try:
+                response = client.get(endpoint, params=params)
+            except AAPAPIError as api_error:
+                if api_error.status_code == HTTP_NOT_FOUND:
+                    # Handle 404 error with proper message
+                    raise AAPResourceNotFoundError("Host", "hosts endpoint")
+                elif api_error.status_code == HTTP_BAD_REQUEST:
+                    # Pass through 400 status messages directly to user
+                    raise SystemExit(str(api_error))
+                else:
+                    # Re-raise other errors
+                    raise
 
-        endpoint = f"{CONTROLLER_API_VERSION_ENDPOINT}hosts/"
-        response = client.get(endpoint, params=params)
+            if response.status_code == HTTP_OK:
+                data = response.json()
+                hosts = data.get('results', [])
 
-        if response.status_code == HTTP_OK:
-            data = response.json()
-            hosts = data.get('results', [])
+                # Define columns for output
+                columns = ['ID', 'Name', 'Description', 'Inventory', 'Enabled']
+                rows = []
 
-            columns = ['ID', 'Name', 'Description', 'Inventory', 'Enabled']
-            host_list = []
+                for host in hosts:
+                    # Get inventory name from summary_fields if available
+                    inventory_name = ''
+                    if 'summary_fields' in host and 'inventory' in host['summary_fields']:
+                        if host['summary_fields']['inventory']:
+                            inventory_name = host['summary_fields']['inventory'].get('name', '')
 
-            for host in hosts:
-                # Resolve inventory name from summary_fields
-                inventory_name = ""
-                if host.get('summary_fields', {}).get('inventory', {}).get('name'):
-                    inventory_name = host['summary_fields']['inventory']['name']
-                elif host.get('inventory'):
-                    inventory_name = str(host['inventory'])
+                    row = [
+                        host.get('id', ''),
+                        host.get('name', ''),
+                        host.get('description', ''),
+                        inventory_name,
+                        "Yes" if host.get('enabled', False) else "No"
+                    ]
+                    rows.append(row)
 
-                host_list.append([
-                    host.get('id', ''),
-                    host.get('name', ''),
-                    host.get('description', ''),
-                    inventory_name,
-                    'Yes' if host.get('enabled', False) else 'No'
-                ])
+                return (columns, rows)
+            else:
+                raise AAPClientError(f"Controller API failed with status {response.status_code}")
 
-            return (columns, host_list)
-        else:
-            raise AAPClientError(f"Failed to retrieve hosts: {response.status_code}")
+        except AAPResourceNotFoundError as e:
+            raise SystemExit(str(e))
+        except AAPClientError as e:
+            raise SystemExit(str(e))
+        except Exception as e:
+            raise SystemExit(f"Unexpected error: {e}")
 
 
-class HostShowCommand(ShowOne):
+class HostShowCommand(AAPShowCommand):
     """Show details of a specific host."""
 
     def get_parser(self, prog_name):
@@ -151,27 +169,25 @@ class HostShowCommand(ShowOne):
             'host',
             nargs='?',
             metavar='<host>',
-            help='Host name or ID to show'
+            help='Host name or ID to display'
         )
-
         return parser
 
     def take_action(self, parsed_args):
-        config = AAPConfig()
-        config.validate()
-
-        # Create HTTP client
-        client = AAPHTTPClient(config)
-
+        """Execute the host show command."""
         try:
+            # Get client from centralized client manager
+            client = self.controller_client
+
             # Determine how to resolve the host
             if parsed_args.id:
+                # Use explicit ID (ignores positional parameter)
                 host_id = parsed_args.id
             elif parsed_args.host:
+                # Use positional parameter - name first, then ID fallback if numeric
                 host_id = resolve_host_name(client, parsed_args.host, api="controller")
             else:
-                parser = self.get_parser('aap host show')
-                parser.error("Host identifier is required")
+                raise AAPClientError("Host identifier is required")
 
             endpoint = f"{CONTROLLER_API_VERSION_ENDPOINT}hosts/{host_id}/"
             response = client.get(endpoint)
@@ -182,107 +198,98 @@ class HostShowCommand(ShowOne):
             elif response.status_code == HTTP_NOT_FOUND:
                 raise AAPResourceNotFoundError("Host", parsed_args.host or parsed_args.id)
             else:
-                raise AAPClientError(f"Failed to retrieve host: {response.status_code}")
+                raise AAPClientError(f"Failed to get host: {response.status_code}")
 
-        except AAPAPIError as api_error:
-            if api_error.status_code == HTTP_NOT_FOUND:
-                raise AAPResourceNotFoundError("Host", parsed_args.host or parsed_args.id)
-            else:
-                raise AAPClientError(f"API error: {api_error}")
+        except AAPResourceNotFoundError:
+            raise
+        except AAPClientError:
+            raise
+        except Exception as e:
+            raise AAPClientError(f"Unexpected error: {e}")
 
 
-class HostCreateCommand(ShowOne):
+class HostCreateCommand(AAPShowCommand):
     """Create a new host."""
 
     def get_parser(self, prog_name):
         parser = super().get_parser(prog_name)
-
-        # Required positional argument
         parser.add_argument(
             'name',
-            metavar='<name>',
-            help='Name for the new host'
+            help='Host name'
         )
-
-        # Required inventory argument
+        parser.add_argument(
+            '--description',
+            help='Host description'
+        )
         parser.add_argument(
             '--inventory',
             required=True,
-            help='Inventory name or ID to add the host to'
-        )
-
-        # Optional arguments
-        parser.add_argument(
-            '--description',
-            help='Description for the host'
+            help='Inventory name or ID'
         )
         parser.add_argument(
             '--variables',
-            help='Variables for the host (JSON format)'
+            help='Host variables as JSON string'
         )
-        parser.add_argument(
-            '--disabled',
-            action='store_true',
-            help='Disable the host'
-        )
-
         return parser
 
     def take_action(self, parsed_args):
-        config = AAPConfig()
-        config.validate()
-
-        # Create HTTP client
-        client = AAPHTTPClient(config)
-
+        """Execute the host create command."""
         try:
+            # Get client from centralized client manager
+            client = self.controller_client
+
+            # Get parser for usage message
             parser = self.get_parser('aap host create')
 
-            # Resolve inventory name to ID
-            try:
-                inventory_id = resolve_inventory_name(client, parsed_args.inventory, api="controller")
-            except AAPResourceNotFoundError:
-                parser.error(f"Inventory '{parsed_args.inventory}' not found")
-
-            # Handle enabled/disabled flags
-            enabled = True  # Default
-            if parsed_args.disabled:
-                enabled = False
+            # Resolve inventory
+            inventory_id = resolve_inventory_name(client, parsed_args.inventory, api="controller")
 
             host_data = {
                 'name': parsed_args.name,
-                'inventory': inventory_id,
-                'enabled': enabled
+                'inventory': inventory_id
             }
 
             # Add optional fields
             if parsed_args.description:
                 host_data['description'] = parsed_args.description
-            if parsed_args.variables:
-                host_data['variables'] = parsed_args.variables
+            if getattr(parsed_args, 'variables', None):
+                try:
+                    host_data['variables'] = json.loads(parsed_args.variables)
+                except json.JSONDecodeError:
+                    parser.error("argument --variables: must be valid JSON")
 
+            # Create host
             endpoint = f"{CONTROLLER_API_VERSION_ENDPOINT}hosts/"
-            response = client.post(endpoint, json=host_data)
+            try:
+                response = client.post(endpoint, json=host_data)
+            except AAPAPIError as api_error:
+                if api_error.status_code == HTTP_NOT_FOUND:
+                    # Handle 404 error with proper message
+                    raise AAPResourceNotFoundError("Host", parsed_args.name)
+                elif api_error.status_code == HTTP_BAD_REQUEST:
+                    # Pass through 400 status messages directly to user
+                    raise SystemExit(str(api_error))
+                else:
+                    # Re-raise other errors
+                    raise
 
             if response.status_code == HTTP_CREATED:
                 host_data = response.json()
-                print(f"Host '{parsed_args.name}' created successfully")
+                print(f"Host '{host_data.get('name', '')}' created successfully")
+
                 return _format_host_data(host_data)
-            elif response.status_code == HTTP_BAD_REQUEST:
-                error_data = response.json()
-                parser.error(f"Bad request: {error_data}")
             else:
-                raise AAPClientError(f"Failed to create host: {response.status_code}")
+                raise AAPClientError(f"Host creation failed with status {response.status_code}")
 
-        except AAPAPIError as api_error:
-            if api_error.status_code == HTTP_BAD_REQUEST:
-                parser = self.get_parser('aap host create')
-                parser.error(f"Bad request: {api_error}")
-            else:
-                raise AAPClientError(f"API error: {api_error}")
+        except AAPResourceNotFoundError as e:
+            raise SystemExit(str(e))
+        except AAPClientError as e:
+            raise SystemExit(str(e))
+        except Exception as e:
+            raise SystemExit(f"Unexpected error: {e}")
 
 
-class HostSetCommand(ShowOne):
+class HostSetCommand(AAPShowCommand):
     """Update an existing host."""
 
     def get_parser(self, prog_name):
@@ -303,98 +310,103 @@ class HostSetCommand(ShowOne):
             help='Host name or ID to update'
         )
 
-        # Update fields
         parser.add_argument(
             '--set-name',
             dest='set_name',
-            help='New name for the host'
+            help='New host name'
         )
         parser.add_argument(
             '--description',
-            help='New description for the host'
+            help='Host description'
         )
         parser.add_argument(
             '--variables',
-            help='New variables for the host (JSON format)'
+            help='Host variables as JSON string'
         )
 
-        # Mutually exclusive group for enabled/disabled
-        enabled_group = parser.add_mutually_exclusive_group()
-        enabled_group.add_argument(
+        # Enable/disable flags for enabled status
+        enable_group = parser.add_mutually_exclusive_group()
+        enable_group.add_argument(
             '--enable',
             action='store_true',
+            dest='enable_host',
             help='Enable the host'
         )
-        enabled_group.add_argument(
+        enable_group.add_argument(
             '--disable',
             action='store_true',
+            dest='disable_host',
             help='Disable the host'
         )
 
         return parser
 
     def take_action(self, parsed_args):
-        config = AAPConfig()
-        config.validate()
-
-        # Create HTTP client
-        client = AAPHTTPClient(config)
-
+        """Execute the host set command."""
         try:
+            # Get client from centralized client manager
+            client = self.controller_client
+
+            # Get parser for usage message
             parser = self.get_parser('aap host set')
 
-            # Determine how to resolve the host
-            if parsed_args.id:
-                host_id = parsed_args.id
-            elif parsed_args.host:
-                host_id = resolve_host_name(client, parsed_args.host, api="controller")
-            else:
-                parser.error("Host identifier is required")
+            # Resolve host - handle both ID and name
+            host_id = resolve_host_name(client, parsed_args.host, api="controller")
 
+            # Prepare host update data
             host_data = {}
 
-            # Update fields if provided
-            if parsed_args.set_name is not None:
+            if parsed_args.set_name:
                 host_data['name'] = parsed_args.set_name
-            if parsed_args.description is not None:
+            if parsed_args.description is not None:  # Allow empty string
                 host_data['description'] = parsed_args.description
-            if parsed_args.variables is not None:
-                host_data['variables'] = parsed_args.variables
+            if getattr(parsed_args, 'variables', None):
+                try:
+                    host_data['variables'] = json.loads(parsed_args.variables)
+                except json.JSONDecodeError:
+                    parser.error("argument --variables: must be valid JSON")
 
-            # Handle enabled/disabled boolean
-            if parsed_args.enable:
+            # Handle enable/disable flags
+            if parsed_args.enable_host:
                 host_data['enabled'] = True
-            elif parsed_args.disable:
+            elif parsed_args.disable_host:
                 host_data['enabled'] = False
 
             if not host_data:
-                parser.error("At least one field must be specified to update")
+                parser.error("No update fields provided")
 
+            # Update host
             endpoint = f"{CONTROLLER_API_VERSION_ENDPOINT}hosts/{host_id}/"
-            response = client.patch(endpoint, json=host_data)
+            try:
+                response = client.patch(endpoint, json=host_data)
+            except AAPAPIError as api_error:
+                if api_error.status_code == HTTP_NOT_FOUND:
+                    # Handle 404 error with proper message
+                    raise AAPResourceNotFoundError("Host", parsed_args.host)
+                elif api_error.status_code == HTTP_BAD_REQUEST:
+                    # Pass through 400 status messages directly to user
+                    raise SystemExit(str(api_error))
+                else:
+                    # Re-raise other errors
+                    raise
 
             if response.status_code == HTTP_OK:
                 host_data = response.json()
-                print(f"Host '{parsed_args.host or parsed_args.id}' updated successfully")
+                print(f"Host '{host_data.get('name', '')}' updated successfully")
+
                 return _format_host_data(host_data)
-            elif response.status_code == HTTP_NOT_FOUND:
-                raise AAPResourceNotFoundError("Host", parsed_args.host or parsed_args.id)
-            elif response.status_code == HTTP_BAD_REQUEST:
-                parser.error(f"Bad request: {response.json()}")
             else:
-                raise AAPClientError(f"Failed to update host: {response.status_code}")
+                raise AAPClientError(f"Host update failed with status {response.status_code}")
 
-        except AAPAPIError as api_error:
-            if api_error.status_code == HTTP_NOT_FOUND:
-                raise AAPResourceNotFoundError("Host", parsed_args.host or parsed_args.id)
-            elif api_error.status_code == HTTP_BAD_REQUEST:
-                parser = self.get_parser('aap host set')
-                parser.error(f"Bad request: {api_error}")
-            else:
-                raise AAPClientError(f"API error: {api_error}")
+        except AAPResourceNotFoundError as e:
+            raise SystemExit(str(e))
+        except AAPClientError as e:
+            raise SystemExit(str(e))
+        except Exception as e:
+            raise SystemExit(f"Unexpected error: {e}")
 
 
-class HostDeleteCommand(Command):
+class HostDeleteCommand(AAPCommand):
     """Delete a host."""
 
     def get_parser(self, prog_name):
@@ -412,55 +424,45 @@ class HostDeleteCommand(Command):
             'host',
             nargs='?',
             metavar='<host>',
-            help='Host name or ID to delete'
+            help='Host name or ID'
         )
-
         return parser
 
     def take_action(self, parsed_args):
-        config = AAPConfig()
-        config.validate()
-
-        # Create HTTP client
-        client = AAPHTTPClient(config)
-
+        """Execute the host delete command."""
         try:
-            parser = self.get_parser('aap host delete')
+            # Get client from centralized client manager
+            client = self.controller_client
 
             # Determine how to resolve the host
             if parsed_args.id:
+                # Use explicit ID (ignores positional parameter)
                 host_id = parsed_args.id
-                host_identifier = str(parsed_args.id)
             elif parsed_args.host:
+                # Use positional parameter - name first, then ID fallback if numeric
                 host_id = resolve_host_name(client, parsed_args.host, api="controller")
-                host_identifier = parsed_args.host
             else:
-                parser.error("Host identifier is required")
+                raise AAPClientError("Host identifier is required")
 
             endpoint = f"{CONTROLLER_API_VERSION_ENDPOINT}hosts/{host_id}/"
             response = client.delete(endpoint)
 
-            if response.status_code == HTTP_NO_CONTENT:
-                print(f"Host '{host_identifier}' deleted successfully")
+            if response.status_code in (HTTP_NO_CONTENT, HTTP_ACCEPTED):
+                print(f"Host '{parsed_args.host or parsed_args.id}' deleted successfully")
             elif response.status_code == HTTP_NOT_FOUND:
-                raise AAPResourceNotFoundError("Host", host_identifier)
-            elif response.status_code == HTTP_BAD_REQUEST:
-                error_data = response.json()
-                parser.error(f"Bad request: {error_data}")
+                raise AAPResourceNotFoundError("Host", parsed_args.host or parsed_args.id)
             else:
                 raise AAPClientError(f"Failed to delete host: {response.status_code}")
 
-        except AAPAPIError as api_error:
-            if api_error.status_code == HTTP_NOT_FOUND:
-                raise AAPResourceNotFoundError("Host", parsed_args.host or parsed_args.id)
-            elif api_error.status_code == HTTP_BAD_REQUEST:
-                parser = self.get_parser('aap host delete')
-                parser.error(f"Bad request: {api_error}")
-            else:
-                raise AAPClientError(f"API error: {api_error}")
+        except AAPResourceNotFoundError:
+            raise
+        except AAPClientError:
+            raise
+        except Exception as e:
+            raise AAPClientError(f"Unexpected error: {e}")
 
 
-class HostGroupsListCommand(Lister):
+class HostGroupsListCommand(AAPListCommand):
     """List groups associated with a host."""
 
     def get_parser(self, prog_name):
@@ -476,34 +478,26 @@ class HostGroupsListCommand(Lister):
         # Positional parameter for name lookup with ID fallback
         parser.add_argument(
             'host',
-            nargs='?',
             metavar='<host>',
-            help='Host name or ID to list groups for'
+            help='Host name or ID'
         )
-
         return parser
 
     def take_action(self, parsed_args):
-        config = AAPConfig()
-        config.validate()
-
-        # Create HTTP client
-        client = AAPHTTPClient(config)
-
+        """Execute the host groups list command."""
         try:
-            parser = self.get_parser('aap host group list')
+            # Get client from centralized client manager
+            client = self.controller_client
 
             # Determine how to resolve the host
             if parsed_args.id:
+                # Use explicit ID (ignores positional parameter)
                 host_id = parsed_args.id
-                host_identifier = str(parsed_args.id)
-            elif parsed_args.host:
-                host_id = resolve_host_name(client, parsed_args.host, api="controller")
-                host_identifier = parsed_args.host
             else:
-                parser.error("Host identifier is required")
+                # Use positional parameter - name first, then ID fallback if numeric
+                host_id = resolve_host_name(client, parsed_args.host, api="controller")
 
-            # Fetch host data to get groups from summary_fields
+            # Get host details to access summary_fields.groups
             endpoint = f"{CONTROLLER_API_VERSION_ENDPOINT}hosts/{host_id}/"
             response = client.get(endpoint)
 
@@ -511,35 +505,39 @@ class HostGroupsListCommand(Lister):
                 host_data = response.json()
 
                 # Extract groups from summary_fields
-                summary_fields = host_data.get('summary_fields', {})
-                groups_data = summary_fields.get('groups', {})
-                groups = groups_data.get('results', [])
+                groups = []
+                if 'summary_fields' in host_data and 'groups' in host_data['summary_fields']:
+                    groups_data = host_data['summary_fields']['groups']
+                    if 'results' in groups_data:
+                        groups = groups_data['results']
 
-                columns = ['Group ID', 'Group Name']
-                group_list = []
+                # Define columns for output
+                columns = ['ID', 'Name']
+                rows = []
 
                 for group in groups:
-                    group_list.append([
+                    row = [
                         group.get('id', ''),
                         group.get('name', '')
-                    ])
+                    ]
+                    rows.append(row)
 
-                return (columns, group_list)
-
+                return (columns, rows)
             elif response.status_code == HTTP_NOT_FOUND:
-                raise AAPResourceNotFoundError("Host", host_identifier)
-            else:
-                raise AAPClientError(f"Failed to retrieve host: {response.status_code}")
-
-        except AAPAPIError as api_error:
-            if api_error.status_code == HTTP_NOT_FOUND:
                 raise AAPResourceNotFoundError("Host", parsed_args.host or parsed_args.id)
             else:
-                raise AAPClientError(f"API error: {api_error}")
+                raise AAPClientError(f"Failed to get host: {response.status_code}")
+
+        except AAPResourceNotFoundError:
+            raise
+        except AAPClientError:
+            raise
+        except Exception as e:
+            raise AAPClientError(f"Unexpected error: {e}")
 
 
-class HostVariablesShowCommand(ShowOne):
-    """Show variables of a specific host."""
+class HostVariablesShowCommand(AAPShowCommand):
+    """Show host variables in YAML format."""
 
     def get_parser(self, prog_name):
         parser = super().get_parser(prog_name)
@@ -551,70 +549,68 @@ class HostVariablesShowCommand(ShowOne):
             help='Host ID (overrides positional parameter)'
         )
 
-
-
         # Positional parameter for name lookup with ID fallback
         parser.add_argument(
             'host',
-            nargs='?',
             metavar='<host>',
-            help='Host name or ID to show variables for'
+            help='Host name or ID'
         )
-
         return parser
 
     def take_action(self, parsed_args):
-        config = AAPConfig()
-        config.validate()
-
-        # Create HTTP client
-        client = AAPHTTPClient(config)
-
+        """Execute the host variables show command."""
         try:
-            parser = self.get_parser('aap host variables show')
+            # Get client from centralized client manager
+            client = self.controller_client
 
             # Determine how to resolve the host
             if parsed_args.id:
+                # Use explicit ID (ignores positional parameter)
                 host_id = parsed_args.id
-                host_identifier = str(parsed_args.id)
-            elif parsed_args.host:
-                host_id = resolve_host_name(client, parsed_args.host, api="controller")
-                host_identifier = parsed_args.host
             else:
-                parser.error("Host identifier is required")
+                # Use positional parameter - name first, then ID fallback if numeric
+                host_id = resolve_host_name(client, parsed_args.host, api="controller")
 
+            # Get host details
             endpoint = f"{CONTROLLER_API_VERSION_ENDPOINT}hosts/{host_id}/"
             response = client.get(endpoint)
 
             if response.status_code == HTTP_OK:
                 host_data = response.json()
-                variables = host_data.get('variables', '')
 
-                # Convert to YAML format
+                # Extract variables
+                variables = host_data.get('variables', {})
+
+                # Always convert to YAML format
                 if variables:
                     try:
-                        # Parse JSON variables and convert to YAML
+                        # If variables is a string, try to parse it as JSON first
                         if isinstance(variables, str):
-                            variables_dict = json.loads(variables)
-                        else:
-                            variables_dict = variables
-                        variables = yaml.dump(variables_dict, default_flow_style=False, allow_unicode=True)
-                    except (json.JSONDecodeError, TypeError) as e:
-                        # If JSON parsing fails, show error message but keep original value
-                        variables = f"Error converting to YAML: {str(e)}\n\nOriginal value:\n{variables}"
+                            variables = json.loads(variables)
+                        # Convert to YAML
+                        variables_yaml = yaml.dump(variables, default_flow_style=False)
+                    except (json.JSONDecodeError, yaml.YAMLError):
+                        # If conversion fails, display as string
+                        variables_yaml = str(variables)
+                else:
+                    variables_yaml = "{}"
 
                 # Format for display
                 columns = ['Host', 'Variables']
-                values = [host_data.get('name', host_identifier), variables]
+                values = [
+                    parsed_args.host or parsed_args.id,
+                    variables_yaml
+                ]
 
                 return (columns, values)
             elif response.status_code == HTTP_NOT_FOUND:
-                raise AAPResourceNotFoundError("Host", host_identifier)
-            else:
-                raise AAPClientError(f"Failed to retrieve host: {response.status_code}")
-
-        except AAPAPIError as api_error:
-            if api_error.status_code == HTTP_NOT_FOUND:
                 raise AAPResourceNotFoundError("Host", parsed_args.host or parsed_args.id)
             else:
-                raise AAPClientError(f"API error: {api_error}")
+                raise AAPClientError(f"Failed to get host: {response.status_code}")
+
+        except AAPResourceNotFoundError:
+            raise
+        except AAPClientError:
+            raise
+        except Exception as e:
+            raise AAPClientError(f"Unexpected error: {e}")

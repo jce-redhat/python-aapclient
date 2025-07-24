@@ -1,16 +1,13 @@
 """Credential commands."""
-from cliff.command import Command
-from cliff.lister import Lister
-from cliff.show import ShowOne
-from aapclient.common.client import AAPHTTPClient
-from aapclient.common.config import AAPConfig
+from aapclient.common.basecommands import AAPShowCommand, AAPListCommand, AAPCommand
 from aapclient.common.constants import (
     CONTROLLER_API_VERSION_ENDPOINT,
     HTTP_OK,
     HTTP_CREATED,
     HTTP_NO_CONTENT,
     HTTP_NOT_FOUND,
-    HTTP_BAD_REQUEST
+    HTTP_BAD_REQUEST,
+    HTTP_ACCEPTED
 )
 from aapclient.common.exceptions import AAPClientError, AAPResourceNotFoundError, AAPAPIError
 from aapclient.common.functions import resolve_organization_name, resolve_credential_name
@@ -29,34 +26,46 @@ def _format_credential_data(credential_data):
     Returns:
         tuple: (field_names, field_values) for ShowOne display
     """
-    # Extract helper variables from summary_fields
-    credential_type_info = credential_data.get('summary_fields', {}).get('credential_type', {})
-    organization_info = credential_data.get('summary_fields', {}).get('organization', {})
-    created_by = credential_data.get('summary_fields', {}).get('created_by', {})
-    modified_by = credential_data.get('summary_fields', {}).get('modified_by', {})
+    # Extract credential details
+    id_value = credential_data.get('id', '')
+    name = credential_data.get('name', '')
+    description = credential_data.get('description', '')
+    credential_type = credential_data.get('credential_type', '')
+    organization_name = ''
 
-    # Define comprehensive field mappings as ordered dictionary
-    field_data = {
-        'ID': str(credential_data.get('id', '')),
-        'Name': credential_data.get('name', ''),
-        'Description': credential_data.get('description', ''),
-        'Organization': organization_info.get('name', '') or str(credential_data.get('organization', '')),
-        'Credential Type': credential_type_info.get('name', '') or str(credential_data.get('credential_type', '')),
-        'Kind': credential_data.get('kind', ''),
-        'Cloud': str(credential_data.get('cloud')).lower(),
-        'Kubernetes': str(credential_data.get('kubernetes')).lower(),
-        'Inputs': str(credential_data.get('inputs', {})),
-        'Created': credential_data.get('created', ''),
-        'Created By': created_by.get('username', ''),
-        'Modified': credential_data.get('modified', ''),
-        'Modified By': modified_by.get('username', ''),
-    }
+    # Resolve organization name if available
+    if 'summary_fields' in credential_data and 'organization' in credential_data['summary_fields']:
+        if credential_data['summary_fields']['organization']:
+            organization_name = credential_data['summary_fields']['organization'].get('name', '')
 
-    # Return all fields
-    return list(field_data.keys()), list(field_data.values())
+    created = credential_data.get('created', '')
+    modified = credential_data.get('modified', '')
+
+    # Format fields for display
+    columns = [
+        'ID',
+        'Name',
+        'Description',
+        'Credential Type',
+        'Organization',
+        'Created',
+        'Modified'
+    ]
+
+    values = [
+        id_value,
+        name,
+        description,
+        credential_type,
+        organization_name,
+        created,
+        modified
+    ]
+
+    return (columns, values)
 
 
-class CredentialListCommand(Lister):
+class CredentialListCommand(AAPListCommand):
     """List credentials."""
 
     def get_parser(self, prog_name):
@@ -72,12 +81,8 @@ class CredentialListCommand(Lister):
     def take_action(self, parsed_args):
         """Execute the credential list command."""
         try:
-            # Initialize configuration and validate
-            config = AAPConfig()
-            config.validate()
-
-            # Create HTTP client
-            client = AAPHTTPClient(config)
+            # Get client from centralized client manager
+            client = self.controller_client
 
             # Build query parameters
             params = {'order_by': 'id'}  # Sort by ID on server side
@@ -101,28 +106,24 @@ class CredentialListCommand(Lister):
 
             if response.status_code == HTTP_OK:
                 data = response.json()
-
-                # Extract credentials from results (already sorted by API)
                 credentials = data.get('results', [])
 
-                # Define columns for table display
-                columns = [
-                    'ID',
-                    'Name',
-                    'Credential Type'
-                ]
-
-                # Build rows data
+                # Define columns for output
+                columns = ['ID', 'Name', 'Credential Type', 'Organization']
                 rows = []
+
                 for credential in credentials:
-                    # Get credential type name from summary_fields, fallback to ID
-                    credential_type_info = credential.get('summary_fields', {}).get('credential_type', {})
-                    credential_type_name = credential_type_info.get('name', credential.get('credential_type', ''))
+                    # Get organization name from summary_fields if available
+                    org_name = ''
+                    if 'summary_fields' in credential and 'organization' in credential['summary_fields']:
+                        if credential['summary_fields']['organization']:
+                            org_name = credential['summary_fields']['organization'].get('name', '')
 
                     row = [
                         credential.get('id', ''),
                         credential.get('name', ''),
-                        credential_type_name,
+                        credential.get('credential_type', ''),
+                        org_name
                     ]
                     rows.append(row)
 
@@ -132,20 +133,13 @@ class CredentialListCommand(Lister):
 
         except AAPResourceNotFoundError as e:
             raise SystemExit(str(e))
-        except AAPAPIError as api_error:
-            if api_error.status_code == HTTP_BAD_REQUEST:
-                # Pass through 400 status messages directly to user
-                raise SystemExit(str(api_error))
-            else:
-                # Re-raise other API errors as client errors with context
-                raise SystemExit(f"API Error: {api_error}")
         except AAPClientError as e:
             raise SystemExit(str(e))
         except Exception as e:
             raise SystemExit(f"Unexpected error: {e}")
 
 
-class CredentialShowCommand(ShowOne):
+class CredentialShowCommand(AAPShowCommand):
     """Show details of a specific credential."""
 
     def get_parser(self, prog_name):
@@ -162,19 +156,16 @@ class CredentialShowCommand(ShowOne):
         parser.add_argument(
             'credential',
             nargs='?',
-            help='Credential name or ID'
+            metavar='<credential>',
+            help='Credential name or ID to display'
         )
         return parser
 
     def take_action(self, parsed_args):
         """Execute the credential show command."""
         try:
-            # Initialize configuration and validate
-            config = AAPConfig()
-            config.validate()
-
-            # Create HTTP client
-            client = AAPHTTPClient(config)
+            # Get client from centralized client manager
+            client = self.controller_client
 
             # Determine how to resolve the credential
             if parsed_args.id:
@@ -186,40 +177,26 @@ class CredentialShowCommand(ShowOne):
             else:
                 raise AAPClientError("Credential identifier is required")
 
-            # Get specific credential
             endpoint = f"{CONTROLLER_API_VERSION_ENDPOINT}credentials/{credential_id}/"
-            try:
-                response = client.get(endpoint)
+            response = client.get(endpoint)
+
+            if response.status_code == HTTP_OK:
                 credential_data = response.json()
-
                 return _format_credential_data(credential_data)
-
-            except AAPAPIError as api_error:
-                if api_error.status_code == HTTP_NOT_FOUND:
-                    raise AAPResourceNotFoundError("Credential", parsed_args.credential or parsed_args.id)
-                elif api_error.status_code == HTTP_BAD_REQUEST:
-                    # Pass through 400 status messages directly to user
-                    raise SystemExit(str(api_error))
-                else:
-                    # Re-raise other errors
-                    raise
-
-        except AAPResourceNotFoundError as e:
-            raise SystemExit(str(e))
-        except AAPAPIError as api_error:
-            if api_error.status_code == HTTP_BAD_REQUEST:
-                # Pass through 400 status messages directly to user
-                raise SystemExit(str(api_error))
+            elif response.status_code == HTTP_NOT_FOUND:
+                raise AAPResourceNotFoundError("Credential", parsed_args.credential or parsed_args.id)
             else:
-                # Re-raise other API errors as client errors with context
-                raise SystemExit(f"API Error: {api_error}")
-        except AAPClientError as e:
-            raise SystemExit(str(e))
+                raise AAPClientError(f"Failed to get credential: {response.status_code}")
+
+        except AAPResourceNotFoundError:
+            raise
+        except AAPClientError:
+            raise
         except Exception as e:
-            raise SystemExit(f"Unexpected error: {e}")
+            raise AAPClientError(f"Unexpected error: {e}")
 
 
-class CredentialCreateCommand(ShowOne):
+class CredentialCreateCommand(AAPShowCommand):
     """Create a new credential."""
 
     def get_parser(self, prog_name):
@@ -234,12 +211,13 @@ class CredentialCreateCommand(ShowOne):
         )
         parser.add_argument(
             '--organization',
-            help='Organization'
+            help='Organization name or ID'
         )
         parser.add_argument(
             '--credential-type',
             required=True,
-            help='Credential type'
+            type=int,
+            help='Credential type ID'
         )
         parser.add_argument(
             '--inputs',
@@ -250,12 +228,8 @@ class CredentialCreateCommand(ShowOne):
     def take_action(self, parsed_args):
         """Execute the credential create command."""
         try:
-            # Initialize configuration and validate
-            config = AAPConfig()
-            config.validate()
-
-            # Create HTTP client
-            client = AAPHTTPClient(config)
+            # Get client from centralized client manager
+            client = self.controller_client
 
             # Get parser for usage message
             parser = self.get_parser('aap credential create')
@@ -308,20 +282,13 @@ class CredentialCreateCommand(ShowOne):
 
         except AAPResourceNotFoundError as e:
             raise SystemExit(str(e))
-        except AAPAPIError as api_error:
-            if api_error.status_code == HTTP_BAD_REQUEST:
-                # Pass through 400 status messages directly to user
-                raise SystemExit(str(api_error))
-            else:
-                # Re-raise other API errors as client errors with context
-                raise SystemExit(f"API Error: {api_error}")
         except AAPClientError as e:
             raise SystemExit(str(e))
         except Exception as e:
             raise SystemExit(f"Unexpected error: {e}")
 
 
-class CredentialSetCommand(ShowOne):
+class CredentialSetCommand(AAPShowCommand):
     """Update an existing credential."""
 
     def get_parser(self, prog_name):
@@ -338,67 +305,58 @@ class CredentialSetCommand(ShowOne):
         parser.add_argument(
             'credential',
             nargs='?',
-            help='Credential name or ID'
+            metavar='<credential>',
+            help='Credential name or ID to update'
         )
 
-        # Update fields
         parser.add_argument(
             '--set-name',
             dest='set_name',
-            help='Update credential name'
+            help='New credential name'
         )
         parser.add_argument(
             '--description',
-            help='Update credential description'
+            help='Credential description'
         )
         parser.add_argument(
             '--organization',
-            help='Update organization'
+            help='Organization name or ID'
         )
         parser.add_argument(
             '--credential-type',
-            help='Update credential type'
+            type=int,
+            help='Credential type ID'
         )
         parser.add_argument(
             '--inputs',
-            help='Update credential inputs as JSON string'
+            help='Credential inputs as JSON string'
         )
         return parser
 
     def take_action(self, parsed_args):
         """Execute the credential set command."""
         try:
-            # Initialize configuration and validate
-            config = AAPConfig()
-            config.validate()
-
-            # Create HTTP client
-            client = AAPHTTPClient(config)
+            # Get client from centralized client manager
+            client = self.controller_client
 
             # Get parser for usage message
             parser = self.get_parser('aap credential set')
 
-            # Determine how to resolve the credential
-            if parsed_args.id:
-                # Use explicit ID (ignores positional parameter)
-                credential_id = parsed_args.id
-            elif parsed_args.credential:
-                # Use positional parameter - name first, then ID fallback if numeric
-                credential_id = resolve_credential_name(client, parsed_args.credential, api="controller")
-            else:
-                raise AAPClientError("Credential identifier is required")
+            # Resolve credential - handle both ID and name
+            credential_id = resolve_credential_name(client, parsed_args.credential, api="controller")
 
             # Resolve organization if provided
-            org_id = None
             if getattr(parsed_args, 'organization', None):
                 org_id = resolve_organization_name(client, parsed_args.organization, api="controller")
+            else:
+                org_id = None
 
             # Prepare credential update data
             credential_data = {}
 
             if parsed_args.set_name:
                 credential_data['name'] = parsed_args.set_name
-            if parsed_args.description:
+            if parsed_args.description is not None:  # Allow empty string
                 credential_data['description'] = parsed_args.description
             if org_id is not None:
                 credential_data['organization'] = org_id
@@ -412,7 +370,7 @@ class CredentialSetCommand(ShowOne):
                     parser.error("argument --inputs: must be valid JSON")
 
             if not credential_data:
-                raise AAPClientError("At least one field must be specified to update")
+                parser.error("No update fields provided")
 
             # Update credential
             endpoint = f"{CONTROLLER_API_VERSION_ENDPOINT}credentials/{credential_id}/"
@@ -421,7 +379,7 @@ class CredentialSetCommand(ShowOne):
             except AAPAPIError as api_error:
                 if api_error.status_code == HTTP_NOT_FOUND:
                     # Handle 404 error with proper message
-                    raise AAPResourceNotFoundError("Credential", parsed_args.credential or parsed_args.id)
+                    raise AAPResourceNotFoundError("Credential", parsed_args.credential)
                 elif api_error.status_code == HTTP_BAD_REQUEST:
                     # Pass through 400 status messages directly to user
                     raise SystemExit(str(api_error))
@@ -439,20 +397,13 @@ class CredentialSetCommand(ShowOne):
 
         except AAPResourceNotFoundError as e:
             raise SystemExit(str(e))
-        except AAPAPIError as api_error:
-            if api_error.status_code == HTTP_BAD_REQUEST:
-                # Pass through 400 status messages directly to user
-                raise SystemExit(str(api_error))
-            else:
-                # Re-raise other API errors as client errors with context
-                raise SystemExit(f"API Error: {api_error}")
         except AAPClientError as e:
             raise SystemExit(str(e))
         except Exception as e:
             raise SystemExit(f"Unexpected error: {e}")
 
 
-class CredentialDeleteCommand(Command):
+class CredentialDeleteCommand(AAPCommand):
     """Delete a credential."""
 
     def get_parser(self, prog_name):
@@ -469,6 +420,7 @@ class CredentialDeleteCommand(Command):
         parser.add_argument(
             'credential',
             nargs='?',
+            metavar='<credential>',
             help='Credential name or ID'
         )
         return parser
@@ -476,75 +428,32 @@ class CredentialDeleteCommand(Command):
     def take_action(self, parsed_args):
         """Execute the credential delete command."""
         try:
-            # Initialize configuration and validate
-            config = AAPConfig()
-            config.validate()
-
-            # Create HTTP client
-            client = AAPHTTPClient(config)
+            # Get client from centralized client manager
+            client = self.controller_client
 
             # Determine how to resolve the credential
             if parsed_args.id:
                 # Use explicit ID (ignores positional parameter)
                 credential_id = parsed_args.id
-                credential_identifier = str(parsed_args.id)
             elif parsed_args.credential:
                 # Use positional parameter - name first, then ID fallback if numeric
                 credential_id = resolve_credential_name(client, parsed_args.credential, api="controller")
-                credential_identifier = parsed_args.credential
             else:
                 raise AAPClientError("Credential identifier is required")
 
-            # Get credential details first for confirmation
-            try:
-                endpoint = f"{CONTROLLER_API_VERSION_ENDPOINT}credentials/{credential_id}/"
-                response = client.get(endpoint)
-            except AAPAPIError as api_error:
-                if api_error.status_code == HTTP_NOT_FOUND:
-                    # Handle 404 error with proper message
-                    raise AAPResourceNotFoundError("Credential", credential_identifier)
-                elif api_error.status_code == HTTP_BAD_REQUEST:
-                    # Pass through 400 status messages directly to user
-                    raise SystemExit(str(api_error))
-                else:
-                    # Re-raise other errors
-                    raise
+            endpoint = f"{CONTROLLER_API_VERSION_ENDPOINT}credentials/{credential_id}/"
+            response = client.delete(endpoint)
 
-            if response.status_code == HTTP_OK:
-                credential_data = response.json()
-                credential_name = credential_data.get('name', credential_identifier)
-
-                # Delete credential
-                try:
-                    delete_response = client.delete(endpoint)
-                except AAPAPIError as api_error:
-                    if api_error.status_code == HTTP_NOT_FOUND:
-                        # Handle 404 error with proper message
-                        raise AAPResourceNotFoundError("Credential", credential_identifier)
-                    elif api_error.status_code == HTTP_BAD_REQUEST:
-                        # Pass through 400 status messages directly to user
-                        raise SystemExit(str(api_error))
-                    else:
-                        # Re-raise other errors
-                        raise
-
-                if delete_response.status_code == HTTP_NO_CONTENT:
-                    print(f"Credential '{credential_name}' deleted successfully")
-                else:
-                    raise AAPClientError(f"Credential deletion failed with status {delete_response.status_code}")
+            if response.status_code in (HTTP_NO_CONTENT, HTTP_ACCEPTED):
+                print(f"Credential '{parsed_args.credential or parsed_args.id}' deleted successfully")
+            elif response.status_code == HTTP_NOT_FOUND:
+                raise AAPResourceNotFoundError("Credential", parsed_args.credential or parsed_args.id)
             else:
-                raise AAPClientError(f"Failed to get credential details with status {response.status_code}")
+                raise AAPClientError(f"Failed to delete credential: {response.status_code}")
 
-        except AAPResourceNotFoundError as e:
-            raise SystemExit(str(e))
-        except AAPAPIError as api_error:
-            if api_error.status_code == HTTP_BAD_REQUEST:
-                # Pass through 400 status messages directly to user
-                raise SystemExit(str(api_error))
-            else:
-                # Re-raise other API errors as client errors with context
-                raise SystemExit(f"API Error: {api_error}")
-        except AAPClientError as e:
-            raise SystemExit(str(e))
+        except AAPResourceNotFoundError:
+            raise
+        except AAPClientError:
+            raise
         except Exception as e:
-            raise SystemExit(f"Unexpected error: {e}")
+            raise AAPClientError(f"Unexpected error: {e}")

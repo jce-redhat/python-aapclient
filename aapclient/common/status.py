@@ -1,7 +1,5 @@
-"""Status command."""
-from cliff.lister import Lister
-from aapclient.common.client import AAPHTTPClient
-from aapclient.common.config import AAPConfig
+"""Status commands."""
+from aapclient.common.basecommands import AAPListCommand
 from aapclient.common.constants import (
     GATEWAY_API_VERSION_ENDPOINT,
     HTTP_OK,
@@ -11,7 +9,7 @@ from aapclient.common.constants import (
 from aapclient.common.exceptions import AAPClientError, AAPResourceNotFoundError, AAPAPIError
 
 
-class StatusCommand(Lister):
+class StatusCommand(AAPListCommand):
     """Show AAP platform status."""
 
     def get_parser(self, prog_name):
@@ -28,12 +26,8 @@ class StatusCommand(Lister):
     def take_action(self, parsed_args):
         """Execute the status command."""
         try:
-            # Initialize configuration and validate
-            config = AAPConfig()
-            config.validate()
-
-            # Create HTTP client
-            client = AAPHTTPClient(config)
+            # Get client from centralized client manager
+            client = self.gateway_client
 
             # Get status from Gateway API
             endpoint = f"{GATEWAY_API_VERSION_ENDPOINT}status/"

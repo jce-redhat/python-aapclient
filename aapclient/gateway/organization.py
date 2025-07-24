@@ -1,23 +1,19 @@
 """Organization commands."""
-from cliff.command import Command
-from cliff.lister import Lister
-from cliff.show import ShowOne
-from aapclient.common.client import AAPHTTPClient
-from aapclient.common.config import AAPConfig
+from aapclient.common.basecommands import AAPShowCommand, AAPListCommand, AAPCommand
 from aapclient.common.constants import (
     GATEWAY_API_VERSION_ENDPOINT,
     HTTP_OK,
     HTTP_CREATED,
     HTTP_NO_CONTENT,
     HTTP_NOT_FOUND,
-    HTTP_BAD_REQUEST
+    HTTP_BAD_REQUEST,
+    HTTP_ACCEPTED
 )
 from aapclient.common.exceptions import AAPClientError, AAPResourceNotFoundError, AAPAPIError
 from aapclient.common.functions import resolve_organization_name
 
 
-
-class OrganizationListCommand(Lister):
+class OrganizationListCommand(AAPListCommand):
     """List organizations."""
 
     def get_parser(self, prog_name):
@@ -33,12 +29,8 @@ class OrganizationListCommand(Lister):
     def take_action(self, parsed_args):
         """Execute the organization list command."""
         try:
-            # Initialize configuration and validate
-            config = AAPConfig()
-            config.validate()
-
-            # Create HTTP client
-            client = AAPHTTPClient(config)
+            # Get client from centralized client manager
+            client = self.gateway_client
 
             # Build query parameters
             params = {'order_by': 'id'}  # Sort by ID on server side
@@ -50,7 +42,10 @@ class OrganizationListCommand(Lister):
             try:
                 response = client.get(endpoint, params=params)
             except AAPAPIError as api_error:
-                if api_error.status_code == HTTP_BAD_REQUEST:
+                if api_error.status_code == HTTP_NOT_FOUND:
+                    # Handle 404 error with proper message
+                    raise AAPResourceNotFoundError("Organization", "organizations endpoint")
+                elif api_error.status_code == HTTP_BAD_REQUEST:
                     # Pass through 400 status messages directly to user
                     raise SystemExit(str(api_error))
                 else:
@@ -59,30 +54,17 @@ class OrganizationListCommand(Lister):
 
             if response.status_code == HTTP_OK:
                 data = response.json()
-
-                # Extract organizations from results (already sorted by API)
                 organizations = data.get('results', [])
 
-                # Define columns for table display
-                columns = [
-                    'ID',
-                    'Name',
-                    'Description',
-                    'Managed',
-                    'Users',
-                    'Teams'
-                ]
-
-                # Build rows data
+                # Define columns for output
+                columns = ['ID', 'Name', 'Description']
                 rows = []
-                for org in organizations:
+
+                for organization in organizations:
                     row = [
-                        org.get('id', ''),
-                        org.get('name', ''),
-                        org.get('description', ''),
-                        'Yes' if org.get('managed', False) else 'No',
-                        org.get('summary_fields', {}).get('related_field_counts', {}).get('users', 0),
-                        org.get('summary_fields', {}).get('related_field_counts', {}).get('teams', 0)
+                        organization.get('id', ''),
+                        organization.get('name', ''),
+                        organization.get('description', '')
                     ]
                     rows.append(row)
 
@@ -98,7 +80,47 @@ class OrganizationListCommand(Lister):
             raise SystemExit(f"Unexpected error: {e}")
 
 
-class OrganizationShowCommand(ShowOne):
+def _format_organization_data(organization_data):
+    """
+    Format organization data consistently
+
+    Args:
+        organization_data (dict): Organization data from API response
+
+    Returns:
+        tuple: (field_names, field_values) for ShowOne display
+    """
+    # Extract organization details
+    id_value = organization_data.get('id', '')
+    name = organization_data.get('name', '')
+    description = organization_data.get('description', '')
+    max_hosts = organization_data.get('max_hosts', '')
+    created = organization_data.get('created', '')
+    modified = organization_data.get('modified', '')
+
+    # Format fields for display
+    columns = [
+        'ID',
+        'Name',
+        'Description',
+        'Max Hosts',
+        'Created',
+        'Modified'
+    ]
+
+    values = [
+        id_value,
+        name,
+        description,
+        max_hosts,
+        created,
+        modified
+    ]
+
+    return (columns, values)
+
+
+class OrganizationShowCommand(AAPShowCommand):
     """Show details of a specific organization."""
 
     def get_parser(self, prog_name):
@@ -115,19 +137,16 @@ class OrganizationShowCommand(ShowOne):
         parser.add_argument(
             'organization',
             nargs='?',
-            help='Organization name or ID'
+            metavar='<organization>',
+            help='Organization name or ID to display'
         )
         return parser
 
     def take_action(self, parsed_args):
         """Execute the organization show command."""
         try:
-            # Initialize configuration and validate
-            config = AAPConfig()
-            config.validate()
-
-            # Create HTTP client
-            client = AAPHTTPClient(config)
+            # Get client from centralized client manager
+            client = self.gateway_client
 
             # Determine how to resolve the organization
             if parsed_args.id:
@@ -135,65 +154,30 @@ class OrganizationShowCommand(ShowOne):
                 organization_id = parsed_args.id
             elif parsed_args.organization:
                 # Use positional parameter - name first, then ID fallback if numeric
-                organization_id = resolve_organization_name(client, parsed_args.organization)
+                organization_id = resolve_organization_name(client, parsed_args.organization, api="gateway")
             else:
                 raise AAPClientError("Organization identifier is required")
 
-            # Get specific organization
             endpoint = f"{GATEWAY_API_VERSION_ENDPOINT}organizations/{organization_id}/"
-            try:
-                response = client.get(endpoint)
-                org_data = response.json()
+            response = client.get(endpoint)
 
-                # Prepare data using dictionary for cleaner code
-                related_counts = org_data.get('summary_fields', {}).get('related_field_counts', {})
-                created_by = org_data.get('summary_fields', {}).get('created_by', {})
-                modified_by = org_data.get('summary_fields', {}).get('modified_by', {})
+            if response.status_code == HTTP_OK:
+                organization_data = response.json()
+                return _format_organization_data(organization_data)
+            elif response.status_code == HTTP_NOT_FOUND:
+                raise AAPResourceNotFoundError("Organization", parsed_args.organization or parsed_args.id)
+            else:
+                raise AAPClientError(f"Failed to get organization: {response.status_code}")
 
-                # Define field mappings as ordered dictionary
-                field_data = {
-                    'ID': str(org_data.get('id', '')),
-                    'Name': org_data.get('name', ''),
-                    'Description': org_data.get('description', ''),
-                    'Managed': 'Yes' if org_data.get('managed', False) else 'No',
-                    'Users': str(related_counts.get('users', 0)),
-                    'Teams': str(related_counts.get('teams', 0)),
-                    'Created': org_data.get('created', ''),
-                    'Created By': created_by.get('username', '') if created_by else '',
-                    'Modified': org_data.get('modified', ''),
-                    'Modified By': modified_by.get('username', '') if modified_by else ''
-                }
-
-                # Convert to columns and values for Cliff formatting
-                columns = []
-                values = []
-                for column_name, value in field_data.items():
-                    columns.append(column_name)
-                    values.append(value)
-
-                return (columns, values)
-            except AAPAPIError as api_error:
-                # Check if it's a 404 error from the API
-                if api_error.status_code == HTTP_NOT_FOUND:
-                    # Use consistent error message for both --id and positional parameter
-                    identifier = str(parsed_args.id) if parsed_args.id else parsed_args.organization
-                    raise AAPResourceNotFoundError("Organization", identifier)
-                elif api_error.status_code == HTTP_BAD_REQUEST:
-                    # Pass through 400 status messages directly to user
-                    raise SystemExit(str(api_error))
-                else:
-                    # Re-raise other errors
-                    raise
-
-        except AAPResourceNotFoundError as e:
-            raise SystemExit(str(e))
-        except AAPClientError as e:
-            raise SystemExit(str(e))
+        except AAPResourceNotFoundError:
+            raise
+        except AAPClientError:
+            raise
         except Exception as e:
-            raise SystemExit(f"Unexpected error: {e}")
+            raise AAPClientError(f"Unexpected error: {e}")
 
 
-class OrganizationCreateCommand(ShowOne):
+class OrganizationCreateCommand(AAPShowCommand):
     """Create a new organization."""
 
     def get_parser(self, prog_name):
@@ -206,32 +190,42 @@ class OrganizationCreateCommand(ShowOne):
             '--description',
             help='Organization description'
         )
+        parser.add_argument(
+            '--max-hosts',
+            type=int,
+            dest='max_hosts',
+            help='Maximum number of hosts allowed in this organization'
+        )
         return parser
 
     def take_action(self, parsed_args):
         """Execute the organization create command."""
         try:
-            # Initialize configuration and validate
-            config = AAPConfig()
-            config.validate()
+            # Get client from centralized client manager
+            client = self.gateway_client
 
-            # Create HTTP client
-            client = AAPHTTPClient(config)
+            # Get parser for usage message
+            parser = self.get_parser('aap organization create')
 
-            # Prepare organization data
-            org_data = {
+            organization_data = {
                 'name': parsed_args.name
             }
 
+            # Add optional fields
             if parsed_args.description:
-                org_data['description'] = parsed_args.description
+                organization_data['description'] = parsed_args.description
+            if getattr(parsed_args, 'max_hosts', None):
+                organization_data['max_hosts'] = parsed_args.max_hosts
 
             # Create organization
             endpoint = f"{GATEWAY_API_VERSION_ENDPOINT}organizations/"
             try:
-                response = client.post(endpoint, json=org_data)
+                response = client.post(endpoint, json=organization_data)
             except AAPAPIError as api_error:
-                if api_error.status_code == HTTP_BAD_REQUEST:
+                if api_error.status_code == HTTP_NOT_FOUND:
+                    # Handle 404 error with proper message
+                    raise AAPResourceNotFoundError("Organization", parsed_args.name)
+                elif api_error.status_code == HTTP_BAD_REQUEST:
                     # Pass through 400 status messages directly to user
                     raise SystemExit(str(api_error))
                 else:
@@ -239,50 +233,12 @@ class OrganizationCreateCommand(ShowOne):
                     raise
 
             if response.status_code == HTTP_CREATED:
-                org_data = response.json()
+                organization_data = response.json()
+                print(f"Organization '{organization_data.get('name', '')}' created successfully")
 
-                # Prepare columns and data for Cliff formatting
-                columns = []
-                values = []
-
-                # Basic information
-                columns.append('ID')
-                values.append(str(org_data.get('id', '')))
-
-                columns.append('Name')
-                values.append(org_data.get('name', ''))
-
-                columns.append('Description')
-                values.append(org_data.get('description', ''))
-
-                columns.append('Managed')
-                values.append('Yes' if org_data.get('managed', False) else 'No')
-
-                # Creation info
-                columns.append('Created')
-                values.append(org_data.get('created', ''))
-
-                columns.append('Created By')
-                created_by = org_data.get('summary_fields', {}).get('created_by', {})
-                values.append(created_by.get('username', '') if created_by else '')
-
-                return (columns, values)
+                return _format_organization_data(organization_data)
             else:
-                error_msg = f"Failed to create organization: HTTP {response.status_code}"
-                try:
-                    error_data = response.json()
-                    if 'detail' in error_data:
-                        error_msg += f" - {error_data['detail']}"
-                    elif isinstance(error_data, dict):
-                        # Handle field-specific errors
-                        for field, errors in error_data.items():
-                            if isinstance(errors, list):
-                                error_msg += f" - {field}: {', '.join(errors)}"
-                            else:
-                                error_msg += f" - {field}: {errors}"
-                except:
-                    pass
-                raise AAPClientError(error_msg)
+                raise AAPClientError(f"Organization creation failed with status {response.status_code}")
 
         except AAPResourceNotFoundError as e:
             raise SystemExit(str(e))
@@ -292,8 +248,8 @@ class OrganizationCreateCommand(ShowOne):
             raise SystemExit(f"Unexpected error: {e}")
 
 
-class OrganizationSetCommand(ShowOne):
-    """Set/update an existing organization."""
+class OrganizationSetCommand(AAPShowCommand):
+    """Update an existing organization."""
 
     def get_parser(self, prog_name):
         parser = super().get_parser(prog_name)
@@ -309,57 +265,61 @@ class OrganizationSetCommand(ShowOne):
         parser.add_argument(
             'organization',
             nargs='?',
-            help='Organization name or ID'
+            metavar='<organization>',
+            help='Organization name or ID to update'
         )
 
-        # Set fields
         parser.add_argument(
             '--set-name',
             dest='set_name',
-            help='Set organization name'
+            help='New organization name'
         )
         parser.add_argument(
             '--description',
-            help='Set organization description'
+            help='Organization description'
+        )
+        parser.add_argument(
+            '--max-hosts',
+            type=int,
+            dest='max_hosts',
+            help='Maximum number of hosts allowed in this organization'
         )
         return parser
 
     def take_action(self, parsed_args):
         """Execute the organization set command."""
         try:
-            # Initialize configuration and validate
-            config = AAPConfig()
-            config.validate()
+            # Get client from centralized client manager
+            client = self.gateway_client
 
-            # Create HTTP client
-            client = AAPHTTPClient(config)
+            # Get parser for usage message
+            parser = self.get_parser('aap organization set')
 
-            # Determine how to resolve the organization
-            if parsed_args.id:
-                # Use explicit ID (ignores positional parameter)
-                organization_id = parsed_args.id
-            elif parsed_args.organization:
-                # Use positional parameter - name first, then ID fallback if numeric
-                organization_id = resolve_organization_name(client, parsed_args.organization)
-            else:
-                raise AAPClientError("Organization identifier is required")
+            # Resolve organization - handle both ID and name
+            organization_id = resolve_organization_name(client, parsed_args.organization, api="gateway")
 
-            # Prepare data to set
-            set_data = {}
+            # Prepare organization update data
+            organization_data = {}
+
             if parsed_args.set_name:
-                set_data['name'] = parsed_args.set_name
-            if parsed_args.description is not None:  # Allow empty string to clear description
-                set_data['description'] = parsed_args.description
+                organization_data['name'] = parsed_args.set_name
+            if parsed_args.description is not None:  # Allow empty string
+                organization_data['description'] = parsed_args.description
+            if getattr(parsed_args, 'max_hosts', None):
+                organization_data['max_hosts'] = parsed_args.max_hosts
 
-            if not set_data:
-                raise AAPClientError("At least one field must be specified to set")
+            if not organization_data:
+                parser.error("No update fields provided")
 
             # Update organization
             endpoint = f"{GATEWAY_API_VERSION_ENDPOINT}organizations/{organization_id}/"
             try:
-                response = client.patch(endpoint, json=set_data)
+                response = client.patch(endpoint, json=organization_data)
             except AAPAPIError as api_error:
-                if api_error.status_code == HTTP_BAD_REQUEST:
+                if api_error.status_code == HTTP_NOT_FOUND:
+                    # Handle 404 error with proper message
+                    raise AAPResourceNotFoundError("Organization", parsed_args.organization)
+                elif api_error.status_code == HTTP_BAD_REQUEST:
                     # Pass through 400 status messages directly to user
                     raise SystemExit(str(api_error))
                 else:
@@ -367,66 +327,12 @@ class OrganizationSetCommand(ShowOne):
                     raise
 
             if response.status_code == HTTP_OK:
-                org_data = response.json()
+                organization_data = response.json()
+                print(f"Organization '{organization_data.get('name', '')}' updated successfully")
 
-                # Prepare columns and data for Cliff formatting
-                columns = []
-                values = []
-
-                # Basic information
-                columns.append('ID')
-                values.append(str(org_data.get('id', '')))
-
-                columns.append('Name')
-                values.append(org_data.get('name', ''))
-
-                columns.append('Description')
-                values.append(org_data.get('description', ''))
-
-                columns.append('Managed')
-                values.append('Yes' if org_data.get('managed', False) else 'No')
-
-                # User and team counts
-                related_counts = org_data.get('summary_fields', {}).get('related_field_counts', {})
-                columns.append('Users')
-                values.append(str(related_counts.get('users', 0)))
-
-                columns.append('Teams')
-                values.append(str(related_counts.get('teams', 0)))
-
-                # Creation info
-                columns.append('Created')
-                values.append(org_data.get('created', ''))
-
-                columns.append('Created By')
-                created_by = org_data.get('summary_fields', {}).get('created_by', {})
-                values.append(created_by.get('username', '') if created_by else '')
-
-                # Modifier info
-                columns.append('Modified')
-                values.append(org_data.get('modified', ''))
-
-                columns.append('Modified By')
-                modified_by = org_data.get('summary_fields', {}).get('modified_by', {})
-                values.append(modified_by.get('username', '') if modified_by else '')
-
-                return (columns, values)
+                return _format_organization_data(organization_data)
             else:
-                error_msg = f"Failed to set organization: HTTP {response.status_code}"
-                try:
-                    error_data = response.json()
-                    if 'detail' in error_data:
-                        error_msg += f" - {error_data['detail']}"
-                    elif isinstance(error_data, dict):
-                        # Handle field-specific errors
-                        for field, errors in error_data.items():
-                            if isinstance(errors, list):
-                                error_msg += f" - {field}: {', '.join(errors)}"
-                            else:
-                                error_msg += f" - {field}: {errors}"
-                except:
-                    pass
-                raise AAPClientError(error_msg)
+                raise AAPClientError(f"Organization update failed with status {response.status_code}")
 
         except AAPResourceNotFoundError as e:
             raise SystemExit(str(e))
@@ -436,7 +342,7 @@ class OrganizationSetCommand(ShowOne):
             raise SystemExit(f"Unexpected error: {e}")
 
 
-class OrganizationDeleteCommand(Command):
+class OrganizationDeleteCommand(AAPCommand):
     """Delete an organization."""
 
     def get_parser(self, prog_name):
@@ -453,21 +359,16 @@ class OrganizationDeleteCommand(Command):
         parser.add_argument(
             'organization',
             nargs='?',
+            metavar='<organization>',
             help='Organization name or ID'
         )
-
-
         return parser
 
     def take_action(self, parsed_args):
         """Execute the organization delete command."""
         try:
-            # Initialize configuration and validate
-            config = AAPConfig()
-            config.validate()
-
-            # Create HTTP client
-            client = AAPHTTPClient(config)
+            # Get client from centralized client manager
+            client = self.gateway_client
 
             # Determine how to resolve the organization
             if parsed_args.id:
@@ -475,50 +376,23 @@ class OrganizationDeleteCommand(Command):
                 organization_id = parsed_args.id
             elif parsed_args.organization:
                 # Use positional parameter - name first, then ID fallback if numeric
-                organization_id = resolve_organization_name(client, parsed_args.organization)
+                organization_id = resolve_organization_name(client, parsed_args.organization, api="gateway")
             else:
                 raise AAPClientError("Organization identifier is required")
 
-            # Get organization details first for confirmation
             endpoint = f"{GATEWAY_API_VERSION_ENDPOINT}organizations/{organization_id}/"
-            response = client.get(endpoint)
+            response = client.delete(endpoint)
 
-            if response.status_code == HTTP_OK:
-                org_data = response.json()
-                org_name = org_data.get('name', str(organization_id))
-
-                # Check if organization is managed
-                if org_data.get('managed', False):
-                    raise AAPClientError(f"Cannot delete managed organization '{org_name}'")
-
-                # Delete organization
-                try:
-                    response = client.delete(endpoint)
-                except AAPAPIError as api_error:
-                    if api_error.status_code == HTTP_BAD_REQUEST:
-                        # Pass through 400 status messages directly to user
-                        raise SystemExit(str(api_error))
-                    else:
-                        # Re-raise other errors
-                        raise
-
-                if response.status_code == HTTP_NO_CONTENT:
-                    print(f"Organization '{org_name}' deleted successfully.")
-                else:
-                    error_msg = f"Failed to delete organization: HTTP {response.status_code}"
-                    try:
-                        error_data = response.json()
-                        if 'detail' in error_data:
-                            error_msg += f" - {error_data['detail']}"
-                    except:
-                        pass
-                    raise AAPClientError(error_msg)
+            if response.status_code in (HTTP_NO_CONTENT, HTTP_ACCEPTED):
+                print(f"Organization '{parsed_args.organization or parsed_args.id}' deleted successfully")
+            elif response.status_code == HTTP_NOT_FOUND:
+                raise AAPResourceNotFoundError("Organization", parsed_args.organization or parsed_args.id)
             else:
-                raise AAPResourceNotFoundError("Organization", parsed_args.organization or str(parsed_args.id))
+                raise AAPClientError(f"Failed to delete organization: {response.status_code}")
 
-        except AAPResourceNotFoundError as e:
-            raise SystemExit(str(e))
-        except AAPClientError as e:
-            raise SystemExit(str(e))
+        except AAPResourceNotFoundError:
+            raise
+        except AAPClientError:
+            raise
         except Exception as e:
-            raise SystemExit(f"Unexpected error: {e}")
+            raise AAPClientError(f"Unexpected error: {e}")

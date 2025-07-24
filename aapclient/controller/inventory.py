@@ -1,19 +1,13 @@
 """Inventory commands."""
-
-from cliff.command import Command
-from cliff.lister import Lister
-from cliff.show import ShowOne
-
-from aapclient.common.client import AAPHTTPClient
-from aapclient.common.config import AAPConfig
+from aapclient.common.basecommands import AAPShowCommand, AAPListCommand, AAPCommand
 from aapclient.common.constants import (
     CONTROLLER_API_VERSION_ENDPOINT,
     HTTP_OK,
     HTTP_CREATED,
-    HTTP_ACCEPTED,
     HTTP_NO_CONTENT,
     HTTP_NOT_FOUND,
-    HTTP_BAD_REQUEST
+    HTTP_BAD_REQUEST,
+    HTTP_ACCEPTED
 )
 from aapclient.common.exceptions import AAPClientError, AAPResourceNotFoundError, AAPAPIError
 from aapclient.common.functions import resolve_organization_name, resolve_inventory_name
@@ -24,7 +18,7 @@ from aapclient.common.functions import resolve_organization_name, resolve_invent
 
 def _format_inventory_data(inventory_data):
     """
-    Format inventory data for display.
+    Format inventory data consistently
 
     Args:
         inventory_data (dict): Inventory data from API response
@@ -32,121 +26,128 @@ def _format_inventory_data(inventory_data):
     Returns:
         tuple: (field_names, field_values) for ShowOne display
     """
-    # Extract helper variables from summary_fields
-    organization_info = inventory_data.get('summary_fields', {}).get('organization', {})
-    created_by = inventory_data.get('summary_fields', {}).get('created_by', {})
-    modified_by = inventory_data.get('summary_fields', {}).get('modified_by', {})
+    # Extract inventory details
+    id_value = inventory_data.get('id', '')
+    name = inventory_data.get('name', '')
+    description = inventory_data.get('description', '')
+    organization_name = ''
+    kind = inventory_data.get('kind', '')
+    host_filter = inventory_data.get('host_filter', '')
+    variables = inventory_data.get('variables', '')
 
-    # Handle organization display using summary_fields pattern
-    org_display = organization_info.get('name', '')
-    if not org_display:
-        # Fall back to raw organization value, but handle None case
-        org_value = inventory_data.get('organization')
-        if org_value is not None:
-            org_display = str(org_value)
-        else:
-            org_display = "None"
+    # Resolve organization name if available
+    if 'summary_fields' in inventory_data and 'organization' in inventory_data['summary_fields']:
+        if inventory_data['summary_fields']['organization']:
+            organization_name = inventory_data['summary_fields']['organization'].get('name', '')
 
-    # Handle inventory type (kind field)
-    inventory_type = inventory_data.get('kind', '') or 'inventory'
+    created = inventory_data.get('created', '')
+    modified = inventory_data.get('modified', '')
 
-    # Compute status based on failure indicators
-    sources_with_failures = inventory_data.get('inventory_sources_with_failures', 0)
+    # Format fields for display
+    columns = [
+        'ID',
+        'Name',
+        'Description',
+        'Organization',
+        'Kind',
+        'Host Filter',
+        'Variables',
+        'Created',
+        'Modified'
+    ]
 
-    if sources_with_failures > 0:
-        status = "Error"
-    else:
-        status = "Ready"
+    values = [
+        id_value,
+        name,
+        description,
+        organization_name,
+        kind,
+        host_filter,
+        variables,
+        created,
+        modified
+    ]
 
-    # Define comprehensive field mappings as ordered dictionary
-    field_data = {
-        'ID': str(inventory_data.get('id', '')),
-        'Name': inventory_data.get('name', ''),
-        'Description': inventory_data.get('description', ''),
-        'Organization': org_display,
-        'Type': inventory_type,
-        'Status': status,
-        'Variables': inventory_data.get('variables', ''),
-        'Inventory Sources': str(inventory_data.get('total_inventory_sources', 0)),
-        'Sources with Failures': str(inventory_data.get('inventory_sources_with_failures', 0)),
-        'Prevent Instance Group Fallback': "Yes" if inventory_data.get('prevent_instance_group_fallback', False) else "No",
-        'Created': inventory_data.get('created', ''),
-        'Created By': created_by.get('username', ''),
-        'Modified': inventory_data.get('modified', ''),
-        'Modified By': modified_by.get('username', ''),
-    }
-
-    # Return all fields
-    return list(field_data.keys()), list(field_data.values())
+    return (columns, values)
 
 
-class InventoryListCommand(Lister):
+class InventoryListCommand(AAPListCommand):
     """List inventories."""
 
     def get_parser(self, prog_name):
         parser = super().get_parser(prog_name)
+        parser.add_argument(
+            '--limit',
+            type=int,
+            metavar='N',
+            help='Limit the number of results returned (default: 20)'
+        )
         return parser
 
     def take_action(self, parsed_args):
-        config = AAPConfig()
-        config.validate()
-
-        # Create HTTP client
-        client = AAPHTTPClient(config)
-
+        """Execute the inventory list command."""
         try:
-            endpoint = f"{CONTROLLER_API_VERSION_ENDPOINT}inventories/"
+            # Get client from centralized client manager
+            client = self.controller_client
+
+            # Build query parameters
             params = {'order_by': 'id'}  # Sort by ID on server side
-            response = client.get(endpoint, params=params)
+            if parsed_args.limit:
+                params['page_size'] = parsed_args.limit
+
+            # Query inventories endpoint
+            endpoint = f"{CONTROLLER_API_VERSION_ENDPOINT}inventories/"
+            try:
+                response = client.get(endpoint, params=params)
+            except AAPAPIError as api_error:
+                if api_error.status_code == HTTP_NOT_FOUND:
+                    # Handle 404 error with proper message
+                    raise AAPResourceNotFoundError("Inventory", "inventories endpoint")
+                elif api_error.status_code == HTTP_BAD_REQUEST:
+                    # Pass through 400 status messages directly to user
+                    raise SystemExit(str(api_error))
+                else:
+                    # Re-raise other errors
+                    raise
 
             if response.status_code == HTTP_OK:
                 data = response.json()
-                results = data.get('results', [])
+                inventories = data.get('results', [])
 
-                columns = ('ID', 'Name', 'Status', 'Type', 'Organization')
-                inventory_data = []
+                # Define columns for output
+                columns = ['ID', 'Name', 'Description', 'Organization', 'Kind']
+                rows = []
 
-                for inventory in results:
-                    # Get organization name from summary_fields, same pattern as other commands
-                    organization_info = inventory.get('summary_fields', {}).get('organization', {})
-                    org_display = organization_info.get('name', '')
-                    if not org_display:
-                        # Fall back to raw organization value, but handle None case
-                        org_value = inventory.get('organization')
-                        if org_value is not None:
-                            org_display = str(org_value)
-                        else:
-                            org_display = "None"
+                for inventory in inventories:
+                    # Get organization name from summary_fields if available
+                    org_name = ''
+                    if 'summary_fields' in inventory and 'organization' in inventory['summary_fields']:
+                        if inventory['summary_fields']['organization']:
+                            org_name = inventory['summary_fields']['organization'].get('name', '')
 
-                    # Handle inventory type (kind field)
-                    inventory_type = inventory.get('kind', '') or 'inventory'
-
-                    # Compute status based on failure indicators
-                    sources_with_failures = inventory.get('inventory_sources_with_failures', 0)
-
-                    if sources_with_failures > 0:
-                        status = "Error"
-                    else:
-                        status = "Ready"
-
-                    inventory_data.append((
+                    row = [
                         inventory.get('id', ''),
                         inventory.get('name', ''),
-                        status,
-                        inventory_type,
-                        org_display
-                    ))
+                        inventory.get('description', ''),
+                        org_name,
+                        inventory.get('kind', '')
+                    ]
+                    rows.append(row)
 
-                return (columns, inventory_data)
+                return (columns, rows)
             else:
-                raise AAPClientError(f"Failed to list inventories: {response.status_code}")
+                raise AAPClientError(f"Controller API failed with status {response.status_code}")
 
-        except AAPAPIError as e:
-            raise AAPClientError(f"API error: {e}")
+        except AAPResourceNotFoundError as e:
+            raise SystemExit(str(e))
+        except AAPClientError as e:
+            raise SystemExit(str(e))
+        except Exception as e:
+            raise SystemExit(f"Unexpected error: {e}")
 
 
-class InventoryShowCommand(ShowOne):
-    """Show inventory details."""
+class InventoryShowCommand(AAPShowCommand):
+    """Show details of a specific inventory."""
 
     def get_parser(self, prog_name):
         parser = super().get_parser(prog_name)
@@ -168,13 +169,11 @@ class InventoryShowCommand(ShowOne):
         return parser
 
     def take_action(self, parsed_args):
-        config = AAPConfig()
-        config.validate()
-
-        # Create HTTP client
-        client = AAPHTTPClient(config)
-
+        """Execute the inventory show command."""
         try:
+            # Get client from centralized client manager
+            client = self.controller_client
+
             # Determine how to resolve the inventory
             if parsed_args.id:
                 # Use explicit ID (ignores positional parameter)
@@ -198,52 +197,65 @@ class InventoryShowCommand(ShowOne):
 
         except AAPResourceNotFoundError:
             raise
-        except AAPAPIError as e:
-            if e.status_code == HTTP_NOT_FOUND:
-                raise AAPResourceNotFoundError("Inventory", parsed_args.inventory or parsed_args.id)
-            else:
-                raise AAPClientError(f"API error: {e}")
+        except AAPClientError:
+            raise
+        except Exception as e:
+            raise AAPClientError(f"Unexpected error: {e}")
 
 
-class InventoryCreateCommand(ShowOne):
-    """Create a new static inventory in AAP"""
+class InventoryCreateCommand(AAPShowCommand):
+    """Create a new inventory."""
 
     def get_parser(self, prog_name):
         parser = super().get_parser(prog_name)
         parser.add_argument(
             'name',
-            metavar='<name>',
-            help='Name of the inventory to create'
+            help='Inventory name'
         )
         parser.add_argument(
             '--description',
-            help='Description of the inventory'
+            help='Inventory description'
         )
         parser.add_argument(
             '--organization',
             required=True,
-            help='Organization name or ID for the inventory'
+            help='Organization name or ID'
+        )
+        parser.add_argument(
+            '--kind',
+            choices=['', 'smart'],
+            default='',
+            help='Inventory kind (default: regular inventory)'
+        )
+        parser.add_argument(
+            '--host-filter',
+            dest='host_filter',
+            help='Host filter query for smart inventories'
         )
         parser.add_argument(
             '--variables',
-            help='Variables for the inventory in YAML/JSON format'
+            help='Inventory variables as JSON string'
         )
         parser.add_argument(
-            '--prevent-instance-group-fallback',
+            '--enable-instance-group-fallback',
             action='store_true',
-            dest='prevent_instance_group_fallback',
-            help='Prevent instance group fallback'
+            dest='instance_group_fallback',
+            help='Allow instance group fallback'
+        )
+        parser.add_argument(
+            '--disable-instance-group-fallback',
+            action='store_true',
+            dest='disable_instance_group_fallback',
+            help='Disable instance group fallback'
         )
         return parser
 
     def take_action(self, parsed_args):
-        config = AAPConfig()
-        config.validate()
-
-        # Create HTTP client
-        client = AAPHTTPClient(config)
-
+        """Execute the inventory create command."""
         try:
+            # Get client from centralized client manager
+            client = self.controller_client
+
             # Get parser for usage message
             parser = self.get_parser('aap inventory create')
 
@@ -252,104 +264,119 @@ class InventoryCreateCommand(ShowOne):
 
             inventory_data = {
                 'name': parsed_args.name,
-                'organization': org_id,
-                'kind': ''  # Empty string indicates a static inventory
+                'organization': org_id
             }
 
             # Add optional fields
             if parsed_args.description:
                 inventory_data['description'] = parsed_args.description
-            if parsed_args.variables:
-                inventory_data['variables'] = parsed_args.variables
+            if getattr(parsed_args, 'kind', None):
+                inventory_data['kind'] = parsed_args.kind
+            if getattr(parsed_args, 'host_filter', None):
+                inventory_data['host_filter'] = parsed_args.host_filter
+            if getattr(parsed_args, 'variables', None):
+                try:
+                    import json
+                    inventory_data['variables'] = json.loads(parsed_args.variables)
+                except json.JSONDecodeError:
+                    parser.error("argument --variables: must be valid JSON")
 
-            # Handle instance group fallback boolean
-            if parsed_args.prevent_instance_group_fallback:
-                inventory_data['prevent_instance_group_fallback'] = True
-            # If flag is not specified, let the API use its default
+            # Handle instance group fallback flags
+            if parsed_args.instance_group_fallback:
+                inventory_data['instance_group_fallback'] = True
+            elif parsed_args.disable_instance_group_fallback:
+                inventory_data['instance_group_fallback'] = False
 
+            # Create inventory
             endpoint = f"{CONTROLLER_API_VERSION_ENDPOINT}inventories/"
-            response = client.post(endpoint, json=inventory_data)
+            try:
+                response = client.post(endpoint, json=inventory_data)
+            except AAPAPIError as api_error:
+                if api_error.status_code == HTTP_NOT_FOUND:
+                    # Handle 404 error with proper message
+                    raise AAPResourceNotFoundError("Inventory", parsed_args.name)
+                elif api_error.status_code == HTTP_BAD_REQUEST:
+                    # Pass through 400 status messages directly to user
+                    raise SystemExit(str(api_error))
+                else:
+                    # Re-raise other errors
+                    raise
 
             if response.status_code == HTTP_CREATED:
                 inventory_data = response.json()
-                print(f"Inventory '{parsed_args.name}' created successfully")
+                print(f"Inventory '{inventory_data.get('name', '')}' created successfully")
+
                 return _format_inventory_data(inventory_data)
-            elif response.status_code == HTTP_BAD_REQUEST:
-                error_data = response.json()
-                if isinstance(error_data, dict):
-                    for field, messages in error_data.items():
-                        if isinstance(messages, list):
-                            for message in messages:
-                                print(f"{field}: {message}")
-                        else:
-                            print(f"{field}: {messages}")
-                else:
-                    print(f"Error: {error_data}")
-                parser.error("Inventory creation failed due to validation errors")
             else:
-                raise AAPClientError(f"Failed to create inventory: {response.status_code}")
+                raise AAPClientError(f"Inventory creation failed with status {response.status_code}")
 
         except AAPResourceNotFoundError as e:
-            parser.error(str(e))
-        except AAPAPIError as e:
-            if e.status_code == HTTP_BAD_REQUEST:
-                parser.error(f"Bad request: {e}")
-            else:
-                raise AAPClientError(f"API error: {e}")
+            raise SystemExit(str(e))
+        except AAPClientError as e:
+            raise SystemExit(str(e))
+        except Exception as e:
+            raise SystemExit(f"Unexpected error: {e}")
 
 
-class InventorySetCommand(ShowOne):
+class InventorySetCommand(AAPShowCommand):
     """Update an existing inventory."""
 
     def get_parser(self, prog_name):
         parser = super().get_parser(prog_name)
+
+        # Positional parameter for name lookup with ID fallback
         parser.add_argument(
             'inventory',
             metavar='<inventory>',
             help='Inventory name or ID to update'
         )
+
         parser.add_argument(
             '--set-name',
             dest='set_name',
-            help='New name for the inventory'
+            help='New inventory name'
         )
         parser.add_argument(
             '--description',
-            help='New description for the inventory'
+            help='Inventory description'
         )
         parser.add_argument(
             '--organization',
-            help='New organization name or ID for the inventory'
+            help='Organization name or ID'
+        )
+        parser.add_argument(
+            '--host-filter',
+            dest='host_filter',
+            help='Host filter query for smart inventories'
         )
         parser.add_argument(
             '--variables',
-            help='New variables for the inventory in YAML/JSON format'
+            help='Inventory variables as JSON string'
         )
 
-        # Mutually exclusive group for instance group fallback settings
+        # Enable/disable flags for instance group fallback
         fallback_group = parser.add_mutually_exclusive_group()
         fallback_group.add_argument(
-            '--prevent-instance-group-fallback',
+            '--enable-instance-group-fallback',
             action='store_true',
-            dest='prevent_instance_group_fallback',
-            help='Prevent instance group fallback'
-        )
-        fallback_group.add_argument(
-            '--allow-instance-group-fallback',
-            action='store_true',
-            dest='allow_instance_group_fallback',
+            dest='enable_fallback',
             help='Allow instance group fallback'
         )
+        fallback_group.add_argument(
+            '--disable-instance-group-fallback',
+            action='store_true',
+            dest='disable_fallback',
+            help='Disable instance group fallback'
+        )
+
         return parser
 
     def take_action(self, parsed_args):
-        config = AAPConfig()
-        config.validate()
-
-        # Create HTTP client
-        client = AAPHTTPClient(config)
-
+        """Execute the inventory set command."""
         try:
+            # Get client from centralized client manager
+            client = self.controller_client
+
             # Get parser for usage message
             parser = self.get_parser('aap inventory set')
 
@@ -371,54 +398,56 @@ class InventorySetCommand(ShowOne):
                 inventory_data['description'] = parsed_args.description
             if org_id is not None:
                 inventory_data['organization'] = org_id
-            if parsed_args.variables is not None:  # Allow empty string
-                inventory_data['variables'] = parsed_args.variables
+            if getattr(parsed_args, 'host_filter', None):
+                inventory_data['host_filter'] = parsed_args.host_filter
+            if getattr(parsed_args, 'variables', None):
+                try:
+                    import json
+                    inventory_data['variables'] = json.loads(parsed_args.variables)
+                except json.JSONDecodeError:
+                    parser.error("argument --variables: must be valid JSON")
 
-            # Handle instance group fallback boolean
-            if parsed_args.prevent_instance_group_fallback:
-                inventory_data['prevent_instance_group_fallback'] = True
-            elif parsed_args.allow_instance_group_fallback:
-                inventory_data['prevent_instance_group_fallback'] = False
+            # Handle enable/disable flags
+            if parsed_args.enable_fallback:
+                inventory_data['instance_group_fallback'] = True
+            elif parsed_args.disable_fallback:
+                inventory_data['instance_group_fallback'] = False
 
             if not inventory_data:
-                parser.error("At least one field must be specified to update")
+                parser.error("No update fields provided")
 
+            # Update inventory
             endpoint = f"{CONTROLLER_API_VERSION_ENDPOINT}inventories/{inventory_id}/"
-            response = client.patch(endpoint, json=inventory_data)
+            try:
+                response = client.patch(endpoint, json=inventory_data)
+            except AAPAPIError as api_error:
+                if api_error.status_code == HTTP_NOT_FOUND:
+                    # Handle 404 error with proper message
+                    raise AAPResourceNotFoundError("Inventory", parsed_args.inventory)
+                elif api_error.status_code == HTTP_BAD_REQUEST:
+                    # Pass through 400 status messages directly to user
+                    raise SystemExit(str(api_error))
+                else:
+                    # Re-raise other errors
+                    raise
 
             if response.status_code == HTTP_OK:
                 inventory_data = response.json()
-                print(f"Inventory '{parsed_args.inventory}' updated successfully")
+                print(f"Inventory '{inventory_data.get('name', '')}' updated successfully")
+
                 return _format_inventory_data(inventory_data)
-            elif response.status_code == HTTP_NOT_FOUND:
-                raise AAPResourceNotFoundError("Inventory", parsed_args.inventory)
-            elif response.status_code == HTTP_BAD_REQUEST:
-                error_data = response.json()
-                if isinstance(error_data, dict):
-                    for field, messages in error_data.items():
-                        if isinstance(messages, list):
-                            for message in messages:
-                                print(f"{field}: {message}")
-                        else:
-                            print(f"{field}: {messages}")
-                else:
-                    print(f"Error: {error_data}")
-                parser.error("Inventory update failed due to validation errors")
             else:
-                raise AAPClientError(f"Failed to update inventory: {response.status_code}")
+                raise AAPClientError(f"Inventory update failed with status {response.status_code}")
 
         except AAPResourceNotFoundError as e:
-            parser.error(str(e))
-        except AAPAPIError as e:
-            if e.status_code == HTTP_NOT_FOUND:
-                raise AAPResourceNotFoundError("Inventory", parsed_args.inventory)
-            elif e.status_code == HTTP_BAD_REQUEST:
-                parser.error(f"Bad request: {e}")
-            else:
-                raise AAPClientError(f"API error: {e}")
+            raise SystemExit(str(e))
+        except AAPClientError as e:
+            raise SystemExit(str(e))
+        except Exception as e:
+            raise SystemExit(f"Unexpected error: {e}")
 
 
-class InventoryDeleteCommand(Command):
+class InventoryDeleteCommand(AAPCommand):
     """Delete an inventory."""
 
     def get_parser(self, prog_name):
@@ -436,18 +465,16 @@ class InventoryDeleteCommand(Command):
             'inventory',
             nargs='?',
             metavar='<inventory>',
-            help='Inventory name or ID to delete'
+            help='Inventory name or ID'
         )
         return parser
 
     def take_action(self, parsed_args):
-        config = AAPConfig()
-        config.validate()
-
-        # Create HTTP client
-        client = AAPHTTPClient(config)
-
+        """Execute the inventory delete command."""
         try:
+            # Get client from centralized client manager
+            client = self.controller_client
+
             # Determine how to resolve the inventory
             if parsed_args.id:
                 # Use explicit ID (ignores positional parameter)
@@ -468,11 +495,9 @@ class InventoryDeleteCommand(Command):
             else:
                 raise AAPClientError(f"Failed to delete inventory: {response.status_code}")
 
-        except AAPResourceNotFoundError as e:
-            parser = self.get_parser('aap inventory delete')
-            parser.error(str(e))
-        except AAPAPIError as e:
-            if e.status_code == HTTP_NOT_FOUND:
-                raise AAPResourceNotFoundError("Inventory", parsed_args.inventory or parsed_args.id)
-            else:
-                raise AAPClientError(f"API error: {e}")
+        except AAPResourceNotFoundError:
+            raise
+        except AAPClientError:
+            raise
+        except Exception as e:
+            raise AAPClientError(f"Unexpected error: {e}")

@@ -1,157 +1,169 @@
 """Instance Group commands."""
-
-from cliff.command import Command
-from cliff.lister import Lister
-from cliff.show import ShowOne
-
-from aapclient.common.config import AAPConfig
-from aapclient.common.client import AAPHTTPClient
+from aapclient.common.basecommands import AAPShowCommand, AAPListCommand, AAPCommand
 from aapclient.common.constants import (
     CONTROLLER_API_VERSION_ENDPOINT,
     HTTP_OK,
     HTTP_CREATED,
     HTTP_NO_CONTENT,
     HTTP_NOT_FOUND,
-    HTTP_BAD_REQUEST
+    HTTP_BAD_REQUEST,
+    HTTP_ACCEPTED
 )
-from aapclient.common.exceptions import (
-    AAPClientError,
-    AAPResourceNotFoundError,
-    AAPAPIError
-)
-from aapclient.common.functions import (
-    resolve_organization_name,
-    resolve_credential_name,
-    resolve_instance_group_name
-)
+from aapclient.common.exceptions import AAPClientError, AAPResourceNotFoundError, AAPAPIError
+from aapclient.common.functions import resolve_credential_name, resolve_instance_group_name
+
+
+
 
 
 def _format_instance_group_data(instance_group_data):
-    """Format instance group data for display."""
-    # Determine type based on is_container_group
+    """
+    Format instance group data consistently
+
+    Args:
+        instance_group_data (dict): Instance group data from API response
+
+    Returns:
+        tuple: (field_names, field_values) for ShowOne display
+    """
+    # Extract instance group details
+    id_value = instance_group_data.get('id', '')
+    name = instance_group_data.get('name', '')
     is_container_group = instance_group_data.get('is_container_group', False)
-    group_type = "Container group" if is_container_group else "Instance group"
-
-    # Format capacity remaining as percentage
+    instances_count = len(instance_group_data.get('instances', []))
+    jobs_running = instance_group_data.get('jobs_running', 0)
+    jobs_total = instance_group_data.get('jobs_total', 0)
     capacity_remaining = instance_group_data.get('percent_capacity_remaining', 0)
-    capacity_display = f"{capacity_remaining}%"
 
-    # Common fields for both types
+    # Determine type based on is_container_group
+    group_type = "Container" if is_container_group else "Instance"
+
+    # Display credential if it's a container group
+    credential_name = ''
+    if is_container_group and 'summary_fields' in instance_group_data and 'credential' in instance_group_data['summary_fields']:
+        if instance_group_data['summary_fields']['credential']:
+            credential_name = instance_group_data['summary_fields']['credential'].get('name', '')
+        else:
+            # If no credential in summary_fields but there's a credential ID, show the ID
+            credential_id = instance_group_data.get('credential')
+            if credential_id:
+                credential_name = str(credential_id)
+
+    created = instance_group_data.get('created', '')
+    modified = instance_group_data.get('modified', '')
+
+    # Format fields for display
     columns = [
+        'ID',
         'Name',
         'Type',
-        'Created',
-        'Modified',
-        'Max Concurrent Jobs',
-        'Max Forks',
-        'Jobs Running',
-        'Jobs Total',
+        'Running Jobs',
+        'Total Jobs',
+        'Instances',
+        'Capacity Remaining'
     ]
 
     values = [
-        instance_group_data.get('name', ''),
+        id_value,
+        name,
         group_type,
-        instance_group_data.get('created', ''),
-        instance_group_data.get('modified', ''),
-        instance_group_data.get('max_concurrent_jobs', 0),
-        instance_group_data.get('max_forks', 0),
-        instance_group_data.get('jobs_running', 0),
-        instance_group_data.get('jobs_total', 0),
+        jobs_running,
+        jobs_total,
+        instances_count,
+        f"{capacity_remaining}%"
     ]
 
-    # Add type-specific fields
+    # Add credential field if it's a container group
     if is_container_group:
-        # Container group specific fields
-        columns.extend(['Credential', 'Pod Spec Override'])
+        columns.append('Credential')
+        values.append(credential_name)
 
-        # Resolve credential name from summary_fields if available, otherwise use ID
-        credential_value = instance_group_data.get('credential')
-        if credential_value:
-            summary_fields = instance_group_data.get('summary_fields', {})
-            credential_summary = summary_fields.get('credential', {})
-            credential_name = credential_summary.get('name', str(credential_value))
-        else:
-            credential_name = ''
-
-        values.extend([
-            credential_name,
-            instance_group_data.get('pod_spec_override', '')
-        ])
-    else:
-        # Instance group specific fields
-        columns.extend([
-            'Policy Instance Minimum',
-            'Policy Instance Percentage',
-            'Capacity',
-            'Consumed Capacity',
-            'Capacity Remaining',
-        ])
-        values.extend([
-            instance_group_data.get('policy_instance_minimum', 0),
-            instance_group_data.get('policy_instance_percentage', 0),
-            instance_group_data.get('capacity', 0),
-            instance_group_data.get('consumed_capacity', 0),
-            capacity_display,
-        ])
+    columns.extend(['Created', 'Modified'])
+    values.extend([created, modified])
 
     return (columns, values)
 
 
-
-
-
-class InstanceGroupListCommand(Lister):
+class InstanceGroupListCommand(AAPListCommand):
     """List instance groups."""
 
     def get_parser(self, prog_name):
         parser = super().get_parser(prog_name)
+        parser.add_argument(
+            '--limit',
+            type=int,
+            metavar='N',
+            help='Limit the number of results returned (default: 20)'
+        )
         return parser
 
     def take_action(self, parsed_args):
-        config = AAPConfig()
-        config.validate()
-
-        # Create HTTP client
-        client = AAPHTTPClient(config)
-
+        """Execute the instance group list command."""
         try:
-            # Enable server-side sorting on ID
-            params = {'order_by': 'id'}
+            # Get client from centralized client manager
+            client = self.controller_client
+
+            # Build query parameters
+            params = {'order_by': 'id'}  # Sort by ID on server side
+            if parsed_args.limit:
+                params['page_size'] = parsed_args.limit
+
+            # Query instance groups endpoint
             endpoint = f"{CONTROLLER_API_VERSION_ENDPOINT}instance_groups/"
-            response = client.get(endpoint, params=params)
+            try:
+                response = client.get(endpoint, params=params)
+            except AAPAPIError as api_error:
+                if api_error.status_code == HTTP_NOT_FOUND:
+                    # Handle 404 error with proper message
+                    raise AAPResourceNotFoundError("Instance Group", "instance_groups endpoint")
+                elif api_error.status_code == HTTP_BAD_REQUEST:
+                    # Pass through 400 status messages directly to user
+                    raise SystemExit(str(api_error))
+                else:
+                    # Re-raise other errors
+                    raise
 
             if response.status_code == HTTP_OK:
                 data = response.json()
                 instance_groups = data.get('results', [])
 
+                # Define columns for output
                 columns = ['ID', 'Name', 'Type', 'Running Jobs', 'Total Jobs', 'Instances', 'Capacity Remaining']
                 rows = []
 
-                for group in instance_groups:
-                    group_type = "Container group" if group.get('is_container_group', False) else "Instance group"
-                    capacity_remaining = f"{group.get('percent_capacity_remaining', 0)}%"
+                for instance_group in instance_groups:
+                    # Determine type based on is_container_group
+                    is_container_group = instance_group.get('is_container_group', False)
+                    group_type = "Container" if is_container_group else "Instance"
+
+                    # Calculate instances count
+                    instances_count = len(instance_group.get('instances', []))
 
                     row = [
-                        group.get('id', ''),
-                        group.get('name', ''),
+                        instance_group.get('id', ''),
+                        instance_group.get('name', ''),
                         group_type,
-                        group.get('jobs_running', 0),
-                        group.get('jobs_total', 0),
-                        group.get('instances', 0),
-                        capacity_remaining
+                        instance_group.get('jobs_running', 0),
+                        instance_group.get('jobs_total', 0),
+                        instances_count,
+                        f"{instance_group.get('percent_capacity_remaining', 0)}%"
                     ]
                     rows.append(row)
 
                 return (columns, rows)
             else:
-                raise AAPClientError(f"Failed to list instance groups: {response.status_code}")
+                raise AAPClientError(f"Controller API failed with status {response.status_code}")
 
-        except AAPAPIError as api_error:
-            raise AAPClientError(f"API error: {api_error}")
+        except AAPResourceNotFoundError as e:
+            raise SystemExit(str(e))
+        except AAPClientError as e:
+            raise SystemExit(str(e))
+        except Exception as e:
+            raise SystemExit(f"Unexpected error: {e}")
 
 
-class InstanceGroupShowCommand(ShowOne):
-    """Show instance group details."""
+class InstanceGroupShowCommand(AAPShowCommand):
+    """Show details of a specific instance group."""
 
     def get_parser(self, prog_name):
         parser = super().get_parser(prog_name)
@@ -167,26 +179,26 @@ class InstanceGroupShowCommand(ShowOne):
         parser.add_argument(
             'instance_group',
             nargs='?',
-            metavar='<instance-group>',
-            help='Instance group name or ID to display'
+            metavar='<instance_group>',
+            help='Instance Group name or ID to display'
         )
         return parser
 
     def take_action(self, parsed_args):
-        config = AAPConfig()
-        config.validate()
-
-        # Create HTTP client
-        client = AAPHTTPClient(config)
-
+        """Execute the instance group show command."""
         try:
+            # Get client from centralized client manager
+            client = self.controller_client
+
             # Determine how to resolve the instance group
             if parsed_args.id:
+                # Use explicit ID (ignores positional parameter)
                 instance_group_id = parsed_args.id
             elif parsed_args.instance_group:
+                # Use positional parameter - name first, then ID fallback if numeric
                 instance_group_id = resolve_instance_group_name(client, parsed_args.instance_group, api="controller")
             else:
-                raise AAPClientError("Instance group identifier is required")
+                raise AAPClientError("Instance Group identifier is required")
 
             endpoint = f"{CONTROLLER_API_VERSION_ENDPOINT}instance_groups/{instance_group_id}/"
             response = client.get(endpoint)
@@ -199,133 +211,154 @@ class InstanceGroupShowCommand(ShowOne):
             else:
                 raise AAPClientError(f"Failed to get instance group: {response.status_code}")
 
-        except AAPAPIError as api_error:
-            if api_error.status_code == HTTP_NOT_FOUND:
-                raise AAPResourceNotFoundError("Instance Group", parsed_args.instance_group or parsed_args.id)
-            else:
-                raise AAPClientError(f"API error: {api_error}")
+        except AAPResourceNotFoundError:
+            raise
+        except AAPClientError:
+            raise
+        except Exception as e:
+            raise AAPClientError(f"Unexpected error: {e}")
 
 
-class InstanceGroupCreateCommand(ShowOne):
+class InstanceGroupCreateCommand(AAPShowCommand):
     """Create a new instance group."""
 
     def get_parser(self, prog_name):
         parser = super().get_parser(prog_name)
-
-        # Required positional argument
         parser.add_argument(
             'name',
-            metavar='<name>',
-            help='Name for the new instance group'
+            help='Instance Group name'
         )
-
-        # Optional arguments
         parser.add_argument(
             '--is-container-group',
             action='store_true',
-            help='Set as container group'
+            dest='is_container_group',
+            help='Create a container group'
         )
-        parser.add_argument(
-            '--max-forks',
-            type=int,
-            help='Maximum forks'
-        )
-        parser.add_argument(
-            '--max-concurrent-jobs',
-            type=int,
-            help='Maximum concurrent jobs'
-        )
+
+        # Container-specific arguments
         parser.add_argument(
             '--credential',
-            help='Credential for container groups'
+            help='Container Registry credential name or ID (container groups only)'
         )
+        parser.add_argument(
+            '--pod-spec-override',
+            dest='pod_spec_override',
+            help='Pod spec override for container groups (JSON format)'
+        )
+
+        # Instance-specific arguments
         parser.add_argument(
             '--policy-instance-minimum',
             type=int,
-            help='Policy instance minimum for instance groups'
+            dest='policy_instance_minimum',
+            help='Minimum number of instances (instance groups only)'
         )
         parser.add_argument(
             '--policy-instance-percentage',
             type=int,
-            help='Policy instance percentage for instance groups'
-        )
-        parser.add_argument(
-            '--pod-spec-override',
-            help='Pod spec override for container groups'
+            dest='policy_instance_percentage',
+            help='Percentage of instances to maintain (instance groups only)'
         )
 
+        # Common arguments
+        parser.add_argument(
+            '--max-forks',
+            type=int,
+            dest='max_forks',
+            help='Maximum number of forks'
+        )
+        parser.add_argument(
+            '--max-concurrent-jobs',
+            type=int,
+            dest='max_concurrent_jobs',
+            help='Maximum number of concurrent jobs'
+        )
         return parser
 
     def take_action(self, parsed_args):
-        config = AAPConfig()
-        config.validate()
-
-        # Create HTTP client
-        client = AAPHTTPClient(config)
-
+        """Execute the instance group create command."""
         try:
+            # Get client from centralized client manager
+            client = self.controller_client
+
             # Get parser for usage message
             parser = self.get_parser('aap instance-group create')
 
-            # Validate arguments based on instance group type
+            # Validate argument combinations based on type
             if parsed_args.is_container_group:
-                # Container groups should not have policy arguments
+                # Container group - deny instance-specific arguments
                 if parsed_args.policy_instance_minimum is not None:
-                    parser.error("argument --policy-instance-minimum: not allowed when --is-container-group is specified")
+                    parser.error("--policy-instance-minimum cannot be used with container groups")
                 if parsed_args.policy_instance_percentage is not None:
-                    parser.error("argument --policy-instance-percentage: not allowed when --is-container-group is specified")
+                    parser.error("--policy-instance-percentage cannot be used with container groups")
             else:
-                # Regular instance groups should not have container-specific arguments
+                # Instance group - deny container-specific arguments
                 if parsed_args.credential:
-                    parser.error("argument --credential: not allowed when --is-container-group is not specified")
-                if parsed_args.pod_spec_override is not None:
-                    parser.error("argument --pod-spec-override: not allowed when --is-container-group is not specified")
+                    parser.error("--credential can only be used with container groups (use --is-container-group)")
+                if parsed_args.pod_spec_override:
+                    parser.error("--pod-spec-override can only be used with container groups (use --is-container-group)")
 
             instance_group_data = {
                 'name': parsed_args.name,
-                'is_container_group': parsed_args.is_container_group,
+                'is_container_group': parsed_args.is_container_group
             }
 
-            # Add optional fields
-            if parsed_args.max_concurrent_jobs is not None:
-                instance_group_data['max_concurrent_jobs'] = parsed_args.max_concurrent_jobs
+            # Add common fields
             if parsed_args.max_forks is not None:
                 instance_group_data['max_forks'] = parsed_args.max_forks
-            if parsed_args.credential:
-                try:
+            if parsed_args.max_concurrent_jobs is not None:
+                instance_group_data['max_concurrent_jobs'] = parsed_args.max_concurrent_jobs
+
+            # Add container-specific fields
+            if parsed_args.is_container_group:
+                if parsed_args.credential:
                     credential_id = resolve_credential_name(client, parsed_args.credential, api="controller")
                     instance_group_data['credential'] = credential_id
-                except AAPResourceNotFoundError:
-                    parser.error(f"Credential '{parsed_args.credential}' not found")
-            if parsed_args.policy_instance_percentage is not None:
-                instance_group_data['policy_instance_percentage'] = parsed_args.policy_instance_percentage
-            if parsed_args.policy_instance_minimum is not None:
-                instance_group_data['policy_instance_minimum'] = parsed_args.policy_instance_minimum
-            if parsed_args.pod_spec_override is not None:
-                instance_group_data['pod_spec_override'] = parsed_args.pod_spec_override
+                if parsed_args.pod_spec_override:
+                    try:
+                        import json
+                        instance_group_data['pod_spec_override'] = json.loads(parsed_args.pod_spec_override)
+                    except json.JSONDecodeError:
+                        parser.error("argument --pod-spec-override: must be valid JSON")
+            else:
+                # Add instance-specific fields
+                if parsed_args.policy_instance_minimum is not None:
+                    instance_group_data['policy_instance_minimum'] = parsed_args.policy_instance_minimum
+                if parsed_args.policy_instance_percentage is not None:
+                    instance_group_data['policy_instance_percentage'] = parsed_args.policy_instance_percentage
 
+            # Create instance group
             endpoint = f"{CONTROLLER_API_VERSION_ENDPOINT}instance_groups/"
-            response = client.post(endpoint, json=instance_group_data)
+            try:
+                response = client.post(endpoint, json=instance_group_data)
+            except AAPAPIError as api_error:
+                if api_error.status_code == HTTP_NOT_FOUND:
+                    # Handle 404 error with proper message
+                    raise AAPResourceNotFoundError("Instance Group", parsed_args.name)
+                elif api_error.status_code == HTTP_BAD_REQUEST:
+                    # Pass through 400 status messages directly to user
+                    raise SystemExit(str(api_error))
+                else:
+                    # Re-raise other errors
+                    raise
 
             if response.status_code == HTTP_CREATED:
                 instance_group_data = response.json()
-                print(f"Instance Group '{parsed_args.name}' created successfully")
+                print(f"Instance Group '{instance_group_data.get('name', '')}' created successfully")
+
                 return _format_instance_group_data(instance_group_data)
-            elif response.status_code == HTTP_BAD_REQUEST:
-                error_data = response.json()
-                parser.error(f"Bad request: {error_data}")
             else:
-                raise AAPClientError(f"Failed to create instance group: {response.status_code}")
+                raise AAPClientError(f"Instance Group creation failed with status {response.status_code}")
 
-        except AAPAPIError as api_error:
-            if api_error.status_code == HTTP_BAD_REQUEST:
-                parser = self.get_parser('aap instance-group create')
-                parser.error(f"Bad request: {api_error}")
-            else:
-                raise AAPClientError(f"API error: {api_error}")
+        except AAPResourceNotFoundError as e:
+            raise SystemExit(str(e))
+        except AAPClientError as e:
+            raise SystemExit(str(e))
+        except Exception as e:
+            raise SystemExit(f"Unexpected error: {e}")
 
 
-class InstanceGroupSetCommand(ShowOne):
+class InstanceGroupSetCommand(AAPShowCommand):
     """Update an existing instance group."""
 
     def get_parser(self, prog_name):
@@ -342,140 +375,151 @@ class InstanceGroupSetCommand(ShowOne):
         parser.add_argument(
             'instance_group',
             nargs='?',
-            metavar='<instance-group>',
-            help='Instance group name or ID to update'
+            metavar='<instance_group>',
+            help='Instance Group name or ID to update'
         )
 
-        # Update fields
-        parser.add_argument(
-            '--max-forks',
-            type=int,
-            help='Maximum forks'
-        )
-        parser.add_argument(
-            '--max-concurrent-jobs',
-            type=int,
-            help='Maximum concurrent jobs'
-        )
+        # Container-specific arguments
         parser.add_argument(
             '--credential',
-            help='Credential for container groups'
+            help='Container Registry credential name or ID (container groups only)'
         )
+        parser.add_argument(
+            '--pod-spec-override',
+            dest='pod_spec_override',
+            help='Pod spec override for container groups (JSON format)'
+        )
+
+        # Instance-specific arguments
         parser.add_argument(
             '--policy-instance-minimum',
             type=int,
-            help='Policy instance minimum for instance groups'
+            dest='policy_instance_minimum',
+            help='Minimum number of instances (instance groups only)'
         )
         parser.add_argument(
             '--policy-instance-percentage',
             type=int,
-            help='Policy instance percentage for instance groups'
-        )
-        parser.add_argument(
-            '--pod-spec-override',
-            help='Pod spec override for container groups'
+            dest='policy_instance_percentage',
+            help='Percentage of instances to maintain (instance groups only)'
         )
 
+        # Common arguments
+        parser.add_argument(
+            '--max-forks',
+            type=int,
+            dest='max_forks',
+            help='Maximum number of forks'
+        )
+        parser.add_argument(
+            '--max-concurrent-jobs',
+            type=int,
+            dest='max_concurrent_jobs',
+            help='Maximum number of concurrent jobs'
+        )
         return parser
 
     def take_action(self, parsed_args):
-        config = AAPConfig()
-        config.validate()
-
-        # Create HTTP client
-        client = AAPHTTPClient(config)
-
+        """Execute the instance group set command."""
         try:
+            # Get client from centralized client manager
+            client = self.controller_client
+
+            # Get parser for usage message
             parser = self.get_parser('aap instance-group set')
 
-            # Determine how to resolve the instance group
-            if parsed_args.id:
-                instance_group_id = parsed_args.id
-            elif parsed_args.instance_group:
-                instance_group_id = resolve_instance_group_name(client, parsed_args.instance_group, api="controller")
-            else:
-                parser.error("Instance group identifier is required")
+            # Resolve instance group - handle both ID and name
+            instance_group_id = resolve_instance_group_name(client, parsed_args.instance_group, api="controller")
 
-            # Fetch current instance group to check its type
-            fetch_endpoint = f"{CONTROLLER_API_VERSION_ENDPOINT}instance_groups/{instance_group_id}/"
-            fetch_response = client.get(fetch_endpoint)
+            # Get current instance group details to check is_container_group
+            endpoint = f"{CONTROLLER_API_VERSION_ENDPOINT}instance_groups/{instance_group_id}/"
+            response = client.get(endpoint)
 
-            if fetch_response.status_code != HTTP_OK:
-                if fetch_response.status_code == HTTP_NOT_FOUND:
-                    raise AAPResourceNotFoundError("Instance Group", parsed_args.instance_group or parsed_args.id)
-                else:
-                    raise AAPClientError(f"Failed to fetch instance group: {fetch_response.status_code}")
+            if response.status_code != HTTP_OK:
+                raise AAPResourceNotFoundError("Instance Group", parsed_args.instance_group)
 
-            current_instance_group = fetch_response.json()
-            is_container_group = current_instance_group.get('is_container_group', False)
+            current_data = response.json()
+            is_container_group = current_data.get('is_container_group', False)
 
-            # Validate arguments based on instance group type
+            # Validate argument combinations based on current type
             if is_container_group:
-                # Container groups should not have policy arguments
+                # Container group - deny instance-specific arguments
                 if parsed_args.policy_instance_minimum is not None:
-                    parser.error("argument --policy-instance-minimum: not allowed for container groups")
+                    parser.error("--policy-instance-minimum cannot be used with container groups")
                 if parsed_args.policy_instance_percentage is not None:
-                    parser.error("argument --policy-instance-percentage: not allowed for container groups")
+                    parser.error("--policy-instance-percentage cannot be used with container groups")
             else:
-                # Regular instance groups should not have container-specific arguments
-                if parsed_args.credential is not None:
-                    parser.error("argument --credential: not allowed for instance groups (only for container groups)")
-                if parsed_args.pod_spec_override is not None:
-                    parser.error("argument --pod-spec-override: not allowed for instance groups (only for container groups)")
+                # Instance group - deny container-specific arguments
+                if parsed_args.credential:
+                    parser.error("--credential can only be used with container groups")
+                if parsed_args.pod_spec_override:
+                    parser.error("--pod-spec-override can only be used with container groups")
 
+            # Prepare instance group update data
             instance_group_data = {}
 
-            # Update fields if provided
-            if parsed_args.max_concurrent_jobs is not None:
-                instance_group_data['max_concurrent_jobs'] = parsed_args.max_concurrent_jobs
+            # Add common fields
             if parsed_args.max_forks is not None:
                 instance_group_data['max_forks'] = parsed_args.max_forks
-            if parsed_args.credential is not None:
-                try:
+            if parsed_args.max_concurrent_jobs is not None:
+                instance_group_data['max_concurrent_jobs'] = parsed_args.max_concurrent_jobs
+
+            # Add container-specific fields
+            if is_container_group:
+                # Include is_container_group in PATCH for container-specific fields
+                if parsed_args.credential or parsed_args.pod_spec_override:
+                    instance_group_data['is_container_group'] = True
+
+                if parsed_args.credential:
                     credential_id = resolve_credential_name(client, parsed_args.credential, api="controller")
                     instance_group_data['credential'] = credential_id
-                    # API requires is_container_group to be explicitly set when setting credential
-                    instance_group_data['is_container_group'] = True
-                except AAPResourceNotFoundError:
-                    parser.error(f"Credential '{parsed_args.credential}' not found")
-            if parsed_args.policy_instance_percentage is not None:
-                instance_group_data['policy_instance_percentage'] = parsed_args.policy_instance_percentage
-            if parsed_args.policy_instance_minimum is not None:
-                instance_group_data['policy_instance_minimum'] = parsed_args.policy_instance_minimum
-            if parsed_args.pod_spec_override is not None:
-                instance_group_data['pod_spec_override'] = parsed_args.pod_spec_override
-                # API requires is_container_group to be explicitly set when setting container-specific fields
-                instance_group_data['is_container_group'] = True
+                if parsed_args.pod_spec_override:
+                    try:
+                        import json
+                        instance_group_data['pod_spec_override'] = json.loads(parsed_args.pod_spec_override)
+                    except json.JSONDecodeError:
+                        parser.error("argument --pod-spec-override: must be valid JSON")
+            else:
+                # Add instance-specific fields
+                if parsed_args.policy_instance_minimum is not None:
+                    instance_group_data['policy_instance_minimum'] = parsed_args.policy_instance_minimum
+                if parsed_args.policy_instance_percentage is not None:
+                    instance_group_data['policy_instance_percentage'] = parsed_args.policy_instance_percentage
 
             if not instance_group_data:
-                parser.error("At least one field must be specified to update")
+                parser.error("No update fields provided")
 
-            endpoint = f"{CONTROLLER_API_VERSION_ENDPOINT}instance_groups/{instance_group_id}/"
-            response = client.patch(endpoint, json=instance_group_data)
+            # Update instance group
+            try:
+                response = client.patch(endpoint, json=instance_group_data)
+            except AAPAPIError as api_error:
+                if api_error.status_code == HTTP_NOT_FOUND:
+                    # Handle 404 error with proper message
+                    raise AAPResourceNotFoundError("Instance Group", parsed_args.instance_group)
+                elif api_error.status_code == HTTP_BAD_REQUEST:
+                    # Pass through 400 status messages directly to user
+                    raise SystemExit(str(api_error))
+                else:
+                    # Re-raise other errors
+                    raise
 
             if response.status_code == HTTP_OK:
                 instance_group_data = response.json()
-                print(f"Instance Group '{parsed_args.instance_group or parsed_args.id}' updated successfully")
+                print(f"Instance Group '{instance_group_data.get('name', '')}' updated successfully")
+
                 return _format_instance_group_data(instance_group_data)
-            elif response.status_code == HTTP_NOT_FOUND:
-                raise AAPResourceNotFoundError("Instance Group", parsed_args.instance_group or parsed_args.id)
-            elif response.status_code == HTTP_BAD_REQUEST:
-                error_data = response.json()
-                parser.error(f"Bad request: {error_data}")
             else:
-                raise AAPClientError(f"Failed to update instance group: {response.status_code}")
+                raise AAPClientError(f"Instance Group update failed with status {response.status_code}")
 
-        except AAPAPIError as api_error:
-            if api_error.status_code == HTTP_NOT_FOUND:
-                raise AAPResourceNotFoundError("Instance Group", parsed_args.instance_group or parsed_args.id)
-            elif api_error.status_code == HTTP_BAD_REQUEST:
-                parser = self.get_parser('aap instance-group set')
-                parser.error(f"Bad request: {api_error}")
-            else:
-                raise AAPClientError(f"API error: {api_error}")
+        except AAPResourceNotFoundError as e:
+            raise SystemExit(str(e))
+        except AAPClientError as e:
+            raise SystemExit(str(e))
+        except Exception as e:
+            raise SystemExit(f"Unexpected error: {e}")
 
 
-class InstanceGroupDeleteCommand(Command):
+class InstanceGroupDeleteCommand(AAPCommand):
     """Delete an instance group."""
 
     def get_parser(self, prog_name):
@@ -492,41 +536,40 @@ class InstanceGroupDeleteCommand(Command):
         parser.add_argument(
             'instance_group',
             nargs='?',
-            metavar='<instance-group>',
-            help='Instance group name or ID to delete'
+            metavar='<instance_group>',
+            help='Instance Group name or ID'
         )
         return parser
 
     def take_action(self, parsed_args):
-        config = AAPConfig()
-        config.validate()
-
-        # Create HTTP client
-        client = AAPHTTPClient(config)
-
+        """Execute the instance group delete command."""
         try:
-            parser = self.get_parser('aap instance-group delete')
+            # Get client from centralized client manager
+            client = self.controller_client
 
             # Determine how to resolve the instance group
             if parsed_args.id:
+                # Use explicit ID (ignores positional parameter)
                 instance_group_id = parsed_args.id
             elif parsed_args.instance_group:
+                # Use positional parameter - name first, then ID fallback if numeric
                 instance_group_id = resolve_instance_group_name(client, parsed_args.instance_group, api="controller")
             else:
-                parser.error("Instance group identifier is required")
+                raise AAPClientError("Instance Group identifier is required")
 
             endpoint = f"{CONTROLLER_API_VERSION_ENDPOINT}instance_groups/{instance_group_id}/"
             response = client.delete(endpoint)
 
-            if response.status_code == HTTP_NO_CONTENT:
+            if response.status_code in (HTTP_NO_CONTENT, HTTP_ACCEPTED):
                 print(f"Instance Group '{parsed_args.instance_group or parsed_args.id}' deleted successfully")
             elif response.status_code == HTTP_NOT_FOUND:
                 raise AAPResourceNotFoundError("Instance Group", parsed_args.instance_group or parsed_args.id)
             else:
                 raise AAPClientError(f"Failed to delete instance group: {response.status_code}")
 
-        except AAPAPIError as api_error:
-            if api_error.status_code == HTTP_NOT_FOUND:
-                raise AAPResourceNotFoundError("Instance Group", parsed_args.instance_group or parsed_args.id)
-            else:
-                raise AAPClientError(f"API error: {api_error}")
+        except AAPResourceNotFoundError:
+            raise
+        except AAPClientError:
+            raise
+        except Exception as e:
+            raise AAPClientError(f"Unexpected error: {e}")

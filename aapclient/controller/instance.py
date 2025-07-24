@@ -1,224 +1,153 @@
-"""Instance management commands."""
-from cliff.lister import Lister
-from cliff.show import ShowOne
-from aapclient.common.client import AAPHTTPClient
-from aapclient.common.config import AAPConfig
+"""Instance commands."""
+from aapclient.common.basecommands import AAPShowCommand, AAPListCommand
 from aapclient.common.constants import (
     CONTROLLER_API_VERSION_ENDPOINT,
     HTTP_OK,
     HTTP_CREATED,
+    HTTP_NO_CONTENT,
     HTTP_NOT_FOUND,
-    HTTP_BAD_REQUEST
+    HTTP_BAD_REQUEST,
+    HTTP_ACCEPTED
 )
 from aapclient.common.exceptions import AAPClientError, AAPResourceNotFoundError, AAPAPIError
 from aapclient.common.functions import resolve_instance_name
 
 
-def _format_instance_data(instance_data):
-    """Format instance data for display in ShowOne commands."""
 
-    # Extract all available scalar information from API
-    instance_id = instance_data.get('id', '')
+
+
+def _format_instance_data(instance_data):
+    """
+    Format instance data consistently
+
+    Args:
+        instance_data (dict): Instance data from API response
+
+    Returns:
+        tuple: (field_names, field_values) for ShowOne display
+    """
+    # Extract instance details
+    id_value = instance_data.get('id', '')
     hostname = instance_data.get('hostname', '')
-    instance_type = instance_data.get('type', '')
-    url = instance_data.get('url', '')
-    uuid = instance_data.get('uuid', '')
-    version = instance_data.get('version', '')
     node_type = instance_data.get('node_type', '')
     node_state = instance_data.get('node_state', '')
     enabled = instance_data.get('enabled', False)
-    capacity = instance_data.get('capacity', 0)
-    consumed_capacity = instance_data.get('consumed_capacity', 0)
-    percent_capacity_remaining = instance_data.get('percent_capacity_remaining', 0.0)
-    cpu_capacity = instance_data.get('cpu_capacity', 0)
-    mem_capacity = instance_data.get('mem_capacity', 0)
-    cpu = instance_data.get('cpu', '')
-    memory = instance_data.get('memory', 0)
-    capacity_adjustment = instance_data.get('capacity_adjustment', '')
-    jobs_running = instance_data.get('jobs_running', 0)
-    jobs_total = instance_data.get('jobs_total', 0)
-    ip_address = instance_data.get('ip_address', '')
-    listener_port = instance_data.get('listener_port')
-    protocol = instance_data.get('protocol', '')
-    peers_from_control_nodes = instance_data.get('peers_from_control_nodes', False)
-    managed = instance_data.get('managed', False)
     managed_by_policy = instance_data.get('managed_by_policy', False)
-    health_check_pending = instance_data.get('health_check_pending', False)
-    health_check_started = instance_data.get('health_check_started')
-    last_health_check = instance_data.get('last_health_check')
-    last_seen = instance_data.get('last_seen')
-    errors = instance_data.get('errors', '')
+    cpu_capacity = instance_data.get('cpu_capacity', '')
+    mem_capacity = instance_data.get('mem_capacity', '')
+    capacity = instance_data.get('capacity', '')
+    version = instance_data.get('version', '')
+    listener_port = instance_data.get('listener_port', '')
     created = instance_data.get('created', '')
     modified = instance_data.get('modified', '')
 
-    # Extract peer information
-    peers = instance_data.get('peers', [])
-    reverse_peers = instance_data.get('reverse_peers', [])
-    peers_count = len(peers) if peers else 0
-    reverse_peers_count = len(reverse_peers) if reverse_peers else 0
-
-    # Extract summary fields data
-    summary_fields = instance_data.get('summary_fields', {})
-    user_capabilities = summary_fields.get('user_capabilities', {})
-    can_edit = user_capabilities.get('edit', False)
-
-    # Format boolean values
-    enabled_display = "Yes" if enabled else "No"
-    managed_display = "Yes" if managed else "No"
-    managed_by_policy_display = "Yes" if managed_by_policy else "No"
-    health_check_pending_display = "Yes" if health_check_pending else "No"
-    peers_from_control_nodes_display = "Yes" if peers_from_control_nodes else "No"
-    can_edit_display = "Yes" if can_edit else "No"
-
-    # Format memory in GB for readability
-    memory_gb = round(memory / (1024**3), 2) if memory else 0
-
-    # Format null values for display
-    def format_null_value(value):
-        if value is None:
-            return ""
-        return str(value)
-
-    # Return as tuple for Cliff ShowOne format
+    # Format fields for display
     columns = [
         'ID',
-        'Name',
-        'Type',
-        'URL',
-        'UUID',
+        'Hostname',
         'Node Type',
         'Node State',
         'Enabled',
-        'Capacity',
-        'Consumed Capacity',
-        'Capacity Remaining',
-        'CPU',
+        'Managed by Policy',
         'CPU Capacity',
-        'Memory (GB)',
         'Memory Capacity',
-        'Capacity Adjustment',
-        'Jobs Running',
-        'Jobs Total',
+        'Capacity',
         'Version',
-        'IP Address',
         'Listener Port',
-        'Protocol',
-        'Peers From Control Nodes',
-        'Peers Count',
-        'Reverse Peers Count',
-        'Managed',
-        'Managed By Policy',
-        'Health Check Pending',
-        'Health Check Started',
-        'Last Health Check',
-        'Last Seen',
-        'Can Edit',
-        'Errors',
         'Created',
-        'Modified',
+        'Modified'
     ]
 
     values = [
-        str(instance_id),
+        id_value,
         hostname,
-        instance_type,
-        url,
-        uuid,
         node_type,
         node_state,
-        enabled_display,
-        str(capacity),
-        str(consumed_capacity),
-        f"{percent_capacity_remaining}%",
-        cpu,
-        str(cpu_capacity),
-        str(memory_gb),
-        str(mem_capacity),
-        capacity_adjustment,
-        str(jobs_running),
-        str(jobs_total),
+        "Yes" if enabled else "No",
+        "Yes" if managed_by_policy else "No",
+        cpu_capacity,
+        mem_capacity,
+        capacity,
         version,
-        ip_address,
-        format_null_value(listener_port),
-        protocol,
-        peers_from_control_nodes_display,
-        str(peers_count),
-        str(reverse_peers_count),
-        managed_display,
-        managed_by_policy_display,
-        health_check_pending_display,
-        format_null_value(health_check_started),
-        format_null_value(last_health_check),
-        format_null_value(last_seen),
-        can_edit_display,
-        errors,
+        listener_port,
         created,
-        modified,
+        modified
     ]
 
     return (columns, values)
 
 
-
-
-
-class InstanceListCommand(Lister):
+class InstanceListCommand(AAPListCommand):
     """List instances."""
 
     def get_parser(self, prog_name):
         parser = super().get_parser(prog_name)
+        parser.add_argument(
+            '--limit',
+            type=int,
+            metavar='N',
+            help='Limit the number of results returned (default: 20)'
+        )
         return parser
 
     def take_action(self, parsed_args):
-        config = AAPConfig()
-        config.validate()
+        """Execute the instance list command."""
+        try:
+            # Get client from centralized client manager
+            client = self.controller_client
 
-        # Create HTTP client
-        client = AAPHTTPClient(config)
+            # Build query parameters
+            params = {'order_by': 'id'}  # Sort by ID on server side
+            if parsed_args.limit:
+                params['page_size'] = parsed_args.limit
 
-        # Get instances with server-side sorting by ID
-        endpoint = f"{CONTROLLER_API_VERSION_ENDPOINT}instances/"
-        params = {'order_by': 'id'}
-        response = client.get(endpoint, params=params)
+            # Query instances endpoint
+            endpoint = f"{CONTROLLER_API_VERSION_ENDPOINT}instances/"
+            try:
+                response = client.get(endpoint, params=params)
+            except AAPAPIError as api_error:
+                if api_error.status_code == HTTP_NOT_FOUND:
+                    # Handle 404 error with proper message
+                    raise AAPResourceNotFoundError("Instance", "instances endpoint")
+                elif api_error.status_code == HTTP_BAD_REQUEST:
+                    # Pass through 400 status messages directly to user
+                    raise SystemExit(str(api_error))
+                else:
+                    # Re-raise other errors
+                    raise
 
-        if response.status_code == HTTP_OK:
-            data = response.json()
-            instances = data.get('results', [])
+            if response.status_code == HTTP_OK:
+                data = response.json()
+                instances = data.get('results', [])
 
-            # Define columns for display
-            columns = ['ID', 'Hostname', 'Status', 'Node Type', 'Capacity', 'Percent Remaining', 'Enabled']
-            rows = []
+                # Define columns for output
+                columns = ['ID', 'Hostname', 'Node Type', 'Node State', 'Enabled']
+                rows = []
 
-            for instance in instances:
-                instance_id = instance.get('id', '')
-                hostname = instance.get('hostname', '')
-                node_state = instance.get('node_state', '')
-                node_type = instance.get('node_type', '')
-                capacity = instance.get('capacity', 0)
-                percent_remaining = instance.get('percent_capacity_remaining', 0.0)
-                enabled = instance.get('enabled', False)
+                for instance in instances:
+                    row = [
+                        instance.get('id', ''),
+                        instance.get('hostname', ''),
+                        instance.get('node_type', ''),
+                        instance.get('node_state', ''),
+                        "Yes" if instance.get('enabled', False) else "No"
+                    ]
+                    rows.append(row)
 
-                # Format display values
-                enabled_display = "Yes" if enabled else "No"
+                return (columns, rows)
+            else:
+                raise AAPClientError(f"Controller API failed with status {response.status_code}")
 
-                row = [
-                    str(instance_id),
-                    hostname,
-                    node_state,
-                    node_type,
-                    str(capacity),
-                    f"{percent_remaining}%",
-                    enabled_display
-                ]
-                rows.append(row)
-
-            return (columns, rows)
-        else:
-            raise AAPClientError(f"Failed to list instances: {response.status_code}")
+        except AAPResourceNotFoundError as e:
+            raise SystemExit(str(e))
+        except AAPClientError as e:
+            raise SystemExit(str(e))
+        except Exception as e:
+            raise SystemExit(f"Unexpected error: {e}")
 
 
-class InstanceShowCommand(ShowOne):
-    """Show instance details."""
+class InstanceShowCommand(AAPShowCommand):
+    """Show details of a specific instance."""
 
     def get_parser(self, prog_name):
         parser = super().get_parser(prog_name)
@@ -240,13 +169,11 @@ class InstanceShowCommand(ShowOne):
         return parser
 
     def take_action(self, parsed_args):
-        config = AAPConfig()
-        config.validate()
-
-        # Create HTTP client
-        client = AAPHTTPClient(config)
-
+        """Execute the instance show command."""
         try:
+            # Get client from centralized client manager
+            client = self.controller_client
+
             # Determine how to resolve the instance
             if parsed_args.id:
                 # Use explicit ID (ignores positional parameter)
@@ -268,66 +195,60 @@ class InstanceShowCommand(ShowOne):
             else:
                 raise AAPClientError(f"Failed to get instance: {response.status_code}")
 
-        except AAPAPIError as api_error:
-            if api_error.status_code == HTTP_NOT_FOUND:
-                raise AAPResourceNotFoundError("Instance", parsed_args.instance or parsed_args.id)
-            else:
-                raise AAPClientError(f"API error: {api_error}")
+        except AAPResourceNotFoundError:
+            raise
+        except AAPClientError:
+            raise
+        except Exception as e:
+            raise AAPClientError(f"Unexpected error: {e}")
 
 
-class InstanceCreateCommand(ShowOne):
+class InstanceCreateCommand(AAPShowCommand):
     """Create a new instance."""
 
     def get_parser(self, prog_name):
         parser = super().get_parser(prog_name)
-
-        # Required positional argument
         parser.add_argument(
             'hostname',
-            metavar='<hostname>',
-            help='Hostname for the new instance'
+            help='Instance hostname'
         )
-
-        # Required and optional arguments
         parser.add_argument(
             '--instance-type',
-            choices=['execution', 'hop'],
-            default='execution',
-            help='Type of instance (default: execution)'
+            choices=['execution', 'control', 'hybrid'],
+            required=True,
+            dest='instance_type',
+            help='Type of instance'
         )
         parser.add_argument(
             '--listener-port',
             type=int,
             default=27199,
-            help='Listener port for the instance (default: 27199)'
+            dest='listener_port',
+            help='Port for instance communication (default: 27199)'
         )
         parser.add_argument(
-            '--disabled',
+            '--disable-instance',
             action='store_true',
-            help='Disable the instance (default: enabled)'
+            help='Create instance in disabled state'
         )
         parser.add_argument(
-            '--enable-peers-from-control-nodes',
+            '--peers-from-control-nodes',
             action='store_true',
-            dest='peers_from_control_nodes',
             help='Enable peers from control nodes'
         )
         parser.add_argument(
             '--disable-manage-by-policy',
             action='store_true',
-            help='Disable manage by policy (default: enabled)'
+            help='Disable management by policy'
         )
-
         return parser
 
     def take_action(self, parsed_args):
-        config = AAPConfig()
-        config.validate()
-
-        # Create HTTP client
-        client = AAPHTTPClient(config)
-
+        """Execute the instance create command."""
         try:
+            # Get client from centralized client manager
+            client = self.controller_client
+
             # Get parser for usage message
             parser = self.get_parser('aap instance create')
 
@@ -340,28 +261,38 @@ class InstanceCreateCommand(ShowOne):
                 'managed_by_policy': not parsed_args.disable_manage_by_policy  # Default enabled unless --disable-manage-by-policy
             }
 
+            # Create instance
             endpoint = f"{CONTROLLER_API_VERSION_ENDPOINT}instances/"
-            response = client.post(endpoint, json=instance_data)
+            try:
+                response = client.post(endpoint, json=instance_data)
+            except AAPAPIError as api_error:
+                if api_error.status_code == HTTP_NOT_FOUND:
+                    # Handle 404 error with proper message
+                    raise AAPResourceNotFoundError("Instance", parsed_args.hostname)
+                elif api_error.status_code == HTTP_BAD_REQUEST:
+                    # Format 400 errors properly using parser.error
+                    parser = self.get_parser('aap instance create')
+                    parser.error(f"Bad request: {api_error}")
+                else:
+                    # Re-raise other errors
+                    raise
 
             if response.status_code == HTTP_CREATED:
                 instance_data = response.json()
-                print(f"Instance '{parsed_args.hostname}' created successfully")
+                print(f"Instance '{instance_data.get('hostname', '')}' created successfully")
                 return _format_instance_data(instance_data)
-            elif response.status_code == HTTP_BAD_REQUEST:
-                error_data = response.json()
-                parser.error(f"Bad request: {error_data}")
             else:
-                raise AAPClientError(f"Failed to create instance: {response.status_code}")
+                raise AAPClientError(f"Instance creation failed with status {response.status_code}")
 
-        except AAPAPIError as api_error:
-            if api_error.status_code == HTTP_BAD_REQUEST:
-                parser = self.get_parser('aap instance create')
-                parser.error(f"Bad request: {api_error}")
-            else:
-                raise AAPClientError(f"API error: {api_error}")
+        except AAPResourceNotFoundError as e:
+            raise SystemExit(str(e))
+        except AAPClientError as e:
+            raise SystemExit(str(e))
+        except Exception as e:
+            raise SystemExit(f"Unexpected error: {e}")
 
 
-class InstanceSetCommand(ShowOne):
+class InstanceSetCommand(AAPShowCommand):
     """Update an existing instance."""
 
     def get_parser(self, prog_name):
@@ -382,125 +313,122 @@ class InstanceSetCommand(ShowOne):
             help='Instance hostname or ID to update'
         )
 
-        # Update fields
         parser.add_argument(
             '--listener-port',
             type=int,
-            help='Listener port for the instance'
+            dest='listener_port',
+            help='Port for instance communication'
         )
 
-        # Mutually exclusive group for enabled/disabled
-        enabled_group = parser.add_mutually_exclusive_group()
-        enabled_group.add_argument(
-            '--enabled',
+        # Enable/disable flags for various boolean settings
+        enable_group = parser.add_mutually_exclusive_group()
+        enable_group.add_argument(
+            '--enable',
             action='store_true',
             dest='enable_instance',
             help='Enable the instance'
         )
-        enabled_group.add_argument(
-            '--disabled',
+        enable_group.add_argument(
+            '--disable',
             action='store_true',
             dest='disable_instance',
             help='Disable the instance'
         )
 
-        # Mutually exclusive group for manage by policy
-        manage_policy_group = parser.add_mutually_exclusive_group()
-        manage_policy_group.add_argument(
-            '--enable-manage-by-policy',
-            action='store_true',
-            dest='enable_manage_by_policy',
-            help='Enable manage by policy'
-        )
-        manage_policy_group.add_argument(
-            '--disable-manage-by-policy',
-            action='store_true',
-            dest='disable_manage_by_policy',
-            help='Disable manage by policy'
-        )
-
-        # Mutually exclusive group for peers from control nodes
         peers_group = parser.add_mutually_exclusive_group()
         peers_group.add_argument(
             '--enable-peers-from-control-nodes',
             action='store_true',
-            dest='enable_peers_from_control_nodes',
+            dest='enable_peers',
             help='Enable peers from control nodes'
         )
         peers_group.add_argument(
             '--disable-peers-from-control-nodes',
             action='store_true',
-            dest='disable_peers_from_control_nodes',
+            dest='disable_peers',
             help='Disable peers from control nodes'
+        )
+
+        policy_group = parser.add_mutually_exclusive_group()
+        policy_group.add_argument(
+            '--enable-manage-by-policy',
+            action='store_true',
+            dest='enable_policy',
+            help='Enable management by policy'
+        )
+        policy_group.add_argument(
+            '--disable-manage-by-policy',
+            action='store_true',
+            dest='disable_policy',
+            help='Disable management by policy'
         )
 
         return parser
 
     def take_action(self, parsed_args):
-        config = AAPConfig()
-        config.validate()
-
-        # Create HTTP client
-        client = AAPHTTPClient(config)
-
+        """Execute the instance set command."""
         try:
+            # Get client from centralized client manager
+            client = self.controller_client
+
+            # Get parser for usage message
             parser = self.get_parser('aap instance set')
 
-            # Determine how to resolve the instance
-            if parsed_args.id:
-                instance_id = parsed_args.id
-            elif parsed_args.instance:
-                instance_id = resolve_instance_name(client, parsed_args.instance, api="controller")
-            else:
-                parser.error("Instance identifier is required")
+            # Resolve instance - handle both ID and hostname
+            instance_id = resolve_instance_name(client, parsed_args.instance, api="controller")
 
+            # Prepare instance update data
             instance_data = {}
 
-            # Update fields if provided
-            if parsed_args.listener_port is not None:
+            if getattr(parsed_args, 'listener_port', None):
                 instance_data['listener_port'] = parsed_args.listener_port
 
-            # Handle enabled/disabled boolean
+            # Handle enable/disable flags
             if parsed_args.enable_instance:
                 instance_data['enabled'] = True
             elif parsed_args.disable_instance:
                 instance_data['enabled'] = False
 
-            # Handle manage by policy boolean
-            if parsed_args.enable_manage_by_policy:
-                instance_data['managed_by_policy'] = True
-            elif parsed_args.disable_manage_by_policy:
-                instance_data['managed_by_policy'] = False
-
-            # Handle peers from control nodes boolean
-            if parsed_args.enable_peers_from_control_nodes:
+            if parsed_args.enable_peers:
                 instance_data['peers_from_control_nodes'] = True
-            elif parsed_args.disable_peers_from_control_nodes:
+            elif parsed_args.disable_peers:
                 instance_data['peers_from_control_nodes'] = False
 
-            if not instance_data:
-                parser.error("At least one field must be specified to update")
+            if parsed_args.enable_policy:
+                instance_data['managed_by_policy'] = True
+            elif parsed_args.disable_policy:
+                instance_data['managed_by_policy'] = False
 
+            if not instance_data:
+                parser.error("No update fields provided")
+
+            # Update instance
             endpoint = f"{CONTROLLER_API_VERSION_ENDPOINT}instances/{instance_id}/"
-            response = client.patch(endpoint, json=instance_data)
+            try:
+                response = client.patch(endpoint, json=instance_data)
+            except AAPAPIError as api_error:
+                if api_error.status_code == HTTP_NOT_FOUND:
+                    # Handle 404 error with proper message
+                    raise AAPResourceNotFoundError("Instance", parsed_args.instance)
+                elif api_error.status_code == HTTP_BAD_REQUEST:
+                    # Format 400 errors properly using parser.error
+                    parser = self.get_parser('aap instance set')
+                    parser.error(f"Bad request: {api_error}")
+                else:
+                    # Re-raise other errors
+                    raise
 
             if response.status_code == HTTP_OK:
                 instance_data = response.json()
-                print(f"Instance '{parsed_args.instance or parsed_args.id}' updated successfully")
-                return _format_instance_data(instance_data)
-            elif response.status_code == HTTP_NOT_FOUND:
-                raise AAPResourceNotFoundError("Instance", parsed_args.instance or parsed_args.id)
-            elif response.status_code == HTTP_BAD_REQUEST:
-                error_data = response.json()
-                parser.error(f"Bad request: {error_data}")
-            else:
-                raise AAPClientError(f"Failed to update instance: {response.status_code}")
+                print(f"Instance '{instance_data.get('hostname', '')}' updated successfully")
 
-        except AAPAPIError as api_error:
-            if api_error.status_code == HTTP_NOT_FOUND:
-                raise AAPResourceNotFoundError("Instance", parsed_args.instance or parsed_args.id)
-            elif api_error.status_code == HTTP_BAD_REQUEST:
-                parser = self.get_parser('aap instance set')
-                parser.error(f"Bad request: {api_error}")
+                return _format_instance_data(instance_data)
             else:
-                raise AAPClientError(f"API error: {api_error}")
+                raise AAPClientError(f"Instance update failed with status {response.status_code}")
+
+        except AAPResourceNotFoundError as e:
+            raise SystemExit(str(e))
+        except AAPClientError as e:
+            raise SystemExit(str(e))
+        except Exception as e:
+            raise SystemExit(f"Unexpected error: {e}")
