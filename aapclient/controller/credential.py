@@ -1,4 +1,4 @@
-"""Credential commands for AAP Controller API."""
+"""Credential commands."""
 from cliff.command import Command
 from cliff.lister import Lister
 from cliff.show import ShowOne
@@ -106,7 +106,7 @@ def _format_credential_data(credential_data):
 
 
 class CredentialListCommand(Lister):
-    """List credentials from AAP Controller API."""
+    """List credentials."""
 
     def get_parser(self, prog_name):
         parser = super().get_parser(prog_name)

@@ -1,4 +1,4 @@
-"""User commands for AAP Gateway API."""
+"""User commands."""
 from cliff.command import Command
 from cliff.lister import Lister
 from cliff.show import ShowOne
@@ -17,7 +17,7 @@ from aapclient.common.functions import resolve_user_name
 
 
 class UserListCommand(Lister):
-    """List users from AAP Gateway API."""
+    """List users."""
 
     def get_parser(self, prog_name):
         parser = super().get_parser(prog_name)

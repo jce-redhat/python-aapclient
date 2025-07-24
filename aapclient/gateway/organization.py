@@ -1,4 +1,4 @@
-"""Organization commands for AAP Gateway API."""
+"""Organization commands."""
 from cliff.command import Command
 from cliff.lister import Lister
 from cliff.show import ShowOne
@@ -18,7 +18,7 @@ from aapclient.common.functions import resolve_organization_name
 
 
 class OrganizationListCommand(Lister):
-    """List organizations from AAP Gateway API."""
+    """List organizations."""
 
     def get_parser(self, prog_name):
         parser = super().get_parser(prog_name)

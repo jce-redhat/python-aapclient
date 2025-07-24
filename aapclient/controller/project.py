@@ -1,4 +1,4 @@
-"""Project commands for AAP Controller API."""
+"""Project commands."""
 from cliff.command import Command
 from cliff.lister import Lister
 from cliff.show import ShowOne
@@ -129,7 +129,7 @@ def _format_project_data(project_data):
 
 
 class ProjectListCommand(Lister):
-    """List projects from AAP Controller API."""
+    """List projects."""
 
     def get_parser(self, prog_name):
         parser = super().get_parser(prog_name)

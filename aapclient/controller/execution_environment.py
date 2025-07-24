@@ -1,4 +1,4 @@
-"""Execution Environment commands for AAP Controller API."""
+"""Execution Environment commands."""
 
 from cliff.command import Command
 from cliff.lister import Lister
@@ -72,7 +72,7 @@ def _format_execution_environment_data(execution_environment_data):
 
 
 class ExecutionEnvironmentListCommand(Lister):
-    """List execution environments from AAP Controller API."""
+    """List execution environments."""
 
     def get_parser(self, prog_name):
         parser = super().get_parser(prog_name)
@@ -130,7 +130,7 @@ class ExecutionEnvironmentListCommand(Lister):
 
 
 class ExecutionEnvironmentShowCommand(ShowOne):
-    """Show execution environment details from AAP Controller API."""
+    """Show execution environment details."""
 
     def get_parser(self, prog_name):
         parser = super().get_parser(prog_name)
@@ -190,7 +190,7 @@ class ExecutionEnvironmentShowCommand(ShowOne):
 
 
 class ExecutionEnvironmentCreateCommand(ShowOne):
-    """Create execution environment in AAP Controller API."""
+    """Create execution environment."""
 
     def get_parser(self, prog_name):
         parser = super().get_parser(prog_name)
@@ -287,7 +287,7 @@ class ExecutionEnvironmentCreateCommand(ShowOne):
 
 
 class ExecutionEnvironmentSetCommand(ShowOne):
-    """Update execution environment in AAP Controller API."""
+    """Update execution environment."""
 
     def get_parser(self, prog_name):
         parser = super().get_parser(prog_name)
@@ -399,7 +399,7 @@ class ExecutionEnvironmentSetCommand(ShowOne):
 
 
 class ExecutionEnvironmentDeleteCommand(Command):
-    """Delete execution environment from AAP Controller API."""
+    """Delete execution environment."""
 
     def get_parser(self, prog_name):
         parser = super().get_parser(prog_name)

@@ -1,4 +1,4 @@
-"""Team commands for AAP Gateway API."""
+"""Team commands."""
 from cliff.command import Command
 from cliff.lister import Lister
 from cliff.show import ShowOne
@@ -19,7 +19,7 @@ from aapclient.common.functions import resolve_organization_name, resolve_team_n
 
 
 class TeamListCommand(Lister):
-    """List teams from AAP Gateway API."""
+    """List teams."""
 
     def get_parser(self, prog_name):
         parser = super().get_parser(prog_name)

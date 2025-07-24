@@ -7,7 +7,7 @@ from aapclient.common.exceptions import AAPClientError
 
 
 class WhoamiCommand(ShowOne):
-    """Get current user information from AAP Gateway API."""
+    """Get current user information."""
 
     def get_parser(self, prog_name):
         parser = super().get_parser(prog_name)

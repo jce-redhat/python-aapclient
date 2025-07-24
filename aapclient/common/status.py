@@ -1,4 +1,4 @@
-"""Status command for AAP Gateway API."""
+"""Status command."""
 from cliff.lister import Lister
 from aapclient.common.client import AAPHTTPClient
 from aapclient.common.config import AAPConfig

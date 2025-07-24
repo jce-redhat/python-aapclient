@@ -1,4 +1,4 @@
-"""Host commands for AAP Controller API."""
+"""Host commands."""
 
 import json
 import yaml
@@ -78,7 +78,7 @@ def _format_host_data(host_data):
 
 
 class HostListCommand(Lister):
-    """List hosts from AAP Controller API."""
+    """List hosts."""
 
     def get_parser(self, prog_name):
         parser = super().get_parser(prog_name)
@@ -134,7 +134,7 @@ class HostListCommand(Lister):
 
 
 class HostShowCommand(ShowOne):
-    """Show details of a specific host from AAP Controller API."""
+    """Show details of a specific host."""
 
     def get_parser(self, prog_name):
         parser = super().get_parser(prog_name)
@@ -192,7 +192,7 @@ class HostShowCommand(ShowOne):
 
 
 class HostCreateCommand(ShowOne):
-    """Create a new host in AAP Controller API."""
+    """Create a new host."""
 
     def get_parser(self, prog_name):
         parser = super().get_parser(prog_name)
@@ -283,7 +283,7 @@ class HostCreateCommand(ShowOne):
 
 
 class HostSetCommand(ShowOne):
-    """Update an existing host in AAP Controller API."""
+    """Update an existing host."""
 
     def get_parser(self, prog_name):
         parser = super().get_parser(prog_name)
@@ -395,7 +395,7 @@ class HostSetCommand(ShowOne):
 
 
 class HostDeleteCommand(Command):
-    """Delete a host from AAP Controller API."""
+    """Delete a host."""
 
     def get_parser(self, prog_name):
         parser = super().get_parser(prog_name)
@@ -461,7 +461,7 @@ class HostDeleteCommand(Command):
 
 
 class HostGroupsListCommand(Lister):
-    """List groups associated with a host from AAP Controller API."""
+    """List groups associated with a host."""
 
     def get_parser(self, prog_name):
         parser = super().get_parser(prog_name)
@@ -539,7 +539,7 @@ class HostGroupsListCommand(Lister):
 
 
 class HostVariablesShowCommand(ShowOne):
-    """Show variables of a specific host from AAP Controller API."""
+    """Show variables of a specific host."""
 
     def get_parser(self, prog_name):
         parser = super().get_parser(prog_name)

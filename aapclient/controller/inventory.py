@@ -1,4 +1,4 @@
-"""Inventory commands for AAP Controller API."""
+"""Inventory commands."""
 
 from cliff.command import Command
 from cliff.lister import Lister
@@ -83,7 +83,7 @@ def _format_inventory_data(inventory_data):
 
 
 class InventoryListCommand(Lister):
-    """List inventories from AAP Controller API."""
+    """List inventories."""
 
     def get_parser(self, prog_name):
         parser = super().get_parser(prog_name)
@@ -148,7 +148,7 @@ class InventoryListCommand(Lister):
 
 
 class InventoryShowCommand(ShowOne):
-    """Show inventory details from AAP Controller API."""
+    """Show inventory details."""
 
     def get_parser(self, prog_name):
         parser = super().get_parser(prog_name)
@@ -301,7 +301,7 @@ class InventoryCreateCommand(ShowOne):
 
 
 class InventorySetCommand(ShowOne):
-    """Update an existing inventory in AAP Controller API."""
+    """Update an existing inventory."""
 
     def get_parser(self, prog_name):
         parser = super().get_parser(prog_name)
@@ -420,7 +420,7 @@ class InventorySetCommand(ShowOne):
 
 
 class InventoryDeleteCommand(Command):
-    """Delete an inventory from AAP Controller API."""
+    """Delete an inventory."""
 
     def get_parser(self, prog_name):
         parser = super().get_parser(prog_name)

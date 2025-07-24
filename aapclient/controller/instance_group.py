@@ -1,4 +1,4 @@
-"""Instance Group commands for AAP Controller API."""
+"""Instance Group commands."""
 
 from cliff.command import Command
 from cliff.lister import Lister
@@ -101,7 +101,7 @@ def _format_instance_group_data(instance_group_data):
 
 
 class InstanceGroupListCommand(Lister):
-    """List instance groups from AAP Controller API."""
+    """List instance groups."""
 
     def get_parser(self, prog_name):
         parser = super().get_parser(prog_name)
@@ -151,7 +151,7 @@ class InstanceGroupListCommand(Lister):
 
 
 class InstanceGroupShowCommand(ShowOne):
-    """Show instance group details from AAP Controller API."""
+    """Show instance group details."""
 
     def get_parser(self, prog_name):
         parser = super().get_parser(prog_name)
@@ -207,7 +207,7 @@ class InstanceGroupShowCommand(ShowOne):
 
 
 class InstanceGroupCreateCommand(ShowOne):
-    """Create a new instance group in AAP Controller API."""
+    """Create a new instance group."""
 
     def get_parser(self, prog_name):
         parser = super().get_parser(prog_name)
@@ -326,7 +326,7 @@ class InstanceGroupCreateCommand(ShowOne):
 
 
 class InstanceGroupSetCommand(ShowOne):
-    """Update an existing instance group in AAP Controller API."""
+    """Update an existing instance group."""
 
     def get_parser(self, prog_name):
         parser = super().get_parser(prog_name)
@@ -476,7 +476,7 @@ class InstanceGroupSetCommand(ShowOne):
 
 
 class InstanceGroupDeleteCommand(Command):
-    """Delete an instance group from AAP Controller API."""
+    """Delete an instance group."""
 
     def get_parser(self, prog_name):
         parser = super().get_parser(prog_name)

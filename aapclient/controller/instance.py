@@ -1,4 +1,4 @@
-"""Instance management commands for AAP Controller API."""
+"""Instance management commands."""
 from cliff.lister import Lister
 from cliff.show import ShowOne
 from aapclient.common.client import AAPHTTPClient
@@ -202,7 +202,7 @@ def resolve_instance_parameter(client, identifier):
 
 
 class InstanceListCommand(Lister):
-    """List instances from AAP Controller API."""
+    """List instances."""
 
     def get_parser(self, prog_name):
         parser = super().get_parser(prog_name)
@@ -257,7 +257,7 @@ class InstanceListCommand(Lister):
 
 
 class InstanceShowCommand(ShowOne):
-    """Show instance details from AAP Controller API."""
+    """Show instance details."""
 
     def get_parser(self, prog_name):
         parser = super().get_parser(prog_name)
@@ -315,7 +315,7 @@ class InstanceShowCommand(ShowOne):
 
 
 class InstanceCreateCommand(ShowOne):
-    """Create a new instance in AAP Controller API."""
+    """Create a new instance."""
 
     def get_parser(self, prog_name):
         parser = super().get_parser(prog_name)
@@ -401,7 +401,7 @@ class InstanceCreateCommand(ShowOne):
 
 
 class InstanceSetCommand(ShowOne):
-    """Update an existing instance in AAP Controller API."""
+    """Update an existing instance."""
 
     def get_parser(self, prog_name):
         parser = super().get_parser(prog_name)
