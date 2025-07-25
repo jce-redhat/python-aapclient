@@ -30,7 +30,13 @@ def _format_instance_group_data(instance_group_data):
     id_value = instance_group_data.get('id', '')
     name = instance_group_data.get('name', '')
     is_container_group = instance_group_data.get('is_container_group', False)
-    instances_count = len(instance_group_data.get('instances', []))
+    # Handle instances field - can be either a list or an integer count
+    instances_value = instance_group_data.get('instances', [])
+    if isinstance(instances_value, list):
+        instances_count = len(instances_value)
+    else:
+        # API returned count as integer
+        instances_count = instances_value
     jobs_running = instance_group_data.get('jobs_running', 0)
     jobs_total = instance_group_data.get('jobs_total', 0)
     capacity_remaining = instance_group_data.get('percent_capacity_remaining', 0)
@@ -128,8 +134,13 @@ class InstanceGroupListCommand(AAPListCommand):
                     is_container_group = instance_group.get('is_container_group', False)
                     group_type = "Container" if is_container_group else "Instance"
 
-                    # Calculate instances count
-                    instances_count = len(instance_group.get('instances', []))
+                    # Calculate instances count - handle both list and integer from API
+                    instances_value = instance_group.get('instances', [])
+                    if isinstance(instances_value, list):
+                        instances_count = len(instances_value)
+                    else:
+                        # API returned count as integer
+                        instances_count = instances_value
 
                     row = [
                         instance_group.get('id', ''),
