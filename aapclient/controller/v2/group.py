@@ -12,7 +12,7 @@ from aapclient.common.constants import (
     HTTP_ACCEPTED
 )
 from aapclient.common.exceptions import AAPClientError, AAPResourceNotFoundError, AAPAPIError
-from aapclient.common.functions import resolve_group_name, resolve_inventory_name, resolve_host_name
+from aapclient.common.functions import resolve_group_name, resolve_inventory_name, resolve_host_name, format_datetime
 
 
 def _get_group_resource_count(client, group_id, resource_type):
@@ -38,13 +38,14 @@ def _get_group_resource_count(client, group_id, resource_type):
     return 0
 
 
-def _format_group_data(group_data, client=None):
+def _format_group_data(group_data, client=None, use_utc=False):
     """
     Format group data consistently
 
     Args:
         group_data (dict): Group data from API response
         client: AAPHTTPClient instance (optional, for getting child groups count)
+        use_utc (bool): If True, display timestamps in UTC; if False, display in local time
 
     Returns:
         tuple: (field_names, field_values) for ShowOne display
@@ -61,8 +62,8 @@ def _format_group_data(group_data, client=None):
             inventory_name = group_data['summary_fields']['inventory'].get('name', '')
 
     variables = group_data.get('variables', '{}')
-    created = group_data.get('created', '')
-    modified = group_data.get('modified', '')
+    created = format_datetime(group_data.get('created', ''), use_utc)
+    modified = format_datetime(group_data.get('modified', ''), use_utc)
 
     # Get child groups count if client provided
     child_groups_count = 0
@@ -196,6 +197,11 @@ class GroupShowCommand(AAPShowCommand):
             metavar='<group>',
             help='Group name or ID to display'
         )
+        parser.add_argument(
+            '--utc',
+            action='store_true',
+            help='Display timestamps in UTC (default: local time)'
+        )
         return parser
 
     def take_action(self, parsed_args):
@@ -219,7 +225,7 @@ class GroupShowCommand(AAPShowCommand):
 
             if response.status_code == HTTP_OK:
                 group_data = response.json()
-                return _format_group_data(group_data, client)
+                return _format_group_data(group_data, client, parsed_args.utc)
             else:
                 raise AAPClientError(f"Failed to get group: {response.status_code}")
 

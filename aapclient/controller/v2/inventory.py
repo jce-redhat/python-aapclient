@@ -12,18 +12,23 @@ from aapclient.common.constants import (
     HTTP_ACCEPTED
 )
 from aapclient.common.exceptions import AAPClientError, AAPResourceNotFoundError, AAPAPIError
-from aapclient.common.functions import resolve_organization_name, resolve_inventory_name
+from aapclient.common.functions import (
+    resolve_organization_name,
+    resolve_inventory_name,
+    format_datetime
+)
 
 
 
 
 
-def _format_inventory_data(inventory_data):
+def _format_inventory_data(inventory_data, use_utc=False):
     """
     Format inventory data consistently
 
     Args:
         inventory_data (dict): Inventory data from API response
+        use_utc (bool): If True, display timestamps in UTC; if False, display in local time
 
     Returns:
         tuple: (field_names, field_values) for ShowOne display
@@ -48,8 +53,9 @@ def _format_inventory_data(inventory_data):
     else:
         variables_display = str(variables)
 
-    created = inventory_data.get('created', '')
-    modified = inventory_data.get('modified', '')
+    # Format datetime fields using common function
+    created = format_datetime(inventory_data.get('created', ''), use_utc)
+    modified = format_datetime(inventory_data.get('modified', ''), use_utc)
 
     # Format fields for display
     columns = [
@@ -166,6 +172,11 @@ class InventoryShowCommand(AAPShowCommand):
             metavar='<inventory>',
             help='Inventory name or ID to display'
         )
+        parser.add_argument(
+            '--utc',
+            action='store_true',
+            help='Display timestamps in UTC'
+        )
         return parser
 
     def take_action(self, parsed_args):
@@ -189,7 +200,7 @@ class InventoryShowCommand(AAPShowCommand):
 
             if response.status_code == HTTP_OK:
                 inventory_data = response.json()
-                return _format_inventory_data(inventory_data)
+                return _format_inventory_data(inventory_data, parsed_args.utc)
             elif response.status_code == HTTP_NOT_FOUND:
                 raise AAPResourceNotFoundError("Inventory", parsed_args.inventory or parsed_args.id)
             else:

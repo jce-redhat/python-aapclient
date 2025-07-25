@@ -10,17 +10,21 @@ from aapclient.common.constants import (
     HTTP_ACCEPTED
 )
 from aapclient.common.exceptions import AAPClientError, AAPResourceNotFoundError, AAPAPIError
-from aapclient.common.functions import resolve_user_name
+from aapclient.common.functions import (
+    resolve_user_name,
+    format_datetime
+)
 
 
 
 
-def _format_user_data(user_data):
+def _format_user_data(user_data, use_utc=False):
     """
     Format user data consistently
 
     Args:
         user_data (dict): User data from API response
+        use_utc (bool): If True, display timestamps in UTC; if False, display in local time
 
     Returns:
         tuple: (field_names, field_values) for ShowOne display
@@ -33,8 +37,10 @@ def _format_user_data(user_data):
     last_name = user_data.get('last_name', '')
     is_superuser = user_data.get('is_superuser', False)
     is_system_auditor = user_data.get('is_system_auditor', False)
-    date_joined = user_data.get('date_joined', '')
-    last_login = user_data.get('last_login', '')
+
+    # Format datetime fields using common function
+    date_joined = format_datetime(user_data.get('date_joined', ''), use_utc)
+    last_login = format_datetime(user_data.get('last_login', ''), use_utc)
 
     # Format fields for display
     columns = [
@@ -146,6 +152,11 @@ class UserShowCommand(AAPShowCommand):
             metavar='<user>',
             help='Username or ID to display'
         )
+        parser.add_argument(
+            '--utc',
+            action='store_true',
+            help='Display timestamps in UTC'
+        )
         return parser
 
     def take_action(self, parsed_args):
@@ -169,7 +180,7 @@ class UserShowCommand(AAPShowCommand):
 
             if response.status_code == HTTP_OK:
                 user_data = response.json()
-                return _format_user_data(user_data)
+                return _format_user_data(user_data, parsed_args.utc)
             elif response.status_code == HTTP_NOT_FOUND:
                 raise AAPResourceNotFoundError("User", parsed_args.user or parsed_args.id)
             else:

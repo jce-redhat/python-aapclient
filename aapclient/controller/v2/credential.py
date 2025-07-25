@@ -10,18 +10,23 @@ from aapclient.common.constants import (
     HTTP_ACCEPTED
 )
 from aapclient.common.exceptions import AAPClientError, AAPResourceNotFoundError, AAPAPIError
-from aapclient.common.functions import resolve_organization_name, resolve_credential_name
+from aapclient.common.functions import (
+    resolve_organization_name,
+    resolve_credential_name,
+    format_datetime
+)
 
 
 
 
 
-def _format_credential_data(credential_data):
+def _format_credential_data(credential_data, use_utc=False):
     """
     Format credential data consistently
 
     Args:
         credential_data (dict): Credential data from API response
+        use_utc (bool): If True, display timestamps in UTC; if False, display in local time
 
     Returns:
         tuple: (field_names, field_values) for ShowOne display
@@ -30,16 +35,17 @@ def _format_credential_data(credential_data):
     id_value = credential_data.get('id', '')
     name = credential_data.get('name', '')
     description = credential_data.get('description', '')
-    credential_type = credential_data.get('credential_type', '')
-    organization_name = ''
+    credential_type = credential_data.get('credential_type_name', '')
 
     # Resolve organization name if available
+    organization_name = ''
     if 'summary_fields' in credential_data and 'organization' in credential_data['summary_fields']:
         if credential_data['summary_fields']['organization']:
             organization_name = credential_data['summary_fields']['organization'].get('name', '')
 
-    created = credential_data.get('created', '')
-    modified = credential_data.get('modified', '')
+    # Format datetime fields using common function
+    created = format_datetime(credential_data.get('created', ''), use_utc)
+    modified = format_datetime(credential_data.get('modified', ''), use_utc)
 
     # Format fields for display
     columns = [
@@ -151,6 +157,11 @@ class CredentialShowCommand(AAPShowCommand):
             metavar='<credential>',
             help='Credential name or ID to display'
         )
+        parser.add_argument(
+            '--utc',
+            action='store_true',
+            help='Display timestamps in UTC (default: local time)'
+        )
         return parser
 
     def take_action(self, parsed_args):
@@ -174,7 +185,7 @@ class CredentialShowCommand(AAPShowCommand):
 
             if response.status_code == HTTP_OK:
                 credential_data = response.json()
-                return _format_credential_data(credential_data)
+                return _format_credential_data(credential_data, parsed_args.utc)
             elif response.status_code == HTTP_NOT_FOUND:
                 raise AAPResourceNotFoundError("Credential", parsed_args.credential or parsed_args.id)
             else:

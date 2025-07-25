@@ -10,7 +10,10 @@ from aapclient.common.constants import (
     HTTP_ACCEPTED
 )
 from aapclient.common.exceptions import AAPClientError, AAPResourceNotFoundError, AAPAPIError
-from aapclient.common.functions import resolve_organization_name
+from aapclient.common.functions import (
+    resolve_organization_name,
+    format_datetime
+)
 
 
 class OrganizationListCommand(AAPListCommand):
@@ -72,12 +75,13 @@ class OrganizationListCommand(AAPListCommand):
             raise SystemExit(f"Unexpected error: {e}")
 
 
-def _format_organization_data(organization_data):
+def _format_organization_data(organization_data, use_utc=False):
     """
     Format organization data consistently
 
     Args:
         organization_data (dict): Organization data from API response
+        use_utc (bool): If True, display timestamps in UTC; if False, display in local time
 
     Returns:
         tuple: (field_names, field_values) for ShowOne display
@@ -87,8 +91,10 @@ def _format_organization_data(organization_data):
     name = organization_data.get('name', '')
     description = organization_data.get('description', '')
     max_hosts = organization_data.get('max_hosts', '')
-    created = organization_data.get('created', '')
-    modified = organization_data.get('modified', '')
+
+    # Format datetime fields using common function
+    created = format_datetime(organization_data.get('created', ''), use_utc)
+    modified = format_datetime(organization_data.get('modified', ''), use_utc)
 
     # Format fields for display
     columns = [
@@ -125,6 +131,13 @@ class OrganizationShowCommand(AAPShowCommand):
             help='Organization ID (overrides positional parameter)'
         )
 
+        # UTC option for timestamp display
+        parser.add_argument(
+            '--utc',
+            action='store_true',
+            help='Display timestamps in UTC (default: local time)'
+        )
+
         # Positional parameter for name lookup with ID fallback
         parser.add_argument(
             'organization',
@@ -155,7 +168,7 @@ class OrganizationShowCommand(AAPShowCommand):
 
             if response.status_code == HTTP_OK:
                 organization_data = response.json()
-                return _format_organization_data(organization_data)
+                return _format_organization_data(organization_data, parsed_args.utc)
             elif response.status_code == HTTP_NOT_FOUND:
                 raise AAPResourceNotFoundError("Organization", parsed_args.organization or parsed_args.id)
             else:

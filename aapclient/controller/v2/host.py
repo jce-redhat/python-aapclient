@@ -12,18 +12,23 @@ from aapclient.common.constants import (
     HTTP_ACCEPTED
 )
 from aapclient.common.exceptions import AAPClientError, AAPResourceNotFoundError, AAPAPIError
-from aapclient.common.functions import resolve_inventory_name, resolve_host_name
+from aapclient.common.functions import (
+    resolve_inventory_name,
+    resolve_host_name,
+    format_datetime
+)
 
 
 
 
 
-def _format_host_data(host_data):
+def _format_host_data(host_data, use_utc=False):
     """
     Format host data consistently
 
     Args:
         host_data (dict): Host data from API response
+        use_utc (bool): If True, display timestamps in UTC; if False, display in local time
 
     Returns:
         tuple: (field_names, field_values) for ShowOne display
@@ -47,8 +52,9 @@ def _format_host_data(host_data):
     else:
         variables_display = str(variables_value)
 
-    created = host_data.get('created', '')
-    modified = host_data.get('modified', '')
+    # Format datetime fields using common function
+    created = format_datetime(host_data.get('created', ''), use_utc)
+    modified = format_datetime(host_data.get('modified', ''), use_utc)
 
     # Format fields for display
     columns = [
@@ -163,6 +169,11 @@ class HostShowCommand(AAPShowCommand):
             metavar='<host>',
             help='Host name or ID to display'
         )
+        parser.add_argument(
+            '--utc',
+            action='store_true',
+            help='Display timestamps in UTC'
+        )
         return parser
 
     def take_action(self, parsed_args):
@@ -186,7 +197,7 @@ class HostShowCommand(AAPShowCommand):
 
             if response.status_code == HTTP_OK:
                 host_data = response.json()
-                return _format_host_data(host_data)
+                return _format_host_data(host_data, parsed_args.utc)
             elif response.status_code == HTTP_NOT_FOUND:
                 raise AAPResourceNotFoundError("Host", parsed_args.host or parsed_args.id)
             else:

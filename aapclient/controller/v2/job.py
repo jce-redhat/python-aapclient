@@ -1,5 +1,4 @@
 """Job commands."""
-from datetime import datetime, timezone
 from aapclient.common.basecommands import AAPShowCommand, AAPListCommand
 from aapclient.common.constants import (
     CONTROLLER_API_VERSION_ENDPOINT,
@@ -7,81 +6,7 @@ from aapclient.common.constants import (
     HTTP_NOT_FOUND
 )
 from aapclient.common.exceptions import AAPClientError, AAPResourceNotFoundError, AAPAPIError
-
-
-def _format_duration(elapsed_seconds):
-    """
-    Format elapsed time in human-readable format with units.
-
-    Args:
-        elapsed_seconds (float): Duration in seconds
-
-    Returns:
-        str: Formatted duration (e.g., "20s", "1m 22s", "1h 5m 30s")
-    """
-    if not elapsed_seconds:
-        return "0s"
-
-    total_seconds = int(elapsed_seconds)
-    hours = total_seconds // 3600
-    minutes = (total_seconds % 3600) // 60
-    seconds = total_seconds % 60
-
-    parts = []
-    if hours > 0:
-        parts.append(f"{hours}h")
-    if minutes > 0:
-        parts.append(f"{minutes}m")
-    if seconds > 0 or not parts:  # Always show seconds if no other units
-        parts.append(f"{seconds}s")
-
-    return " ".join(parts)
-
-
-def _format_datetime(iso_datetime_str, use_utc=False):
-    """
-    Format ISO datetime string to YYYY-MM-DD HH:MM:SS TZ format.
-    Displays in UTC or local time based on use_utc parameter.
-
-    Args:
-        iso_datetime_str (str): ISO format datetime string
-        use_utc (bool): If True, display in UTC; if False, display in local time
-
-    Returns:
-        str: Formatted datetime with timezone or original string if parsing fails
-    """
-    if not iso_datetime_str:
-        return ''
-
-    try:
-        # Parse ISO datetime with timezone awareness
-        if 'T' in iso_datetime_str:
-            # Handle datetime with timezone (Z indicates UTC)
-            if iso_datetime_str.endswith('Z'):
-                # Remove 'Z' and parse as UTC
-                clean_datetime = iso_datetime_str[:-1]
-                if '.' in clean_datetime:
-                    # Handle microseconds
-                    dt = datetime.fromisoformat(clean_datetime).replace(tzinfo=timezone.utc)
-                else:
-                    dt = datetime.fromisoformat(clean_datetime).replace(tzinfo=timezone.utc)
-            else:
-                # Try to parse with timezone info
-                dt = datetime.fromisoformat(iso_datetime_str)
-
-            if use_utc:
-                # Convert to UTC for display
-                utc_dt = dt.astimezone(timezone.utc)
-                return utc_dt.strftime('%Y-%m-%d %H:%M:%S UTC')
-            else:
-                # Convert to local time for display (Python will use system timezone)
-                local_dt = dt.astimezone()
-                return local_dt.strftime('%Y-%m-%d %H:%M:%S %Z')
-        else:
-            return iso_datetime_str
-    except (ValueError, AttributeError):
-        # Return original string if parsing fails
-        return iso_datetime_str
+from aapclient.common.functions import format_duration, format_datetime
 
 
 def _format_job_data(job_data, use_utc=False):
@@ -115,13 +40,13 @@ def _format_job_data(job_data, use_utc=False):
     modified = job_data.get('modified', '')
 
     # Format elapsed time using helper function
-    duration_display = _format_duration(elapsed)
+    duration_display = format_duration(elapsed)
 
     # Format datetime fields
-    started_display = _format_datetime(started, use_utc)
-    finished_display = _format_datetime(finished, use_utc)
-    created_display = _format_datetime(created, use_utc)
-    modified_display = _format_datetime(modified, use_utc)
+    started_display = format_datetime(started, use_utc)
+    finished_display = format_datetime(finished, use_utc)
+    created_display = format_datetime(created, use_utc)
+    modified_display = format_datetime(modified, use_utc)
 
     # Get related resource names from summary_fields
     organization_name = ''
@@ -311,7 +236,7 @@ class JobListCommand(AAPListCommand):
                 for job in jobs:
                     # Format elapsed time using helper function
                     elapsed = job.get('elapsed', 0)
-                    duration_display = _format_duration(elapsed)
+                    duration_display = format_duration(elapsed)
 
                     row = [
                         job.get('id', ''),
@@ -319,8 +244,8 @@ class JobListCommand(AAPListCommand):
                         job.get('type', ''),
                         job.get('status', ''),
                         duration_display,
-                        _format_datetime(job.get('started', ''), parsed_args.utc),
-                        _format_datetime(job.get('finished', ''), parsed_args.utc)
+                        format_datetime(job.get('started', ''), parsed_args.utc),
+                        format_datetime(job.get('finished', ''), parsed_args.utc)
                     ]
                     rows.append(row)
 

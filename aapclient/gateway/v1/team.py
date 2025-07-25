@@ -10,17 +10,22 @@ from aapclient.common.constants import (
     HTTP_ACCEPTED
 )
 from aapclient.common.exceptions import AAPClientError, AAPResourceNotFoundError, AAPAPIError
-from aapclient.common.functions import resolve_organization_name, resolve_team_name
+from aapclient.common.functions import (
+    resolve_organization_name,
+    resolve_team_name,
+    format_datetime
+)
 
 
 
 
-def _format_team_data(team_data):
+def _format_team_data(team_data, use_utc=False):
     """
     Format team data consistently
 
     Args:
         team_data (dict): Team data from API response
+        use_utc (bool): If True, display timestamps in UTC; if False, display in local time
 
     Returns:
         tuple: (field_names, field_values) for ShowOne display
@@ -36,8 +41,9 @@ def _format_team_data(team_data):
         if team_data['summary_fields']['organization']:
             organization_name = team_data['summary_fields']['organization'].get('name', '')
 
-    created = team_data.get('created', '')
-    modified = team_data.get('modified', '')
+    # Format datetime fields using common function
+    created = format_datetime(team_data.get('created', ''), use_utc)
+    modified = format_datetime(team_data.get('modified', ''), use_utc)
 
     # Format fields for display
     columns = [
@@ -147,6 +153,11 @@ class TeamShowCommand(AAPShowCommand):
             metavar='<team>',
             help='Team name or ID to display'
         )
+        parser.add_argument(
+            '--utc',
+            action='store_true',
+            help='Display timestamps in UTC'
+        )
         return parser
 
     def take_action(self, parsed_args):
@@ -170,7 +181,7 @@ class TeamShowCommand(AAPShowCommand):
 
             if response.status_code == HTTP_OK:
                 team_data = response.json()
-                return _format_team_data(team_data)
+                return _format_team_data(team_data, parsed_args.utc)
             elif response.status_code == HTTP_NOT_FOUND:
                 raise AAPResourceNotFoundError("Team", parsed_args.team or parsed_args.id)
             else:

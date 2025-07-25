@@ -10,18 +10,23 @@ from aapclient.common.constants import (
     HTTP_ACCEPTED
 )
 from aapclient.common.exceptions import AAPClientError, AAPResourceNotFoundError, AAPAPIError
-from aapclient.common.functions import resolve_credential_name, resolve_instance_group_name
+from aapclient.common.functions import (
+    resolve_credential_name,
+    resolve_instance_group_name,
+    format_datetime
+)
 
 
 
 
 
-def _format_instance_group_data(instance_group_data):
+def _format_instance_group_data(instance_group_data, use_utc=False):
     """
     Format instance group data consistently
 
     Args:
         instance_group_data (dict): Instance group data from API response
+        use_utc (bool): If True, display timestamps in UTC; if False, display in local time
 
     Returns:
         tuple: (field_names, field_values) for ShowOne display
@@ -55,8 +60,8 @@ def _format_instance_group_data(instance_group_data):
             if credential_id:
                 credential_name = str(credential_id)
 
-    created = instance_group_data.get('created', '')
-    modified = instance_group_data.get('modified', '')
+    created = format_datetime(instance_group_data.get('created', ''), use_utc)
+    modified = format_datetime(instance_group_data.get('modified', ''), use_utc)
 
     # Format fields for display
     columns = [
@@ -185,6 +190,11 @@ class InstanceGroupShowCommand(AAPShowCommand):
             metavar='<instance_group>',
             help='Instance Group name or ID to display'
         )
+        parser.add_argument(
+            '--utc',
+            action='store_true',
+            help='Display timestamps in UTC'
+        )
         return parser
 
     def take_action(self, parsed_args):
@@ -208,7 +218,7 @@ class InstanceGroupShowCommand(AAPShowCommand):
 
             if response.status_code == HTTP_OK:
                 instance_group_data = response.json()
-                return _format_instance_group_data(instance_group_data)
+                return _format_instance_group_data(instance_group_data, use_utc=parsed_args.utc)
             elif response.status_code == HTTP_NOT_FOUND:
                 raise AAPResourceNotFoundError("Instance Group", parsed_args.instance_group or parsed_args.id)
             else:

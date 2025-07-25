@@ -1,11 +1,87 @@
 """Common utility functions for AAP client."""
 
+from datetime import datetime, timezone
 from aapclient.common.constants import (
     GATEWAY_API_VERSION_ENDPOINT,
     CONTROLLER_API_VERSION_ENDPOINT,
     HTTP_OK
 )
 from aapclient.common.exceptions import AAPClientError, AAPResourceNotFoundError, AAPAPIError
+
+
+def format_duration(elapsed_seconds):
+    """
+    Format elapsed time in human-readable format with units.
+
+    Args:
+        elapsed_seconds (float): Duration in seconds
+
+    Returns:
+        str: Formatted duration (e.g., "20s", "1m 22s", "1h 5m 30s")
+    """
+    if not elapsed_seconds:
+        return "0s"
+
+    total_seconds = int(elapsed_seconds)
+    hours = total_seconds // 3600
+    minutes = (total_seconds % 3600) // 60
+    seconds = total_seconds % 60
+
+    parts = []
+    if hours > 0:
+        parts.append(f"{hours}h")
+    if minutes > 0:
+        parts.append(f"{minutes}m")
+    if seconds > 0 or not parts:  # Always show seconds if no other units
+        parts.append(f"{seconds}s")
+
+    return " ".join(parts)
+
+
+def format_datetime(iso_datetime_str, use_utc=False):
+    """
+    Format ISO datetime string to YYYY-MM-DD HH:MM:SS TZ format.
+    Displays in UTC or local time based on use_utc parameter.
+
+    Args:
+        iso_datetime_str (str): ISO format datetime string
+        use_utc (bool): If True, display in UTC; if False, display in local time
+
+    Returns:
+        str: Formatted datetime with timezone or original string if parsing fails
+    """
+    if not iso_datetime_str:
+        return ''
+
+    try:
+        # Parse ISO datetime with timezone awareness
+        if 'T' in iso_datetime_str:
+            # Handle datetime with timezone (Z indicates UTC)
+            if iso_datetime_str.endswith('Z'):
+                # Remove 'Z' and parse as UTC
+                clean_datetime = iso_datetime_str[:-1]
+                if '.' in clean_datetime:
+                    # Handle microseconds
+                    dt = datetime.fromisoformat(clean_datetime).replace(tzinfo=timezone.utc)
+                else:
+                    dt = datetime.fromisoformat(clean_datetime).replace(tzinfo=timezone.utc)
+            else:
+                # Try to parse with timezone info
+                dt = datetime.fromisoformat(iso_datetime_str)
+
+            if use_utc:
+                # Convert to UTC for display
+                utc_dt = dt.astimezone(timezone.utc)
+                return utc_dt.strftime('%Y-%m-%d %H:%M:%S UTC')
+            else:
+                # Convert to local time for display (Python will use system timezone)
+                local_dt = dt.astimezone()
+                return local_dt.strftime('%Y-%m-%d %H:%M:%S %Z')
+        else:
+            return iso_datetime_str
+    except (ValueError, AttributeError):
+        # Return original string if parsing fails
+        return iso_datetime_str
 
 
 def resolve_organization_name(client, identifier, api="gateway"):

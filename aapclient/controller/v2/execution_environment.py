@@ -10,17 +10,23 @@ from aapclient.common.constants import (
     HTTP_ACCEPTED
 )
 from aapclient.common.exceptions import AAPClientError, AAPResourceNotFoundError, AAPAPIError
-from aapclient.common.functions import resolve_organization_name, resolve_credential_name, resolve_execution_environment_name
+from aapclient.common.functions import (
+    resolve_organization_name,
+    resolve_credential_name,
+    resolve_execution_environment_name,
+    format_datetime
+)
 
 
 
 
-def _format_execution_environment_data(ee_data):
+def _format_execution_environment_data(ee_data, use_utc=False):
     """
     Format execution environment data consistently
 
     Args:
         ee_data (dict): Execution environment data from API response
+        use_utc (bool): If True, display timestamps in UTC; if False, display in local time
 
     Returns:
         tuple: (field_names, field_values) for ShowOne display
@@ -44,8 +50,8 @@ def _format_execution_environment_data(ee_data):
             credential_name = ee_data['summary_fields']['credential'].get('name', '')
 
     pull = ee_data.get('pull', '')
-    created = ee_data.get('created', '')
-    modified = ee_data.get('modified', '')
+    created = format_datetime(ee_data.get('created', ''), use_utc)
+    modified = format_datetime(ee_data.get('modified', ''), use_utc)
 
     # Format fields for display
     columns = [
@@ -161,6 +167,11 @@ class ExecutionEnvironmentShowCommand(AAPShowCommand):
             metavar='<execution_environment>',
             help='Execution Environment name or ID to display'
         )
+        parser.add_argument(
+            '--utc',
+            action='store_true',
+            help='Display timestamps in UTC'
+        )
         return parser
 
     def take_action(self, parsed_args):
@@ -184,7 +195,7 @@ class ExecutionEnvironmentShowCommand(AAPShowCommand):
 
             if response.status_code == HTTP_OK:
                 ee_data = response.json()
-                return _format_execution_environment_data(ee_data)
+                return _format_execution_environment_data(ee_data, parsed_args.utc)
             elif response.status_code == HTTP_NOT_FOUND:
                 raise AAPResourceNotFoundError("Execution Environment", parsed_args.execution_environment or parsed_args.id)
             else:

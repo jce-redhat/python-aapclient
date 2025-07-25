@@ -9,19 +9,26 @@ from aapclient.common.constants import (
     HTTP_BAD_REQUEST
 )
 from aapclient.common.exceptions import AAPClientError, AAPResourceNotFoundError, AAPAPIError
-from aapclient.common.functions import resolve_organization_name, resolve_execution_environment_name, resolve_credential_name, resolve_project_name
+from aapclient.common.functions import (
+    resolve_organization_name,
+    resolve_execution_environment_name,
+    resolve_credential_name,
+    resolve_project_name,
+    format_datetime
+)
 
 
 
 
 
 
-def _format_project_data(project_data):
+def _format_project_data(project_data, use_utc=False):
     """
     Format project data consistently
 
     Args:
         project_data (dict): Project data from API response
+        use_utc (bool): If True, display timestamps in UTC; if False, display in local time
 
     Returns:
         tuple: (field_names, field_values) for ShowOne display
@@ -35,6 +42,19 @@ def _format_project_data(project_data):
     modified_by = project_data.get('summary_fields', {}).get('modified_by', {})
     last_job = project_data.get('summary_fields', {}).get('last_job', {})
     last_update = project_data.get('summary_fields', {}).get('last_update', {})
+
+    # Format datetime fields using common function
+    last_job_run = project_data.get('last_job_run', 'Never')
+    if last_job_run and last_job_run != 'Never':
+        last_job_run = format_datetime(last_job_run, use_utc)
+
+    last_updated = project_data.get('last_updated', 'Never')
+    if last_updated and last_updated != 'Never':
+        last_updated = format_datetime(last_updated, use_utc)
+
+    next_job_run = project_data.get('next_job_run', '')
+    if next_job_run:
+        next_job_run = format_datetime(next_job_run, use_utc)
 
     # Define comprehensive field mappings as ordered dictionary
     field_data = {
@@ -60,14 +80,14 @@ def _format_project_data(project_data):
         'Custom Virtualenv': project_data.get('custom_virtualenv', ''),
         'Execution Environment': ee_info.get('name', '') or str(project_data.get('default_environment', '')),
         'Signature Validation Credential': signature_validation_credential_info.get('name', '') or str(project_data.get('signature_validation_credential', '')),
-        'Last Job Run': project_data.get('last_job_run', 'Never'),
+        'Last Job Run': last_job_run,
         'Last Job Failed': 'Yes' if project_data.get('last_job_failed', False) else 'No',
-        'Last Updated': project_data.get('last_updated', 'Never'),
+        'Last Updated': last_updated,
         'Last Update Failed': 'Yes' if project_data.get('last_update_failed', False) else 'No',
-        'Next Job Run': project_data.get('next_job_run', ''),
-        'Created': project_data.get('created', ''),
+        'Next Job Run': next_job_run,
+        'Created': format_datetime(project_data.get('created', ''), use_utc),
         'Created By': created_by.get('username', ''),
-        'Modified': project_data.get('modified', ''),
+        'Modified': format_datetime(project_data.get('modified', ''), use_utc),
         'Modified By': modified_by.get('username', ''),
     }
 
@@ -170,6 +190,13 @@ class ProjectShowCommand(AAPShowCommand):
             help='Project ID (overrides positional parameter)'
         )
 
+        # UTC option for timestamp display
+        parser.add_argument(
+            '--utc',
+            action='store_true',
+            help='Display timestamps in UTC (default: local time)'
+        )
+
         # Positional parameter for name lookup with ID fallback
         parser.add_argument(
             'project',
@@ -200,7 +227,7 @@ class ProjectShowCommand(AAPShowCommand):
                 response = client.get(endpoint)
                 project_data = response.json()
 
-                return _format_project_data(project_data)
+                return _format_project_data(project_data, parsed_args.utc)
 
             except AAPAPIError as api_error:
                 self.handle_api_error(api_error, "Controller API", parsed_args.project or parsed_args.id)

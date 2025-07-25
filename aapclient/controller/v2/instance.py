@@ -10,18 +10,22 @@ from aapclient.common.constants import (
     HTTP_ACCEPTED
 )
 from aapclient.common.exceptions import AAPClientError, AAPResourceNotFoundError, AAPAPIError
-from aapclient.common.functions import resolve_instance_name
+from aapclient.common.functions import (
+    resolve_instance_name,
+    format_datetime
+)
 
 
 
 
 
-def _format_instance_data(instance_data):
+def _format_instance_data(instance_data, use_utc=False):
     """
     Format instance data consistently
 
     Args:
         instance_data (dict): Instance data from API response
+        use_utc (bool): If True, display timestamps in UTC; if False, display in local time
 
     Returns:
         tuple: (field_names, field_values) for ShowOne display
@@ -38,8 +42,10 @@ def _format_instance_data(instance_data):
     capacity = instance_data.get('capacity', '')
     version = instance_data.get('version', '')
     listener_port = instance_data.get('listener_port', '')
-    created = instance_data.get('created', '')
-    modified = instance_data.get('modified', '')
+
+    # Format datetime fields using common function
+    created = format_datetime(instance_data.get('created', ''), use_utc)
+    modified = format_datetime(instance_data.get('modified', ''), use_utc)
 
     # Format fields for display
     columns = [
@@ -158,6 +164,11 @@ class InstanceShowCommand(AAPShowCommand):
             metavar='<instance>',
             help='Instance hostname or ID to display'
         )
+        parser.add_argument(
+            '--utc',
+            action='store_true',
+            help='Display timestamps in UTC'
+        )
         return parser
 
     def take_action(self, parsed_args):
@@ -181,7 +192,7 @@ class InstanceShowCommand(AAPShowCommand):
 
             if response.status_code == HTTP_OK:
                 instance_data = response.json()
-                return _format_instance_data(instance_data)
+                return _format_instance_data(instance_data, parsed_args.utc)
             elif response.status_code == HTTP_NOT_FOUND:
                 raise AAPResourceNotFoundError("Instance", parsed_args.instance or parsed_args.id)
             else:
