@@ -704,3 +704,64 @@ def resolve_group_name(client, identifier, api="controller"):
     except AAPAPIError:
         # API error during ID lookup
         raise AAPResourceNotFoundError("Group", identifier)
+
+
+def resolve_job_name(client, identifier, api="controller"):
+    """
+    Resolve job identifier (name or ID) to ID for use by other resource commands.
+
+    Args:
+        client: AAPHTTPClient instance
+        identifier: Job name or ID
+        api: API to use for resolution ("controller"). Defaults to "controller".
+             Note: Jobs are only available in Controller API.
+
+    Returns:
+        int: Job ID
+
+    Raises:
+        AAPResourceNotFoundError: If job not found by name or ID
+        AAPClientError: If invalid API type specified or API error occurs
+    """
+    # Determine which API endpoint to use
+    if api == "controller":
+        api_endpoint = CONTROLLER_API_VERSION_ENDPOINT
+    else:
+        raise AAPClientError(f"Invalid API type '{api}'. Jobs are only available in Controller API.")
+
+    # First try as job name lookup using unified_jobs endpoint
+    try:
+        endpoint = f"{api_endpoint}unified_jobs/"
+        params = {'name': identifier}
+        response = client.get(endpoint, params=params)
+
+        if response.status_code == HTTP_OK:
+            data = response.json()
+            results = data.get('results', [])
+            if results:
+                return results[0]['id']
+            else:
+                # Name lookup failed, continue to ID lookup
+                pass
+        else:
+            raise AAPClientError(f"Failed to search for job '{identifier}'")
+    except AAPAPIError:
+        # API error during name lookup, continue to ID lookup
+        pass
+
+    # Name lookup failed, try as ID if it's numeric
+    try:
+        job_id = int(identifier)
+        # Verify the ID exists by trying to get it
+        endpoint = f"{api_endpoint}unified_jobs/{job_id}/"
+        response = client.get(endpoint)
+        if response.status_code == HTTP_OK:
+            return job_id
+        else:
+            raise AAPResourceNotFoundError("Job", identifier)
+    except ValueError:
+        # Not a valid integer, and name lookup already failed
+        raise AAPResourceNotFoundError("Job", identifier)
+    except AAPAPIError:
+        # API error during ID lookup
+        raise AAPResourceNotFoundError("Job", identifier)
