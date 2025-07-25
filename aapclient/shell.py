@@ -33,30 +33,41 @@ class AAPApp(App):
         # Add global AAP connection arguments
         aap_group = parser.add_argument_group('AAP Connection')
         aap_group.add_argument(
-            '--aap-host',
+            '--host',
             metavar='<host>',
             help='AAP host URL (overrides AAP_HOST environment variable)'
         )
         aap_group.add_argument(
-            '--aap-username',
+            '--username',
             metavar='<username>',
             help='AAP username (overrides AAP_USERNAME environment variable)'
         )
         aap_group.add_argument(
-            '--aap-password',
+            '--password',
             metavar='<password>',
             help='AAP password (overrides AAP_PASSWORD environment variable)'
         )
         aap_group.add_argument(
-            '--aap-token',
+            '--token',
             metavar='<token>',
             help='AAP API token (overrides AAP_TOKEN environment variable)'
         )
         aap_group.add_argument(
-            '--aap-timeout',
+            '--timeout',
             type=int,
             metavar='<seconds>',
             help='Connection timeout in seconds (overrides AAP_TIMEOUT environment variable)'
+        )
+        aap_group.add_argument(
+            '--ssl-verify',
+            choices=['true', 'false'],
+            metavar='<true|false>',
+            help='Enable or disable SSL certificate verification (overrides AAP_VERIFY_SSL environment variable)'
+        )
+        aap_group.add_argument(
+            '--ca-bundle',
+            metavar='<path>',
+            help='Path to CA certificate bundle file (overrides AAP_CA_BUNDLE environment variable)'
         )
 
         return parser
@@ -73,18 +84,25 @@ class AAPApp(App):
             AAPClientManager: Configured client manager instance
         """
         if self._client_manager is None:
-            # Extract AAP connection overrides from command-line arguments
+                        # Extract AAP connection overrides from command-line arguments
             config_overrides = {}
-            if hasattr(self.options, 'aap_host') and self.options.aap_host:
-                config_overrides['host'] = self.options.aap_host
-            if hasattr(self.options, 'aap_username') and self.options.aap_username:
-                config_overrides['username'] = self.options.aap_username
-            if hasattr(self.options, 'aap_password') and self.options.aap_password:
-                config_overrides['password'] = self.options.aap_password
-            if hasattr(self.options, 'aap_token') and self.options.aap_token:
-                config_overrides['token'] = self.options.aap_token
-            if hasattr(self.options, 'aap_timeout') and self.options.aap_timeout:
-                config_overrides['timeout'] = self.options.aap_timeout
+            if hasattr(self.options, 'host') and self.options.host:
+                config_overrides['host'] = self.options.host
+            if hasattr(self.options, 'username') and self.options.username:
+                config_overrides['username'] = self.options.username
+            if hasattr(self.options, 'password') and self.options.password:
+                config_overrides['password'] = self.options.password
+            if hasattr(self.options, 'token') and self.options.token:
+                config_overrides['token'] = self.options.token
+            if hasattr(self.options, 'timeout') and self.options.timeout:
+                config_overrides['timeout'] = self.options.timeout
+
+            # Handle SSL verification argument
+            if hasattr(self.options, 'ssl_verify') and self.options.ssl_verify:
+                config_overrides['verify_ssl'] = self.options.ssl_verify.lower() == 'true'
+
+            if hasattr(self.options, 'ca_bundle') and self.options.ca_bundle:
+                config_overrides['ca_bundle'] = self.options.ca_bundle
 
             self._client_manager = AAPClientManager(config_overrides=config_overrides)
         return self._client_manager

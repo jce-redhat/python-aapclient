@@ -48,9 +48,10 @@ class AAPHTTPClient:
         # Set timeout from config
         self.timeout = self.config.timeout
 
-        # Disable SSL warnings for self-signed certificates
-        import urllib3
-        urllib3.disable_warnings()
+        # Configure SSL warnings based on verification setting
+        if not self.config.verify_ssl:
+            import urllib3
+            urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
     def _build_url(self, endpoint):
         """Build full URL for API endpoint."""
@@ -74,8 +75,8 @@ class AAPHTTPClient:
         # Set timeout
         kwargs.setdefault('timeout', self.timeout)
 
-        # Disable SSL verification for self-signed certificates
-        kwargs.setdefault('verify', False)
+        # Set SSL verification based on configuration
+        kwargs.setdefault('verify', self.config.ssl_verify_value)
 
         return method, url, kwargs
 

@@ -1,7 +1,7 @@
 """Configuration management for AAP client."""
 import os
 from dotenv import load_dotenv
-from aapclient.common.constants import AAP_HOST, AAP_USERNAME, AAP_PASSWORD, AAP_TOKEN, AAP_TIMEOUT, DEFAULT_TIMEOUT
+from aapclient.common.constants import AAP_HOST, AAP_USERNAME, AAP_PASSWORD, AAP_TOKEN, AAP_TIMEOUT, AAP_VERIFY_SSL, AAP_CA_BUNDLE, DEFAULT_TIMEOUT, DEFAULT_VERIFY_SSL
 from aapclient.common.exceptions import AAPClientError
 
 # Load environment variables from .env file
@@ -17,7 +17,8 @@ class AAPConfig:
 
         Args:
             config_overrides: Dict of configuration overrides from command-line arguments.
-                             Keys can be 'host', 'username', 'password', 'token', 'timeout'.
+                             Keys can be 'host', 'username', 'password', 'token', 'timeout',
+                             'verify_ssl', 'ca_bundle'.
         """
         overrides = config_overrides or {}
 
@@ -27,6 +28,14 @@ class AAPConfig:
         self.password = overrides.get('password') or os.getenv(AAP_PASSWORD)
         self.token = overrides.get('token') or os.getenv(AAP_TOKEN)
         self._timeout = overrides.get('timeout') or os.getenv(AAP_TIMEOUT)
+
+        # Handle verify_ssl carefully to preserve False values
+        if 'verify_ssl' in overrides:
+            self._verify_ssl = overrides['verify_ssl']
+        else:
+            self._verify_ssl = os.getenv(AAP_VERIFY_SSL)
+
+        self.ca_bundle = overrides.get('ca_bundle') or os.getenv(AAP_CA_BUNDLE)
 
     def validate(self):
         """Validate configuration."""
@@ -76,3 +85,24 @@ class AAPConfig:
             except ValueError:
                 return DEFAULT_TIMEOUT
         return DEFAULT_TIMEOUT
+
+    @property
+    def verify_ssl(self):
+        """Get SSL verification setting."""
+        if self._verify_ssl is not None:
+            # Handle string values from environment variables
+            if isinstance(self._verify_ssl, str):
+                return self._verify_ssl.lower() in ('true', '1', 'yes', 'on')
+            # Handle boolean values from command-line overrides
+            return bool(self._verify_ssl)
+        # Default to DEFAULT_VERIFY_SSL (verify SSL certificates)
+        return DEFAULT_VERIFY_SSL
+
+    @property
+    def ssl_verify_value(self):
+        """Get SSL verification value for requests library."""
+        if not self.verify_ssl:
+            return False
+        if self.ca_bundle:
+            return self.ca_bundle
+        return True
