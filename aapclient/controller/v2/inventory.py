@@ -1,4 +1,6 @@
 """Inventory commands."""
+import json
+import yaml
 from aapclient.common.basecommands import AAPShowCommand, AAPListCommand, AAPCommand
 from aapclient.common.constants import (
     CONTROLLER_API_VERSION_ENDPOINT,
@@ -40,6 +42,12 @@ def _format_inventory_data(inventory_data):
         if inventory_data['summary_fields']['organization']:
             organization_name = inventory_data['summary_fields']['organization'].get('name', '')
 
+    # Handle variables with length check
+    if len(str(variables)) > 120:
+        variables_display = "(Display with `inventory variables show` command)"
+    else:
+        variables_display = str(variables)
+
     created = inventory_data.get('created', '')
     modified = inventory_data.get('modified', '')
 
@@ -63,7 +71,7 @@ def _format_inventory_data(inventory_data):
         organization_name,
         kind,
         host_filter,
-        variables,
+        variables_display,
         created,
         modified
     ]
@@ -195,6 +203,90 @@ class InventoryShowCommand(AAPShowCommand):
             raise AAPClientError(f"Unexpected error: {e}")
 
 
+class InventoryVariablesShowCommand(AAPShowCommand):
+    """Show inventory variables in YAML format."""
+
+    def get_parser(self, prog_name):
+        parser = super().get_parser(prog_name)
+
+        # ID option to override positional parameter
+        parser.add_argument(
+            '--id',
+            type=int,
+            help='Inventory ID (overrides positional parameter)'
+        )
+
+        # Positional parameter for name lookup with ID fallback
+        parser.add_argument(
+            'inventory',
+            nargs='?',
+            metavar='<inventory>',
+            help='Inventory name or ID'
+        )
+        return parser
+
+    def take_action(self, parsed_args):
+        """Execute the inventory variables show command."""
+        try:
+            # Get client from centralized client manager
+            client = self.controller_client
+
+            # Determine how to resolve the inventory
+            if parsed_args.id:
+                # Use explicit ID (ignores positional parameter)
+                inventory_id = parsed_args.id
+            elif parsed_args.inventory:
+                # Use positional parameter - name first, then ID fallback if numeric
+                inventory_id = resolve_inventory_name(client, parsed_args.inventory, api="controller")
+            else:
+                raise AAPClientError("Inventory identifier is required")
+
+            # Get inventory details
+            endpoint = f"{CONTROLLER_API_VERSION_ENDPOINT}inventories/{inventory_id}/"
+            try:
+                response = client.get(endpoint)
+            except AAPAPIError as api_error:
+                self.handle_api_error(api_error, "Controller API", parsed_args.inventory or parsed_args.id)
+
+            if response.status_code == HTTP_OK:
+                inventory_data = response.json()
+
+                # Extract variables
+                variables = inventory_data.get('variables', {})
+
+                # Always convert to YAML format
+                if variables:
+                    try:
+                        # If variables is a string, try to parse it as JSON first
+                        if isinstance(variables, str):
+                            variables = json.loads(variables)
+                        # Convert to YAML
+                        variables_yaml = yaml.dump(variables, default_flow_style=False)
+                    except (json.JSONDecodeError, yaml.YAMLError):
+                        # If conversion fails, display as string
+                        variables_yaml = str(variables)
+                else:
+                    variables_yaml = "{}"
+
+                # Format for display
+                columns = ['Inventory', 'Variables']
+                values = [
+                    parsed_args.inventory or parsed_args.id,
+                    variables_yaml
+                ]
+
+                return (columns, values)
+            else:
+                raise AAPClientError(f"Failed to get inventory: {response.status_code}")
+
+        except AAPResourceNotFoundError as e:
+            raise SystemExit(str(e))
+        except AAPClientError as e:
+            raise SystemExit(str(e))
+        except Exception as e:
+            raise SystemExit(f"Unexpected error: {e}")
+
+
 class InventoryCreateCommand(AAPShowCommand):
     """Create a new inventory."""
 
@@ -268,8 +360,9 @@ class InventoryCreateCommand(AAPShowCommand):
                 inventory_data['host_filter'] = parsed_args.host_filter
             if getattr(parsed_args, 'variables', None):
                 try:
-                    import json
-                    inventory_data['variables'] = json.loads(parsed_args.variables)
+                    # Validate JSON format but store as string
+                    json.loads(parsed_args.variables)
+                    inventory_data['variables'] = parsed_args.variables
                 except json.JSONDecodeError:
                     parser.error("argument --variables: must be valid JSON")
 
@@ -386,8 +479,9 @@ class InventorySetCommand(AAPShowCommand):
                 inventory_data['host_filter'] = parsed_args.host_filter
             if getattr(parsed_args, 'variables', None):
                 try:
-                    import json
-                    inventory_data['variables'] = json.loads(parsed_args.variables)
+                    # Validate JSON format but store as string
+                    json.loads(parsed_args.variables)
+                    inventory_data['variables'] = parsed_args.variables
                 except json.JSONDecodeError:
                     parser.error("argument --variables: must be valid JSON")
 
