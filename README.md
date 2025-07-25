@@ -1,12 +1,12 @@
 # python-aapclient
 
-⚠️ **This tool is under active development, features may not work entirely or as expected. Use at your own risk!!** ⚠️
-
-A command-line client for [Ansible Automation Platform (AAP)](https://www.redhat.com/en/technologies/management/ansible) that provides a unified interface for managing AAP resources.
-
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Python](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
 ![AI Assisted](https://img.shields.io/badge/AI%20Assisted-Yes-green)
+
+⚠️ **This tool is under active development, features may not work entirely or as expected. Use at your own risk!!** ⚠️
+
+A command-line client for [Ansible Automation Platform (AAP)](https://www.redhat.com/en/technologies/management/ansible) that provides a unified interface for managing AAP resources.
 
 ## Installation
 
