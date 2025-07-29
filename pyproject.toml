@@ -64,6 +64,11 @@ whoami = "aapclient.common.whoami:WhoamiCommand"
 "team create" = "aapclient.gateway.v1.team:TeamCreateCommand"
 "team set" = "aapclient.gateway.v1.team:TeamSetCommand"
 "team delete" = "aapclient.gateway.v1.team:TeamDeleteCommand"
+"token list" = "aapclient.gateway.v1.token:TokenListCommand"
+"token show" = "aapclient.gateway.v1.token:TokenShowCommand"
+"token create" = "aapclient.gateway.v1.token:TokenCreateCommand"
+"token set" = "aapclient.gateway.v1.token:TokenSetCommand"
+"token delete" = "aapclient.gateway.v1.token:TokenDeleteCommand"
 
 [project.entry-points."aap.controller"]
 "project list" = "aapclient.controller.v2.project:ProjectListCommand"
