@@ -889,3 +889,67 @@ def resolve_application_name(client, identifier, api="gateway"):
         raise
     except Exception as e:
         raise AAPClientError(f"Error resolving application name: {e}")
+
+
+def resolve_host_metric_name(client, identifier, api="controller"):
+    """
+    Resolve host metric identifier (hostname or ID) to ID.
+
+    Args:
+        client: AAPHTTPClient instance
+        identifier: Host metric hostname or ID
+        api: API to use for resolution ("controller"). Defaults to "controller".
+             Note: Host metrics are only available in Controller API.
+
+    Returns:
+        int: Host metric ID
+
+    Raises:
+        AAPResourceNotFoundError: If host metric not found by hostname or ID
+        AAPClientError: If invalid API type specified or API error occurs
+    """
+    # Determine which API endpoint to use
+    if api == "controller":
+        api_endpoint = CONTROLLER_API_VERSION_ENDPOINT
+    elif api == "gateway":
+        # Host metrics are not available in Gateway API
+        raise AAPClientError("Host metrics are only available in Controller API. Use api='controller'.")
+    else:
+        raise AAPClientError(f"Invalid API type '{api}'. Must be 'gateway' or 'controller'.")
+
+    # First try as hostname lookup
+    try:
+        endpoint = f"{api_endpoint}host_metrics/"
+        params = {'hostname': identifier}
+        response = client.get(endpoint, params=params)
+
+        if response.status_code == HTTP_OK:
+            data = response.json()
+            results = data.get('results', [])
+            if results:
+                return results[0]['id']
+            else:
+                # Hostname lookup failed, continue to ID lookup
+                pass
+        else:
+            raise AAPClientError(f"Failed to search for host metric '{identifier}'")
+    except AAPAPIError:
+        # API error during hostname lookup, continue to ID lookup
+        pass
+
+    # Hostname lookup failed, try as ID if it's numeric
+    try:
+        host_metric_id = int(identifier)
+        # Verify the ID exists by trying to get it
+        endpoint = f"{api_endpoint}host_metrics/{host_metric_id}/"
+        response = client.get(endpoint)
+        if response.status_code == HTTP_OK:
+            return host_metric_id
+        else:
+            raise AAPResourceNotFoundError("Host Metric", identifier)
+    except ValueError:
+        # Not a valid integer, and hostname lookup already failed
+        raise AAPResourceNotFoundError("Host Metric", identifier)
+    except AAPAPIError:
+        # API error during ID lookup
+        raise AAPResourceNotFoundError("Host Metric", identifier)
