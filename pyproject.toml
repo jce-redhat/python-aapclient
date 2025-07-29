@@ -69,6 +69,11 @@ whoami = "aapclient.common.whoami:WhoamiCommand"
 "token create" = "aapclient.gateway.v1.token:TokenCreateCommand"
 "token set" = "aapclient.gateway.v1.token:TokenSetCommand"
 "token delete" = "aapclient.gateway.v1.token:TokenDeleteCommand"
+"application list" = "aapclient.gateway.v1.application:ApplicationListCommand"
+"application show" = "aapclient.gateway.v1.application:ApplicationShowCommand"
+"application create" = "aapclient.gateway.v1.application:ApplicationCreateCommand"
+"application set" = "aapclient.gateway.v1.application:ApplicationSetCommand"
+"application delete" = "aapclient.gateway.v1.application:ApplicationDeleteCommand"
 
 [project.entry-points."aap.controller"]
 "project list" = "aapclient.controller.v2.project:ProjectListCommand"

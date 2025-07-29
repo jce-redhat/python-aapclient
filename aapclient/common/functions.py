@@ -841,3 +841,51 @@ def resolve_job_name(client, identifier, api="controller"):
     except AAPAPIError:
         # API error during ID lookup
         raise AAPResourceNotFoundError("Job", identifier)
+
+
+def resolve_application_name(client, identifier, api="gateway"):
+    """
+    Resolve application name to ID using Gateway API.
+
+    Args:
+        client: HTTP client instance
+        identifier: Application name or ID
+        api: API type (for compatibility with other resolve functions)
+
+    Returns:
+        int: Application ID
+
+    Raises:
+        AAPResourceNotFoundError: If application not found
+        AAPClientError: If invalid API type specified or API error occurs
+    """
+    # Application resolution only works with Gateway API
+    if api != "gateway":
+        raise AAPClientError(f"Invalid API type '{api}'. Applications are only available in Gateway API.")
+
+    # If already an integer, return as-is
+    try:
+        return int(identifier)
+    except (ValueError, TypeError):
+        pass
+
+    # Search by name
+    try:
+        endpoint = f"{GATEWAY_API_VERSION_ENDPOINT}applications/"
+        params = {'name': identifier}
+        response = client.get(endpoint, params=params)
+
+        if response.status_code == HTTP_OK:
+            data = response.json()
+            results = data.get('results', [])
+            if results:
+                return results[0]['id']
+            else:
+                raise AAPResourceNotFoundError("Application", identifier)
+        else:
+            raise AAPClientError(f"Failed to search applications: {response.status_code}")
+
+    except AAPResourceNotFoundError:
+        raise
+    except Exception as e:
+        raise AAPClientError(f"Error resolving application name: {e}")
