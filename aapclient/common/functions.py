@@ -9,6 +9,48 @@ from aapclient.common.constants import (
 from aapclient.common.exceptions import AAPClientError, AAPResourceNotFoundError, AAPAPIError
 
 
+def extract_api_error_message(response):
+    """
+    Extract clean error message from API response.
+
+    Args:
+        response: HTTP response object
+
+    Returns:
+        str or None: Clean error message from API, or None if not extractable
+    """
+    if not response:
+        return None
+
+    try:
+        # Try JSON first for structured error messages
+        content_type = response.headers.get('content-type', '').lower()
+        if 'application/json' in content_type:
+            data = response.json()
+            # Try common error message fields
+            message = (data.get('detail') or
+                      data.get('message') or
+                      data.get('error') or
+                      data.get('non_field_errors'))
+
+            # Handle list of errors
+            if isinstance(message, list) and message:
+                return message[0]
+            elif isinstance(message, str):
+                return message.strip()
+
+        # Fall back to text, but avoid HTML responses
+        text = response.text.strip()
+        if text and not text.startswith('<') and len(text) < 500:  # Reasonable length check
+            return text
+
+    except Exception:
+        # If parsing fails, fall back gracefully
+        pass
+
+    return None
+
+
 def format_duration(elapsed_seconds):
     """
     Format elapsed time in human-readable format with units.
@@ -123,10 +165,15 @@ def resolve_organization_name(client, identifier, api="gateway"):
                 # Name lookup failed, continue to ID lookup
                 pass
         else:
-            raise AAPClientError(f"Failed to search for organization '{identifier}'")
-    except AAPAPIError:
-        # API error during name lookup, continue to ID lookup
-        pass
+            # Try to extract API error message
+            api_message = extract_api_error_message(response)
+            if api_message:
+                raise AAPClientError(api_message)
+            else:
+                raise AAPClientError(f"Failed to search for organization '{identifier}'")
+    except AAPAPIError as api_error:
+        # Use the API error message directly - it already contains the API's message
+        raise AAPClientError(str(api_error))
 
     # Name lookup failed, try as ID if it's numeric
     try:
@@ -137,13 +184,18 @@ def resolve_organization_name(client, identifier, api="gateway"):
         if response.status_code == HTTP_OK:
             return org_id
         else:
-            raise AAPResourceNotFoundError("Organization", identifier)
+            # Try to extract API error message for ID lookup
+            api_message = extract_api_error_message(response)
+            if api_message:
+                raise AAPClientError(api_message)
+            else:
+                raise AAPResourceNotFoundError("Organization", identifier)
     except ValueError:
         # Not a valid integer, and name lookup already failed
         raise AAPResourceNotFoundError("Organization", identifier)
-    except AAPAPIError:
-        # API error during ID lookup
-        raise AAPResourceNotFoundError("Organization", identifier)
+    except AAPAPIError as api_error:
+        # Use the API error message directly - it already contains the API's message
+        raise AAPClientError(str(api_error))
 
 
 def resolve_team_name(client, identifier, api="gateway"):
@@ -187,10 +239,15 @@ def resolve_team_name(client, identifier, api="gateway"):
                 # Name lookup failed, continue to ID lookup
                 pass
         else:
-            raise AAPClientError(f"Failed to search for team '{identifier}'")
-    except AAPAPIError:
-        # API error during name lookup, continue to ID lookup
-        pass
+            # Try to extract API error message
+            api_message = extract_api_error_message(response)
+            if api_message:
+                raise AAPClientError(api_message)
+            else:
+                raise AAPClientError(f"Failed to search for team '{identifier}'")
+    except AAPAPIError as api_error:
+        # Use the API error message directly - it already contains the API's message
+        raise AAPClientError(str(api_error))
 
     # Name lookup failed, try as ID if it's numeric
     try:
@@ -201,13 +258,18 @@ def resolve_team_name(client, identifier, api="gateway"):
         if response.status_code == HTTP_OK:
             return team_id
         else:
-            raise AAPResourceNotFoundError("Team", identifier)
+            # Try to extract API error message for ID lookup
+            api_message = extract_api_error_message(response)
+            if api_message:
+                raise AAPClientError(api_message)
+            else:
+                raise AAPResourceNotFoundError("Team", identifier)
     except ValueError:
         # Not a valid integer, and name lookup already failed
         raise AAPResourceNotFoundError("Team", identifier)
-    except AAPAPIError:
-        # API error during ID lookup
-        raise AAPResourceNotFoundError("Team", identifier)
+    except AAPAPIError as api_error:
+        # Use the API error message directly - it already contains the API's message
+        raise AAPClientError(str(api_error))
 
 
 def resolve_user_name(client, identifier, api="gateway"):
@@ -251,10 +313,15 @@ def resolve_user_name(client, identifier, api="gateway"):
                 # Username lookup failed, continue to ID lookup
                 pass
         else:
-            raise AAPClientError(f"Failed to search for user '{identifier}'")
-    except AAPAPIError:
-        # API error during username lookup, continue to ID lookup
-        pass
+            # Try to extract API error message
+            api_message = extract_api_error_message(response)
+            if api_message:
+                raise AAPClientError(api_message)
+            else:
+                raise AAPClientError(f"Failed to search for user '{identifier}'")
+    except AAPAPIError as api_error:
+        # Use the API error message directly - it already contains the API's message
+        raise AAPClientError(str(api_error))
 
     # Username lookup failed, try as ID if it's numeric
     try:
@@ -265,13 +332,18 @@ def resolve_user_name(client, identifier, api="gateway"):
         if response.status_code == HTTP_OK:
             return user_id
         else:
-            raise AAPResourceNotFoundError("User", identifier)
+            # Try to extract API error message for ID lookup
+            api_message = extract_api_error_message(response)
+            if api_message:
+                raise AAPClientError(api_message)
+            else:
+                raise AAPResourceNotFoundError("User", identifier)
     except ValueError:
         # Not a valid integer, and username lookup already failed
         raise AAPResourceNotFoundError("User", identifier)
-    except AAPAPIError:
-        # API error during ID lookup
-        raise AAPResourceNotFoundError("User", identifier)
+    except AAPAPIError as api_error:
+        # Use the API error message directly - it already contains the API's message
+        raise AAPClientError(str(api_error))
 
 
 def resolve_execution_environment_name(client, identifier, api="controller"):
@@ -315,10 +387,15 @@ def resolve_execution_environment_name(client, identifier, api="controller"):
                 # Name lookup failed, continue to ID lookup
                 pass
         else:
-            raise AAPClientError(f"Failed to search for execution environment '{identifier}'")
-    except AAPAPIError:
-        # API error during name lookup, continue to ID lookup
-        pass
+            # Try to extract API error message
+            api_message = extract_api_error_message(response)
+            if api_message:
+                raise AAPClientError(api_message)
+            else:
+                raise AAPClientError(f"Failed to search for execution environment '{identifier}'")
+    except AAPAPIError as api_error:
+        # Use the API error message directly - it already contains the API's message
+        raise AAPClientError(str(api_error))
 
     # Name lookup failed, try as ID if it's numeric
     try:
@@ -329,13 +406,18 @@ def resolve_execution_environment_name(client, identifier, api="controller"):
         if response.status_code == HTTP_OK:
             return ee_id
         else:
-            raise AAPResourceNotFoundError("Execution Environment", identifier)
+            # Try to extract API error message for ID lookup
+            api_message = extract_api_error_message(response)
+            if api_message:
+                raise AAPClientError(api_message)
+            else:
+                raise AAPResourceNotFoundError("Execution Environment", identifier)
     except ValueError:
         # Not a valid integer, and name lookup already failed
         raise AAPResourceNotFoundError("Execution Environment", identifier)
-    except AAPAPIError:
-        # API error during ID lookup
-        raise AAPResourceNotFoundError("Execution Environment", identifier)
+    except AAPAPIError as api_error:
+        # Use the API error message directly - it already contains the API's message
+        raise AAPClientError(str(api_error))
 
 
 def resolve_credential_name(client, identifier, api="controller"):
@@ -379,10 +461,15 @@ def resolve_credential_name(client, identifier, api="controller"):
                 # Name lookup failed, continue to ID lookup
                 pass
         else:
-            raise AAPClientError(f"Failed to search for credential '{identifier}'")
-    except AAPAPIError:
-        # API error during name lookup, continue to ID lookup
-        pass
+            # Try to extract API error message
+            api_message = extract_api_error_message(response)
+            if api_message:
+                raise AAPClientError(api_message)
+            else:
+                raise AAPClientError(f"Failed to search for credential '{identifier}'")
+    except AAPAPIError as api_error:
+        # Use the API error message directly - it already contains the API's message
+        raise AAPClientError(str(api_error))
 
     # Name lookup failed, try as ID if it's numeric
     try:
@@ -393,13 +480,18 @@ def resolve_credential_name(client, identifier, api="controller"):
         if response.status_code == HTTP_OK:
             return credential_id
         else:
-            raise AAPResourceNotFoundError("Credential", identifier)
+            # Try to extract API error message for ID lookup
+            api_message = extract_api_error_message(response)
+            if api_message:
+                raise AAPClientError(api_message)
+            else:
+                raise AAPResourceNotFoundError("Credential", identifier)
     except ValueError:
         # Not a valid integer, and name lookup already failed
         raise AAPResourceNotFoundError("Credential", identifier)
-    except AAPAPIError:
-        # API error during ID lookup
-        raise AAPResourceNotFoundError("Credential", identifier)
+    except AAPAPIError as api_error:
+        # Use the API error message directly - it already contains the API's message
+        raise AAPClientError(str(api_error))
 
 
 def resolve_inventory_name(client, identifier, api="controller"):
@@ -443,10 +535,15 @@ def resolve_inventory_name(client, identifier, api="controller"):
                 # Name lookup failed, continue to ID lookup
                 pass
         else:
-            raise AAPClientError(f"Failed to search for inventory '{identifier}'")
-    except AAPAPIError:
-        # API error during name lookup, continue to ID lookup
-        pass
+            # Try to extract API error message
+            api_message = extract_api_error_message(response)
+            if api_message:
+                raise AAPClientError(api_message)
+            else:
+                raise AAPClientError(f"Failed to search for inventory '{identifier}'")
+    except AAPAPIError as api_error:
+        # Use the API error message directly - it already contains the API's message
+        raise AAPClientError(str(api_error))
 
     # Name lookup failed, try as ID if it's numeric
     try:
@@ -457,13 +554,18 @@ def resolve_inventory_name(client, identifier, api="controller"):
         if response.status_code == HTTP_OK:
             return inventory_id
         else:
-            raise AAPResourceNotFoundError("Inventory", identifier)
+            # Try to extract API error message for ID lookup
+            api_message = extract_api_error_message(response)
+            if api_message:
+                raise AAPClientError(api_message)
+            else:
+                raise AAPResourceNotFoundError("Inventory", identifier)
     except ValueError:
         # Not a valid integer, and name lookup already failed
         raise AAPResourceNotFoundError("Inventory", identifier)
-    except AAPAPIError:
-        # API error during ID lookup
-        raise AAPResourceNotFoundError("Inventory", identifier)
+    except AAPAPIError as api_error:
+        # Use the API error message directly - it already contains the API's message
+        raise AAPClientError(str(api_error))
 
 
 def resolve_instance_group_name(client, identifier, api="controller"):
@@ -504,10 +606,15 @@ def resolve_instance_group_name(client, identifier, api="controller"):
             else:
                 raise AAPClientError(f"Multiple instance groups found with name '{identifier}'")
         else:
-            raise AAPAPIError("Failed to search instance groups", response.status_code)
-    except AAPAPIError:
-        # If name lookup fails, try ID lookup
-        pass
+            # Try to extract API error message
+            api_message = extract_api_error_message(response)
+            if api_message:
+                raise AAPClientError(api_message)
+            else:
+                raise AAPAPIError("Failed to search instance groups", response.status_code)
+    except AAPAPIError as api_error:
+        # Use the API error message directly - it already contains the API's message
+        raise AAPClientError(str(api_error))
 
     # Try ID lookup if name lookup failed or if identifier is numeric
     try:
@@ -517,13 +624,18 @@ def resolve_instance_group_name(client, identifier, api="controller"):
         if response.status_code == HTTP_OK:
             return instance_group_id
         else:
-            raise AAPResourceNotFoundError("Instance Group", identifier)
+            # Try to extract API error message for ID lookup
+            api_message = extract_api_error_message(response)
+            if api_message:
+                raise AAPClientError(api_message)
+            else:
+                raise AAPResourceNotFoundError("Instance Group", identifier)
     except ValueError:
         # Not a valid integer, and name lookup already failed
         raise AAPResourceNotFoundError("Instance Group", identifier)
-    except AAPAPIError:
-        # API error during ID lookup
-        raise AAPResourceNotFoundError("Instance Group", identifier)
+    except AAPAPIError as api_error:
+        # Use the API error message directly - it already contains the API's message
+        raise AAPClientError(str(api_error))
 
 
 def resolve_host_name(client, identifier, api="controller"):
@@ -567,10 +679,15 @@ def resolve_host_name(client, identifier, api="controller"):
                 # Name lookup failed, continue to ID lookup
                 pass
         else:
-            raise AAPClientError(f"Failed to search for host '{identifier}'")
-    except AAPAPIError:
-        # API error during name lookup, continue to ID lookup
-        pass
+            # Try to extract API error message
+            api_message = extract_api_error_message(response)
+            if api_message:
+                raise AAPClientError(api_message)
+            else:
+                raise AAPClientError(f"Failed to search for host '{identifier}'")
+    except AAPAPIError as api_error:
+        # Use the API error message directly - it already contains the API's message
+        raise AAPClientError(str(api_error))
 
     # Name lookup failed, try as ID if it's numeric
     try:
@@ -581,13 +698,18 @@ def resolve_host_name(client, identifier, api="controller"):
         if response.status_code == HTTP_OK:
             return host_id
         else:
-            raise AAPResourceNotFoundError("Host", identifier)
+            # Try to extract API error message for ID lookup
+            api_message = extract_api_error_message(response)
+            if api_message:
+                raise AAPClientError(api_message)
+            else:
+                raise AAPResourceNotFoundError("Host", identifier)
     except ValueError:
         # Not a valid integer, and name lookup already failed
         raise AAPResourceNotFoundError("Host", identifier)
-    except AAPAPIError:
-        # API error during ID lookup
-        raise AAPResourceNotFoundError("Host", identifier)
+    except AAPAPIError as api_error:
+        # Use the API error message directly - it already contains the API's message
+        raise AAPClientError(str(api_error))
 
 
 def resolve_instance_name(client, identifier, api="controller"):
@@ -631,10 +753,15 @@ def resolve_instance_name(client, identifier, api="controller"):
                 # Hostname lookup failed, continue to ID lookup
                 pass
         else:
-            raise AAPClientError(f"Failed to search for instance '{identifier}'")
-    except AAPAPIError:
-        # API error during hostname lookup, continue to ID lookup
-        pass
+            # Try to extract API error message
+            api_message = extract_api_error_message(response)
+            if api_message:
+                raise AAPClientError(api_message)
+            else:
+                raise AAPClientError(f"Failed to search for instance '{identifier}'")
+    except AAPAPIError as api_error:
+        # Use the API error message directly - it already contains the API's message
+        raise AAPClientError(str(api_error))
 
     # Hostname lookup failed, try as ID if it's numeric
     try:
@@ -645,13 +772,18 @@ def resolve_instance_name(client, identifier, api="controller"):
         if response.status_code == HTTP_OK:
             return instance_id
         else:
-            raise AAPResourceNotFoundError("Instance", identifier)
+            # Try to extract API error message for ID lookup
+            api_message = extract_api_error_message(response)
+            if api_message:
+                raise AAPClientError(api_message)
+            else:
+                raise AAPResourceNotFoundError("Instance", identifier)
     except ValueError:
         # Not a valid integer, and hostname lookup already failed
         raise AAPResourceNotFoundError("Instance", identifier)
-    except AAPAPIError:
-        # API error during ID lookup
-        raise AAPResourceNotFoundError("Instance", identifier)
+    except AAPAPIError as api_error:
+        # Use the API error message directly - it already contains the API's message
+        raise AAPClientError(str(api_error))
 
 
 def resolve_project_name(client, identifier, api="controller"):
@@ -695,10 +827,15 @@ def resolve_project_name(client, identifier, api="controller"):
                 # Name lookup failed, continue to ID lookup
                 pass
         else:
-            raise AAPClientError(f"Failed to search for project '{identifier}'")
-    except AAPAPIError:
-        # API error during name lookup, continue to ID lookup
-        pass
+            # Try to extract API error message
+            api_message = extract_api_error_message(response)
+            if api_message:
+                raise AAPClientError(api_message)
+            else:
+                raise AAPClientError(f"Failed to search for project '{identifier}'")
+    except AAPAPIError as api_error:
+        # Use the API error message directly - it already contains the API's message
+        raise AAPClientError(str(api_error))
 
     # Name lookup failed, try as ID if it's numeric
     try:
@@ -709,13 +846,18 @@ def resolve_project_name(client, identifier, api="controller"):
         if response.status_code == HTTP_OK:
             return project_id
         else:
-            raise AAPResourceNotFoundError("Project", identifier)
+            # Try to extract API error message for ID lookup
+            api_message = extract_api_error_message(response)
+            if api_message:
+                raise AAPClientError(api_message)
+            else:
+                raise AAPResourceNotFoundError("Project", identifier)
     except ValueError:
         # Not a valid integer, and name lookup already failed
         raise AAPResourceNotFoundError("Project", identifier)
-    except AAPAPIError:
-        # API error during ID lookup
-        raise AAPResourceNotFoundError("Project", identifier)
+    except AAPAPIError as api_error:
+        # Use the API error message directly - it already contains the API's message
+        raise AAPClientError(str(api_error))
 
 
 def resolve_group_name(client, identifier, api="controller"):
@@ -759,10 +901,15 @@ def resolve_group_name(client, identifier, api="controller"):
                 # Name lookup failed, continue to ID lookup
                 pass
         else:
-            raise AAPClientError(f"Failed to search for group '{identifier}'")
-    except AAPAPIError:
-        # API error during name lookup, continue to ID lookup
-        pass
+            # Try to extract API error message
+            api_message = extract_api_error_message(response)
+            if api_message:
+                raise AAPClientError(api_message)
+            else:
+                raise AAPClientError(f"Failed to search for group '{identifier}'")
+    except AAPAPIError as api_error:
+        # Use the API error message directly - it already contains the API's message
+        raise AAPClientError(str(api_error))
 
     # Name lookup failed, try as ID if it's numeric
     try:
@@ -773,13 +920,18 @@ def resolve_group_name(client, identifier, api="controller"):
         if response.status_code == HTTP_OK:
             return group_id
         else:
-            raise AAPResourceNotFoundError("Group", identifier)
+            # Try to extract API error message for ID lookup
+            api_message = extract_api_error_message(response)
+            if api_message:
+                raise AAPClientError(api_message)
+            else:
+                raise AAPResourceNotFoundError("Group", identifier)
     except ValueError:
         # Not a valid integer, and name lookup already failed
         raise AAPResourceNotFoundError("Group", identifier)
-    except AAPAPIError:
-        # API error during ID lookup
-        raise AAPResourceNotFoundError("Group", identifier)
+    except AAPAPIError as api_error:
+        # Use the API error message directly - it already contains the API's message
+        raise AAPClientError(str(api_error))
 
 
 def resolve_job_name(client, identifier, api="controller"):
@@ -863,11 +1015,27 @@ def resolve_application_name(client, identifier, api="gateway"):
     if api != "gateway":
         raise AAPClientError(f"Invalid API type '{api}'. Applications are only available in Gateway API.")
 
-    # If already an integer, return as-is
+    # If already an integer, try to verify it exists
     try:
-        return int(identifier)
-    except (ValueError, TypeError):
+        app_id = int(identifier)
+        # Verify the ID exists by trying to get it
+        endpoint = f"{GATEWAY_API_VERSION_ENDPOINT}applications/{app_id}/"
+        response = client.get(endpoint)
+        if response.status_code == HTTP_OK:
+            return app_id
+        else:
+            # Try to extract API error message for ID lookup
+            api_message = extract_api_error_message(response)
+            if api_message:
+                raise AAPClientError(api_message)
+            else:
+                raise AAPResourceNotFoundError("Application", identifier)
+    except ValueError:
+        # Not an integer, try name search
         pass
+    except AAPAPIError as api_error:
+        # Use the API error message directly - it already contains the API's message
+        raise AAPClientError(str(api_error))
 
     # Search by name
     try:
@@ -883,10 +1051,18 @@ def resolve_application_name(client, identifier, api="gateway"):
             else:
                 raise AAPResourceNotFoundError("Application", identifier)
         else:
-            raise AAPClientError(f"Failed to search applications: {response.status_code}")
+            # Try to extract API error message
+            api_message = extract_api_error_message(response)
+            if api_message:
+                raise AAPClientError(api_message)
+            else:
+                raise AAPClientError(f"Failed to search applications: {response.status_code}")
 
     except AAPResourceNotFoundError:
         raise
+    except AAPAPIError as api_error:
+        # Use the API error message directly - it already contains the API's message
+        raise AAPClientError(str(api_error))
     except Exception as e:
         raise AAPClientError(f"Error resolving application name: {e}")
 
@@ -932,10 +1108,15 @@ def resolve_host_metric_name(client, identifier, api="controller"):
                 # Hostname lookup failed, continue to ID lookup
                 pass
         else:
-            raise AAPClientError(f"Failed to search for host metric '{identifier}'")
-    except AAPAPIError:
-        # API error during hostname lookup, continue to ID lookup
-        pass
+            # Try to extract API error message
+            api_message = extract_api_error_message(response)
+            if api_message:
+                raise AAPClientError(api_message)
+            else:
+                raise AAPClientError(f"Failed to search for host metric '{identifier}'")
+    except AAPAPIError as api_error:
+        # Use the API error message directly - it already contains the API's message
+        raise AAPClientError(str(api_error))
 
     # Hostname lookup failed, try as ID if it's numeric
     try:
@@ -946,10 +1127,15 @@ def resolve_host_metric_name(client, identifier, api="controller"):
         if response.status_code == HTTP_OK:
             return host_metric_id
         else:
-            raise AAPResourceNotFoundError("Host Metric", identifier)
+            # Try to extract API error message for ID lookup
+            api_message = extract_api_error_message(response)
+            if api_message:
+                raise AAPClientError(api_message)
+            else:
+                raise AAPResourceNotFoundError("Host Metric", identifier)
     except ValueError:
         # Not a valid integer, and hostname lookup already failed
         raise AAPResourceNotFoundError("Host Metric", identifier)
-    except AAPAPIError:
-        # API error during ID lookup
-        raise AAPResourceNotFoundError("Host Metric", identifier)
+    except AAPAPIError as api_error:
+        # Use the API error message directly - it already contains the API's message
+        raise AAPClientError(str(api_error))
