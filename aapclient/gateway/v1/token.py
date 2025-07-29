@@ -11,7 +11,7 @@ from aapclient.common.constants import (
     HTTP_ACCEPTED
 )
 from aapclient.common.exceptions import AAPClientError, AAPResourceNotFoundError, AAPAPIError
-from aapclient.common.functions import format_datetime
+from aapclient.common.functions import format_datetime, resolve_application_name
 
 
 def _format_token_data(token_data, use_utc=False):
@@ -131,7 +131,7 @@ class TokenListCommand(AAPListCommand):
                 tokens = data.get('results', [])
 
                 # Define columns for output
-                columns = ['ID', 'User', 'Scope', 'Description', 'OAuth Application', 'Expiration']
+                columns = ['ID', 'User', 'OAuth Application', 'Scope', 'Description', 'Expiration']
                 rows = []
 
                 for token in tokens:
@@ -153,9 +153,9 @@ class TokenListCommand(AAPListCommand):
                     row = [
                         token.get('id', ''),
                         username,
+                        oauth_application_name,
                         token.get('scope', ''),
                         token.get('description', ''),
-                        oauth_application_name,
                         expires
                     ]
                     rows.append(row)
@@ -366,6 +366,12 @@ class TokenCreateCommand(AAPShowCommand):
             help='Token scope'
         )
 
+        # Optional OAuth application argument
+        parser.add_argument(
+            '--oauth-application',
+            help='OAuth application name or ID (creates application token instead of personal access token)'
+        )
+
         return parser
 
     def take_action(self, parsed_args):
@@ -382,6 +388,11 @@ class TokenCreateCommand(AAPShowCommand):
             # Add description if provided
             if parsed_args.description:
                 create_data['description'] = parsed_args.description
+
+            # Add OAuth application if provided
+            if parsed_args.oauth_application:
+                application_id = resolve_application_name(client, parsed_args.oauth_application)
+                create_data['application'] = application_id
 
             # Create the token
             endpoint = f"{GATEWAY_API_VERSION_ENDPOINT}tokens/"
