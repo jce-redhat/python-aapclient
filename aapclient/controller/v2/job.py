@@ -1,5 +1,5 @@
 """Job commands."""
-from aapclient.common.basecommands import AAPShowCommand, AAPListCommand
+from aapclient.common.basecommands import AAPShowCommand, AAPListCommand, AAPCommand
 from aapclient.common.constants import (
     CONTROLLER_API_VERSION_ENDPOINT,
     HTTP_OK,
@@ -7,6 +7,72 @@ from aapclient.common.constants import (
 )
 from aapclient.common.exceptions import AAPClientError, AAPResourceNotFoundError, AAPAPIError
 from aapclient.common.functions import format_duration, format_datetime
+
+
+def _format_workflow_nodes_data(nodes_data):
+    """
+    Format workflow nodes for dense two-column display.
+
+    Args:
+        nodes_data (list): List of workflow node data from API
+
+    Returns:
+        tuple: (columns, values) for ShowOne display with custom headers
+    """
+    columns = []
+    values = []
+
+    for node in nodes_data:
+        # Left column: Node ID + template name
+        node_id = node.get('id', '')
+        template_info = node.get('summary_fields', {}).get('unified_job_template', {})
+        template_name = template_info.get('name', 'Unknown Template')
+
+        node_column = f"{node_id}: {template_name}"
+
+        # Right column: Status + job info + duration with visual indicators
+        job_info = node.get('summary_fields', {}).get('job', {})
+        do_not_run = node.get('do_not_run', False)
+
+        if do_not_run:
+            # Node was skipped
+            status_column = "⊘ skipped • No Job"
+        elif job_info:
+            # Node was executed
+            job_id = job_info.get('id', '-')
+            status = job_info.get('status', 'unknown')
+            job_elapsed = job_info.get('elapsed', 0)
+
+            # Visual status indicators
+            if status == 'successful':
+                status_icon = "✓"
+            elif status == 'failed':
+                status_icon = "✗"
+            elif status in ['pending', 'waiting', 'running']:
+                status_icon = "⋯"
+            else:
+                status_icon = "?"
+
+            # Format duration compactly
+            if job_elapsed:
+                duration = format_duration(job_elapsed)
+                # Make duration more compact (e.g., "0:00:15" -> "15s")
+                if duration.startswith('0:00:'):
+                    duration = duration[5:] + "s"
+                elif duration.startswith('0:'):
+                    duration = duration[2:] + "m"
+            else:
+                duration = "-"
+
+            status_column = f"{status_icon} {status} • Job {job_id} • {duration}"
+        else:
+            # Node exists but no job info (unusual case)
+            status_column = "? no job info"
+
+        columns.append(node_column)
+        values.append(status_column)
+
+    return (columns, values)
 
 
 def _format_job_data(job_data, use_utc=False):
@@ -325,6 +391,177 @@ class JobShowCommand(AAPShowCommand):
                     return _format_job_data(job_data, parsed_args.utc)
                 else:
                     raise AAPClientError(f"Failed to get job details: {response.status_code}")
+            else:
+                raise AAPClientError(f"Failed to find job: {unified_response.status_code}")
+
+        except AAPResourceNotFoundError as e:
+            raise SystemExit(str(e))
+        except AAPClientError as e:
+            raise SystemExit(str(e))
+        except Exception as e:
+            raise SystemExit(f"Unexpected error: {e}")
+
+
+class JobOutputShowCommand(AAPCommand):
+    """
+    Show job output/stdout.
+
+    Output will differ based on job type.  For most job types the output will be
+    identical to the output displayed in the AAP GUI.  For workflow jobs, a table
+    will be displayed with one workflow node per row along with the status and
+    job ID associated with the workflow node.  To display the output of a node,
+    run `aap job output show <id>` against the node's job ID.
+
+    """
+
+    def get_parser(self, prog_name):
+        parser = super().get_parser(prog_name)
+        parser.add_argument('job_id', metavar='<job_id>', help='Job ID (numeric)')
+        return parser
+
+    def take_action(self, parsed_args):
+        try:
+            client = self.controller_client
+
+            # Validate that job_id is numeric
+            try:
+                job_id = int(parsed_args.job_id)
+            except ValueError:
+                raise AAPClientError(f"Job ID must be numeric, got: '{parsed_args.job_id}'")
+
+            # First, get the job from unified_jobs to determine its type
+            unified_endpoint = f"{CONTROLLER_API_VERSION_ENDPOINT}unified_jobs/"
+            try:
+                unified_response = client.get(unified_endpoint, params={'id': job_id})
+            except AAPAPIError as api_error:
+                self.handle_api_error(api_error, "Controller API", job_id)
+
+            if unified_response.status_code == HTTP_OK:
+                unified_data = unified_response.json()
+                results = unified_data.get('results', [])
+                if not results:
+                    raise AAPResourceNotFoundError("Job", job_id)
+
+                job_preview = results[0]
+                job_type = job_preview.get('type', '')
+
+                # Map job type to stdout endpoint
+                # Different job types have different output patterns
+                if job_type == 'job':
+                    # Regular jobs have stdout endpoint
+                    endpoint = f"{CONTROLLER_API_VERSION_ENDPOINT}jobs/{job_id}/stdout/"
+                    try:
+                        # Add format=txt parameter to get plain text output instead of HTML
+                        response = client.get(endpoint, params={'format': 'txt'})
+                    except AAPAPIError as api_error:
+                        self.handle_api_error(api_error, "Controller API", f"job {job_id} output")
+
+                    if response.status_code == HTTP_OK:
+                        # Output is raw text, so we print it directly
+                        output = response.text
+                        if output:
+                            self.app.stdout.write(output)
+                        else:
+                            self.app.stdout.write("No output available for this job.\n")
+                    elif response.status_code == HTTP_NOT_FOUND:
+                        self.app.stdout.write(f"No output available for {job_type} {job_id}.\n")
+                    else:
+                        raise AAPClientError(f"Failed to get job output: {response.status_code}")
+
+                elif job_type in ['project_update', 'inventory_update']:
+                    # Project and inventory updates have stdout endpoints
+                    type_endpoint_map = {
+                        'project_update': f'project_updates/{job_id}/stdout/',
+                        'inventory_update': f'inventory_updates/{job_id}/stdout/'
+                    }
+
+                    endpoint = f"{CONTROLLER_API_VERSION_ENDPOINT}{type_endpoint_map[job_type]}"
+                    try:
+                        response = client.get(endpoint, params={'format': 'txt'})
+                    except AAPAPIError as api_error:
+                        self.handle_api_error(api_error, "Controller API", f"job {job_id} output")
+
+                    if response.status_code == HTTP_OK:
+                        output = response.text
+                        if output:
+                            self.app.stdout.write(output)
+                        else:
+                            self.app.stdout.write("No output available for this job.\n")
+                    elif response.status_code == HTTP_NOT_FOUND:
+                        self.app.stdout.write(f"No output available for {job_type} {job_id}.\n")
+                    else:
+                        raise AAPClientError(f"Failed to get job output: {response.status_code}")
+
+                elif job_type == 'system_job':
+                    # System jobs store output in result_stdout field of detail endpoint
+                    endpoint = f"{CONTROLLER_API_VERSION_ENDPOINT}system_jobs/{job_id}/"
+                    try:
+                        response = client.get(endpoint)
+                    except AAPAPIError as api_error:
+                        self.handle_api_error(api_error, "Controller API", f"job {job_id} output")
+
+                    if response.status_code == HTTP_OK:
+                        job_data = response.json()
+                        result_stdout = job_data.get('result_stdout', '')
+                        if result_stdout:
+                            self.app.stdout.write(result_stdout)
+                        else:
+                            self.app.stdout.write("No output available for this system job.\n")
+                    elif response.status_code == HTTP_NOT_FOUND:
+                        raise AAPResourceNotFoundError("System Job", job_id)
+                    else:
+                        raise AAPClientError(f"Failed to get system job details: {response.status_code}")
+
+                elif job_type == 'workflow_job':
+                    # Workflow jobs use dense two-column format showing nodes and execution status
+                    endpoint = f"{CONTROLLER_API_VERSION_ENDPOINT}workflow_jobs/{job_id}/workflow_nodes/"
+                    try:
+                        response = client.get(endpoint)
+                    except AAPAPIError as api_error:
+                        self.handle_api_error(api_error, "Controller API", f"job {job_id} workflow nodes")
+
+                    if response.status_code == HTTP_OK:
+                        nodes_data = response.json()
+                        nodes = nodes_data.get('results', [])
+
+                        if nodes:
+                            # Use the helper function to format workflow nodes in dense format
+                            columns, values = _format_workflow_nodes_data(nodes)
+
+                            # Manually format and display the dense two-column output
+                            # Calculate column widths for proper alignment
+                            if columns and values:
+                                max_col_width = max(len(str(col)) for col in columns) if columns else 0
+                                max_val_width = max(len(str(val)) for val in values) if values else 0
+
+                                # Add some padding
+                                col_width = max_col_width + 2
+                                val_width = max_val_width + 2
+
+                                # Print header
+                                header = f"| {'Node':<{col_width}} | {'Execution Status':<{val_width}} |"
+                                separator = "+" + "-" * (col_width + 2) + "+" + "-" * (val_width + 2) + "+"
+
+                                self.app.stdout.write(separator + "\n")
+                                self.app.stdout.write(header + "\n")
+                                self.app.stdout.write(separator + "\n")
+
+                                # Print each row
+                                for col, val in zip(columns, values):
+                                    row = f"| {str(col):<{col_width}} | {str(val):<{val_width}} |"
+                                    self.app.stdout.write(row + "\n")
+
+                                self.app.stdout.write(separator + "\n")
+                        else:
+                            self.app.stdout.write("No workflow nodes found for this workflow job.\n")
+                    elif response.status_code == HTTP_NOT_FOUND:
+                        raise AAPResourceNotFoundError("Workflow Job", job_id)
+                    else:
+                        raise AAPClientError(f"Failed to get workflow job nodes: {response.status_code}")
+
+                else:
+                    # Unknown job type
+                    raise AAPClientError(f"Unsupported job type: {job_type}. Supported types: job, project_update, inventory_update, system_job, workflow_job")
             else:
                 raise AAPClientError(f"Failed to find job: {unified_response.status_code}")
 
