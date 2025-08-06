@@ -16,7 +16,9 @@ from aapclient.common.functions import (
     resolve_organization_name,
     resolve_inventory_name,
     resolve_instance_group_name,
-    format_datetime
+    format_datetime,
+    format_variables_display,
+    format_variables_yaml_display
 )
 
 
@@ -121,7 +123,7 @@ def _format_inventory_data(inventory_data, use_utc=False, client=None):
         if 'modified_by' in summary and summary['modified_by']:
             modified_by = summary['modified_by'].get('username', '')
 
-    # Get variables from variable_data endpoint if client is available
+    # Get variables using unified function - prefer variable_data endpoint if client available
     variables_display = ""
     if client:
         inventory_id = inventory_data.get('id')
@@ -130,23 +132,16 @@ def _format_inventory_data(inventory_data, use_utc=False, client=None):
                 var_response = client.get(f"{CONTROLLER_API_VERSION_ENDPOINT}inventories/{inventory_id}/variable_data/")
                 if var_response.status_code == HTTP_OK:
                     var_data = var_response.json()
-                    if var_data:
-                        # Convert to JSON string for length check
-                        variables_json = json.dumps(var_data)
-                        if len(variables_json) > 120:
-                            variables_display = "(Display with `inventory variables show` command)"
-                        else:
-                            variables_display = variables_json
-                    else:
-                        variables_display = ""
+                    variables_display = format_variables_display(var_data, "inventory")
+                else:
+                    # Fallback to direct field if endpoint fails
+                    variables_display = format_variables_display(variables, "inventory")
             except Exception:
-                variables_display = ""
+                # Fallback to direct field if request fails
+                variables_display = format_variables_display(variables, "inventory")
     else:
-        # Fallback to direct field if no client available
-        if len(str(variables)) > 120:
-            variables_display = "(Display with `inventory variables show` command)"
-        else:
-            variables_display = str(variables) if variables else ""
+        # Use direct field if no client available
+        variables_display = format_variables_display(variables, "inventory")
 
     # Format datetime fields
     created = format_datetime(inventory_data.get('created', ''), use_utc)
@@ -375,22 +370,9 @@ class InventoryVariablesShowCommand(AAPShowCommand):
             if response.status_code == HTTP_OK:
                 inventory_data = response.json()
 
-                # Extract variables
+                # Extract variables and format using unified function
                 variables = inventory_data.get('variables', {})
-
-                # Always convert to YAML format
-                if variables:
-                    try:
-                        # If variables is a string, try to parse it as JSON first
-                        if isinstance(variables, str):
-                            variables = json.loads(variables)
-                        # Convert to YAML
-                        variables_yaml = yaml.dump(variables, default_flow_style=False)
-                    except (json.JSONDecodeError, yaml.YAMLError):
-                        # If conversion fails, display as string
-                        variables_yaml = str(variables)
-                else:
-                    variables_yaml = "{}"
+                variables_yaml = format_variables_yaml_display(variables)
 
                 # Format for display
                 columns = ['Inventory', 'Variables']

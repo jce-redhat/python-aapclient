@@ -15,7 +15,9 @@ from aapclient.common.exceptions import AAPClientError, AAPResourceNotFoundError
 from aapclient.common.functions import (
     resolve_inventory_name,
     resolve_host_name,
-    format_datetime
+    format_datetime,
+    format_variables_display,
+    format_variables_yaml_display
 )
 
 
@@ -45,12 +47,9 @@ def _format_host_data(host_data, use_utc=False):
         if host_data['summary_fields']['inventory']:
             inventory_name = host_data['summary_fields']['inventory'].get('name', '')
 
-    # Handle variables with length check
+    # Handle variables using unified function
     variables_value = host_data.get('variables', '')
-    if len(str(variables_value)) > 120:
-        variables_display = "(Display with `host variables show` command)"
-    else:
-        variables_display = str(variables_value)
+    variables_display = format_variables_display(variables_value, "host")
 
     # Format datetime fields using common function
     created = format_datetime(host_data.get('created', ''), use_utc)
@@ -499,7 +498,7 @@ class HostGroupsListCommand(AAPListCommand):
                         groups = groups_data['results']
 
                 # Define columns for output
-                columns = ['ID', 'Name']
+                columns = ['Group ID', 'Name']
                 rows = []
 
                 for group in groups:
@@ -565,22 +564,9 @@ class HostVariablesShowCommand(AAPShowCommand):
             if response.status_code == HTTP_OK:
                 host_data = response.json()
 
-                # Extract variables
+                # Extract variables and format using unified function
                 variables = host_data.get('variables', {})
-
-                # Always convert to YAML format
-                if variables:
-                    try:
-                        # If variables is a string, try to parse it as JSON first
-                        if isinstance(variables, str):
-                            variables = json.loads(variables)
-                        # Convert to YAML
-                        variables_yaml = yaml.dump(variables, default_flow_style=False)
-                    except (json.JSONDecodeError, yaml.YAMLError):
-                        # If conversion fails, display as string
-                        variables_yaml = str(variables)
-                else:
-                    variables_yaml = "{}"
+                variables_yaml = format_variables_yaml_display(variables)
 
                 # Format for display
                 columns = ['Host', 'Variables']

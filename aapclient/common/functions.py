@@ -1,5 +1,7 @@
 """Common utility functions for AAP client."""
 
+import json
+import yaml
 from datetime import datetime, timezone
 from aapclient.common.constants import (
     GATEWAY_API_VERSION_ENDPOINT,
@@ -1139,3 +1141,201 @@ def resolve_host_metric_name(client, identifier, api="controller"):
     except AAPAPIError as api_error:
         # Use the API error message directly - it already contains the API's message
         raise AAPClientError(str(api_error))
+
+
+def resolve_job_template_name(client, identifier, api="controller"):
+    """
+    Resolve job template identifier (name or ID) to ID for use by other resource commands.
+
+    Args:
+        client: AAPHTTPClient instance
+        identifier: Job template name or ID
+        api: API to use for resolution ("controller"). Defaults to "controller".
+             Note: Job templates are only available in Controller API.
+
+    Returns:
+        int: Job template ID
+
+    Raises:
+        AAPResourceNotFoundError: If job template not found by name or ID
+        AAPClientError: If invalid API type specified or API error occurs
+    """
+    # Determine which API endpoint to use
+    if api == "controller":
+        api_endpoint = CONTROLLER_API_VERSION_ENDPOINT
+    elif api == "gateway":
+        # Job templates are not available in Gateway API
+        raise AAPClientError("Job templates are only available in Controller API. Use api='controller'.")
+    else:
+        raise AAPClientError(f"Invalid API type '{api}'. Must be 'gateway' or 'controller'.")
+
+    # First try as job template name lookup
+    try:
+        endpoint = f"{api_endpoint}job_templates/"
+        params = {'name': identifier}
+        response = client.get(endpoint, params=params)
+
+        if response.status_code == HTTP_OK:
+            data = response.json()
+            results = data.get('results', [])
+            if results:
+                return results[0]['id']
+            else:
+                # Name lookup failed, continue to ID lookup
+                pass
+        else:
+            # Try to extract API error message
+            api_message = extract_api_error_message(response)
+            if api_message:
+                raise AAPClientError(api_message)
+            else:
+                raise AAPClientError(f"Failed to search for job template '{identifier}'")
+    except AAPAPIError as api_error:
+        # Use the API error message directly - it already contains the API's message
+        raise AAPClientError(str(api_error))
+
+    # Name lookup failed, try as ID if it's numeric
+    try:
+        template_id = int(identifier)
+        # Verify the ID exists by trying to get it
+        endpoint = f"{api_endpoint}job_templates/{template_id}/"
+        response = client.get(endpoint)
+        if response.status_code == HTTP_OK:
+            return template_id
+        else:
+            # Try to extract API error message for ID lookup
+            api_message = extract_api_error_message(response)
+            if api_message:
+                raise AAPClientError(api_message)
+            else:
+                raise AAPResourceNotFoundError("Job Template", identifier)
+    except ValueError:
+        # Not a valid integer, and name lookup already failed
+        raise AAPResourceNotFoundError("Job Template", identifier)
+    except AAPAPIError as api_error:
+        # Use the API error message directly - it already contains the API's message
+        raise AAPClientError(str(api_error))
+
+
+def format_variables_display(variables_data, command_name, length_limit=120):
+    """
+    Format variables for consistent display across all AAP CLI commands.
+
+    This function provides unified variable handling with intelligent parsing
+    and consistent length-based truncation behavior.
+
+    Args:
+        variables_data: Variable data from API response (string, dict, or None)
+        command_name (str): Command name for the fallback message (e.g., "template", "inventory", "host")
+        length_limit (int): Character limit for inline display (default: 120)
+
+    Returns:
+        str: Formatted variables string for display
+
+    Behavior:
+        - Empty/None variables: Returns empty string
+        - Valid JSON: Formats as compact JSON
+        - Valid YAML: Converts to compact JSON
+        - Invalid format: Displays as raw string
+        - Length > limit: Returns fallback message pointing to variables show command
+    """
+    if not variables_data:
+        return ''
+
+    # Convert to string if needed
+    variables_str = str(variables_data).strip()
+    if not variables_str:
+        return ''
+
+    try:
+        # First, try to parse as JSON
+        if isinstance(variables_data, dict):
+            # Already a dict, format as JSON
+            parsed_vars = variables_data
+        else:
+            # Try to parse string as JSON
+            parsed_vars = json.loads(variables_str)
+
+        # Format as compact JSON for length check
+        formatted_json = json.dumps(parsed_vars, separators=(',', ':'))
+
+        if len(formatted_json) > length_limit:
+            return f"(Display with `{command_name} variables show` command)"
+        else:
+            return formatted_json
+
+    except (json.JSONDecodeError, TypeError):
+        # If not valid JSON, try YAML parsing
+        try:
+            parsed_vars = yaml.safe_load(variables_str)
+            if parsed_vars:  # Only process if not empty
+                # Format as compact JSON
+                formatted_json = json.dumps(parsed_vars, separators=(',', ':'))
+                if len(formatted_json) > length_limit:
+                    return f"(Display with `{command_name} variables show` command)"
+                else:
+                    return formatted_json
+            else:
+                return ''
+        except (yaml.YAMLError, TypeError):
+            # If neither JSON nor YAML, check length of raw string
+            if len(variables_str) > length_limit:
+                return f"(Display with `{command_name} variables show` command)"
+            else:
+                return variables_str
+
+
+def format_variables_yaml_display(variables_data):
+    """
+    Format variables for consistent YAML display in variables show commands.
+
+    This function provides unified variable formatting for all `*VariablesShowCommand` classes,
+    ensuring consistent YAML output with proper empty value handling.
+
+    Args:
+        variables_data: Variable data from API response (string, dict, or None)
+
+    Returns:
+        str: YAML-formatted variables string for display
+
+    Behavior:
+        - Empty/None variables: Returns "{}"
+        - Valid JSON string: Parses and converts to YAML
+        - Dict object: Converts directly to YAML
+        - YAML string: Attempts to parse and re-format as YAML
+        - Invalid format: Returns as raw string
+    """
+    if not variables_data:
+        return "{}"
+
+    # Handle different input types
+    if isinstance(variables_data, dict):
+        # Already a dict, convert to YAML
+        try:
+            return yaml.dump(variables_data, default_flow_style=False).strip()
+        except yaml.YAMLError:
+            return str(variables_data)
+
+    # Convert to string and check if empty
+    variables_str = str(variables_data).strip()
+    if not variables_str:
+        return "{}"
+
+    try:
+        # First, try to parse as JSON
+        parsed_vars = json.loads(variables_str)
+        if parsed_vars:  # Only process if not empty
+            return yaml.dump(parsed_vars, default_flow_style=False).strip()
+        else:
+            return "{}"
+    except (json.JSONDecodeError, TypeError):
+        # If not valid JSON, try YAML parsing
+        try:
+            parsed_vars = yaml.safe_load(variables_str)
+            if parsed_vars:  # Only process if not empty
+                return yaml.dump(parsed_vars, default_flow_style=False).strip()
+            else:
+                return "{}"
+        except (yaml.YAMLError, TypeError):
+            # If neither JSON nor YAML, return as raw string
+            return variables_str

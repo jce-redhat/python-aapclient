@@ -12,7 +12,7 @@ from aapclient.common.constants import (
     HTTP_ACCEPTED
 )
 from aapclient.common.exceptions import AAPClientError, AAPResourceNotFoundError, AAPAPIError
-from aapclient.common.functions import resolve_group_name, resolve_inventory_name, resolve_host_name, format_datetime
+from aapclient.common.functions import resolve_group_name, resolve_inventory_name, resolve_host_name, format_datetime, format_variables_display, format_variables_yaml_display
 
 
 def _get_group_resource_count(client, group_id, resource_type):
@@ -94,10 +94,8 @@ def _format_group_data(group_data, client=None, use_utc=False):
         'Modified'
     ]
 
-    # Check if variables should be truncated
-    variables_display = variables
-    if len(variables) > 120:
-        variables_display = "(Display with `group variables show` command)"
+    # Handle variables using unified function
+    variables_display = format_variables_display(variables, "group")
 
     values = [
         id_value,
@@ -1014,18 +1012,19 @@ class GroupVariablesShowCommand(AAPShowCommand):
 
             if response.status_code == HTTP_OK:
                 group_data = response.json()
-                variables_str = group_data.get('variables', '{}')
 
-                try:
-                    # Parse JSON and convert to YAML
-                    variables_dict = json.loads(variables_str)
-                    yaml_output = yaml.dump(variables_dict, default_flow_style=False)
+                # Extract variables and format using unified function
+                variables = group_data.get('variables', '{}')
+                variables_yaml = format_variables_yaml_display(variables)
 
-                    # Return as ShowOne format
-                    return (['Variables'], [yaml_output.strip()])
-                except json.JSONDecodeError:
-                    # If variables aren't valid JSON, return as-is
-                    return (['Variables'], [variables_str])
+                # Format for display
+                columns = ['Group', 'Variables']
+                values = [
+                    parsed_args.group or parsed_args.id,
+                    variables_yaml
+                ]
+
+                return (columns, values)
             else:
                 raise AAPClientError(f"Failed to get group: {response.status_code}")
 
