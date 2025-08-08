@@ -5,6 +5,7 @@ from aapclient.common.basecommands import AAPListCommand, AAPShowCommand, AAPCom
 from aapclient.common.constants import (
     CONTROLLER_API_VERSION_ENDPOINT,
     HTTP_OK,
+    HTTP_CREATED,
     HTTP_NO_CONTENT,
     HTTP_NOT_FOUND,
     HTTP_BAD_REQUEST
@@ -13,12 +14,18 @@ from aapclient.common.exceptions import AAPClientError, AAPResourceNotFoundError
 from aapclient.common.functions import (
     format_datetime,
     resolve_job_template_name,
+    resolve_inventory_name,
+    resolve_project_name,
+    resolve_execution_environment_name,
+    resolve_credential_name,
+    resolve_instance_group_name,
     format_variables_display,
     format_variables_yaml_display
 )
 
 
-def _format_job_template_data(template_data, use_utc=False):
+
+def _format_job_template_data(template_data, use_utc=False, client=None):
     """
     Format job template data consistently for ShowOne display.
 
@@ -48,9 +55,11 @@ def _format_job_template_data(template_data, use_utc=False):
     if modified and modified != 'Unknown':
         modified = format_datetime(modified, use_utc)
 
-    last_job_run = template_data.get('last_job_run', 'Never')
-    if last_job_run and last_job_run != 'Never':
+    last_job_run = template_data.get('last_job_run')
+    if last_job_run:
         last_job_run = format_datetime(last_job_run, use_utc)
+    else:
+        last_job_run = 'Never'
 
     # Determine execution environment
     execution_environment = 'Default'
@@ -61,7 +70,7 @@ def _format_job_template_data(template_data, use_utc=False):
             execution_environment = f"ID {template_data.get('execution_environment')}"
 
     # Determine last job status
-    last_job_status = 'Never'
+    last_job_status = 'None'
     if last_job_info:
         last_job_status = f"{last_job_info.get('status', 'Unknown')} (ID: {last_job_info.get('id', 'Unknown')})"
 
@@ -72,7 +81,7 @@ def _format_job_template_data(template_data, use_utc=False):
         if isinstance(cred, dict):
             cred_name = cred.get('name', f"ID {cred.get('id', 'Unknown')}")
             credentials_list.append(cred_name)
-    credentials_display = ', '.join(credentials_list) if credentials_list else 'None'
+    credentials_display = ', '.join(credentials_list) if credentials_list else ''
 
     # Determine labels
     labels_list = []
@@ -82,7 +91,39 @@ def _format_job_template_data(template_data, use_utc=False):
             if isinstance(label, dict):
                 label_name = label.get('name', f"ID {label.get('id', 'Unknown')}")
                 labels_list.append(label_name)
-    labels_display = ', '.join(labels_list) if labels_list else 'None'
+    labels_display = ', '.join(labels_list) if labels_list else ''
+
+    # Determine instance groups
+    instance_groups_list = []
+
+    # Try to fetch instance groups from dedicated endpoint if client is available
+    if client and template_data.get('id'):
+        try:
+            ig_endpoint = f"{CONTROLLER_API_VERSION_ENDPOINT}job_templates/{template_data['id']}/instance_groups/"
+            ig_response = client.get(ig_endpoint)
+            if ig_response.status_code == 200:
+                ig_data = ig_response.json()
+                instance_groups = ig_data.get('results', [])
+                for ig in instance_groups:
+                    if isinstance(ig, dict):
+                        ig_name = ig.get('name', f"ID {ig.get('id', 'Unknown')}")
+                        instance_groups_list.append(ig_name)
+        except Exception:
+            # Fall back to summary_fields if endpoint fetch fails
+            instance_groups = summary_fields.get('instance_groups', [])
+            for ig in instance_groups:
+                if isinstance(ig, dict):
+                    ig_name = ig.get('name', f"ID {ig.get('id', 'Unknown')}")
+                    instance_groups_list.append(ig_name)
+    else:
+        # Fall back to summary_fields if no client available
+        instance_groups = summary_fields.get('instance_groups', [])
+        for ig in instance_groups:
+            if isinstance(ig, dict):
+                ig_name = ig.get('name', f"ID {ig.get('id', 'Unknown')}")
+                instance_groups_list.append(ig_name)
+
+    instance_groups_display = ', '.join(instance_groups_list) if instance_groups_list else ''
 
     # Determine survey state (more detailed than just enabled/disabled)
     survey_enabled = template_data.get('survey_enabled', False)
@@ -99,46 +140,119 @@ def _format_job_template_data(template_data, use_utc=False):
     extra_vars = template_data.get('extra_vars', '')
     extra_vars_display = format_variables_display(extra_vars, "template")
 
-    # Build field data for display
+    # Helper function to add ask-on-launch indicator
+    def add_ask_on_launch_indicator(value, ask_field_name):
+        if template_data.get(ask_field_name, False):
+            if value and str(value).strip():
+                return f"{value} (ask on launch)"
+            else:
+                return "(ask on launch)"
+        return value
+
+    # Build field data for display with ask-on-launch indicators
+    job_type_display = add_ask_on_launch_indicator(template_data.get('job_type', ''), 'ask_job_type_on_launch')
+    inventory_display = add_ask_on_launch_indicator(
+        inventory_info.get('name', f"ID {template_data.get('inventory', 'Unknown')}"),
+        'ask_inventory_on_launch'
+    )
+    execution_environment_display = add_ask_on_launch_indicator(execution_environment, 'ask_execution_environment_on_launch')
+    credentials_display_with_ask = add_ask_on_launch_indicator(credentials_display, 'ask_credential_on_launch')
+    instance_groups_display_with_ask = add_ask_on_launch_indicator(instance_groups_display, 'ask_instance_groups_on_launch')
+    labels_display_with_ask = add_ask_on_launch_indicator(labels_display, 'ask_labels_on_launch')
+    forks_display = add_ask_on_launch_indicator(template_data.get('forks', 0), 'ask_forks_on_launch')
+    verbosity_display = add_ask_on_launch_indicator(template_data.get('verbosity', 0), 'ask_verbosity_on_launch')
+    job_slices_display = add_ask_on_launch_indicator(template_data.get('job_slice_count', 0), 'ask_job_slice_count_on_launch')
+    timeout_display = add_ask_on_launch_indicator(template_data.get('timeout', 0), 'ask_timeout_on_launch')
+    job_tags_display = add_ask_on_launch_indicator(template_data.get('job_tags', ''), 'ask_tags_on_launch')
+    skip_tags_display = add_ask_on_launch_indicator(template_data.get('skip_tags', ''), 'ask_skip_tags_on_launch')
+    limit_display = add_ask_on_launch_indicator(template_data.get('limit', ''), 'ask_limit_on_launch')
+    diff_mode_display = add_ask_on_launch_indicator(
+        'Yes' if template_data.get('diff_mode', False) else 'No',
+        'ask_diff_mode_on_launch'
+    )
+    extra_vars_display_with_ask = add_ask_on_launch_indicator(extra_vars_display, 'ask_variables_on_launch')
+
+    # Get webhook key, URL, and credential if webhook service is configured
+    webhook_key = ''
+    webhook_url = ''
+    webhook_credential_display = ''
+    if template_data.get('webhook_service'):
+        related = template_data.get('related', {})
+
+        # Get webhook key
+        if client:
+            webhook_key_url = related.get('webhook_key')
+            if webhook_key_url:
+                try:
+                    response = client.get(webhook_key_url)
+                    if response.status_code == 200:
+                        key_data = response.json()
+                        webhook_key = key_data.get('webhook_key', '')
+                except Exception:
+                    pass
+
+        # Get webhook URL from webhook_receiver endpoint
+        webhook_receiver_path = related.get('webhook_receiver')
+        if webhook_receiver_path:
+            try:
+                # Get base URL from client manager config
+                from aapclient.common.clientmanager import AAPClientManager
+                client_manager = AAPClientManager()
+                base_url = client_manager.config.base_url
+                webhook_url = base_url.rstrip('/') + webhook_receiver_path
+            except Exception:
+                pass
+
+        # Get webhook credential display
+        webhook_credential_id = template_data.get('webhook_credential')
+        if webhook_credential_id:
+            summary_fields = template_data.get('summary_fields', {})
+            webhook_cred_info = summary_fields.get('webhook_credential', {})
+            if webhook_cred_info and isinstance(webhook_cred_info, dict):
+                webhook_credential_display = webhook_cred_info.get('name', f"ID {webhook_credential_id}")
+            else:
+                webhook_credential_display = f"ID {webhook_credential_id}"
+
     field_data = {
         'ID': template_data.get('id', ''),
         'Name': template_data.get('name', ''),
         'Description': template_data.get('description', ''),
-        'Job Type': template_data.get('job_type', ''),
+        'Job Type': job_type_display,
         'Organization': org_info.get('name', 'Unknown'),
         'Project': project_info.get('name', f"ID {template_data.get('project', 'Unknown')}"),
-        'Inventory': inventory_info.get('name', f"ID {template_data.get('inventory', 'Unknown')}"),
+        'Inventory': inventory_display,
         'Playbook': template_data.get('playbook', ''),
-        'Execution Environment': execution_environment,
-        'Credentials': credentials_display,
-        'Labels': labels_display,
-        'Forks': template_data.get('forks', 0),
-        'Verbosity': template_data.get('verbosity', 0),
-        'Job Timeout': template_data.get('timeout', 0),
-        'Job Tags': template_data.get('job_tags', ''),
-        'Skip Tags': template_data.get('skip_tags', ''),
-        'Limit': template_data.get('limit', ''),
-        'Become Enabled': 'Yes' if template_data.get('become_enabled', False) else 'No',
-        'Diff Mode': 'Yes' if template_data.get('diff_mode', False) else 'No',
-        'Force Handlers': 'Yes' if template_data.get('force_handlers', False) else 'No',
-        'Allow Simultaneous': 'Yes' if template_data.get('allow_simultaneous', False) else 'No',
+        'Execution Environment': execution_environment_display,
+        'Credentials': credentials_display_with_ask,
+        'Instance Groups': instance_groups_display_with_ask,
+        'Labels': labels_display_with_ask,
+        'Forks': forks_display,
+        'Verbosity': verbosity_display,
+        'Job Slices': job_slices_display,
+        'Job Timeout': timeout_display,
+        'Job Tags': job_tags_display,
+        'Skip Tags': skip_tags_display,
+        'Limit': limit_display,
+        'Diff Mode': diff_mode_display,
         'Survey Attached': survey_status,
-        'Use Fact Cache': 'Yes' if template_data.get('use_fact_cache', False) else 'No',
-        'Extra Variables': extra_vars_display,
+        'Privileged Escalation': 'Yes' if template_data.get('become_enabled', False) else 'No',
+        'Concurrent Jobs': 'Yes' if template_data.get('allow_simultaneous', False) else 'No',
+        'Enable Fact Storage': 'Yes' if template_data.get('use_fact_cache', False) else 'No',
+        'Prevent Instance Group Fallback': 'Yes' if template_data.get('prevent_instance_group_fallback', False) else 'No',
+        'Extra Variables': extra_vars_display_with_ask,
+        'Webhook Service': template_data.get('webhook_service', ''),
+        'Webhook Credential': webhook_credential_display,
+        'Webhook URL': webhook_url,
+        'Webhook Key': webhook_key,
         'Last Job Run': last_job_run,
         'Last Job Status': last_job_status,
         'Created': created,
-        'Modified': modified,
         'Created By': created_by.get('username', 'Unknown'),
+        'Modified': modified,
         'Modified By': modified_by.get('username', 'Unknown')
     }
 
     # Add conditional fields only if they have meaningful values
-
-    # Job Slice Count - only if > 1
-    job_slice_count = template_data.get('job_slice_count', 1)
-    if job_slice_count and job_slice_count > 1:
-        field_data['Job Slice Count'] = job_slice_count
 
     # SCM Branch - only if specified
     scm_branch = template_data.get('scm_branch', '')
@@ -281,7 +395,7 @@ class JobTemplateShowCommand(AAPShowCommand):
 
             if response.status_code == HTTP_OK:
                 template_data = response.json()
-                return _format_job_template_data(template_data, parsed_args.utc)
+                return _format_job_template_data(template_data, use_utc=parsed_args.utc, client=client)
             else:
                 raise AAPClientError(f"Failed to get job template: {response.status_code}")
 
@@ -1277,6 +1391,1166 @@ class JobTemplateSurveyDeleteCommand(AAPCommand):
                 print(f"Warning: Survey deleted but failed to disable it on the job template: {api_error}")
 
             print(f"Survey deleted from job template {template_identifier}")
+
+        except AAPResourceNotFoundError as e:
+            raise SystemExit(str(e))
+        except AAPClientError as e:
+            raise SystemExit(str(e))
+        except Exception as e:
+            raise SystemExit(f"Unexpected error: {e}")
+
+
+class JobTemplateCreateCommand(AAPShowCommand):
+    """Create a job template."""
+
+    def get_parser(self, prog_name):
+        parser = super().get_parser(prog_name)
+
+        # Required arguments
+        parser.add_argument(
+            'name',
+            help='Job template name'
+        )
+
+        parser.add_argument(
+            '--job-type',
+            required=True,
+            choices=['check', 'run'],
+            help='Job type (check or run)'
+        )
+
+        parser.add_argument(
+            '--inventory',
+            required=True,
+            help='Inventory name or ID'
+        )
+
+        parser.add_argument(
+            '--project',
+            required=True,
+            help='Project name or ID'
+        )
+
+        parser.add_argument(
+            '--playbook',
+            required=True,
+            help='Playbook path within the project'
+        )
+
+        # Optional arguments
+        parser.add_argument(
+            '--description',
+            help='Job template description'
+        )
+
+        parser.add_argument(
+            '--execution-environment',
+            help='Execution environment name or ID'
+        )
+
+        parser.add_argument(
+            '--credential',
+            action='append',
+            dest='credentials',
+            help='Credential name or ID (can be specified multiple times)'
+        )
+
+        parser.add_argument(
+            '--forks',
+            type=int,
+            help='Number of parallel processes to use'
+        )
+
+        parser.add_argument(
+            '--limit',
+            help='Limit execution to specific hosts or groups'
+        )
+
+        parser.add_argument(
+            '--verbosity',
+            type=int,
+            choices=[0, 1, 2, 3, 4, 5],
+            help='Verbosity level (0-5)'
+        )
+
+        parser.add_argument(
+            '--job-slices',
+            type=int,
+            help='Number of job slices'
+        )
+
+        parser.add_argument(
+            '--job-timeout',
+            type=int,
+            help='Number of seconds to run before the task is canceled'
+        )
+
+        parser.add_argument(
+            '--enable-diff-mode',
+            action='store_true',
+            dest='diff_mode',
+            help='Enable diff mode'
+        )
+
+        parser.add_argument(
+            '--instance-group',
+            action='append',
+            dest='instance_groups',
+            help='Instance group name or ID (can be specified multiple times)'
+        )
+
+        parser.add_argument(
+            '--job-tags',
+            help='Job tags (comma-separated)'
+        )
+
+        parser.add_argument(
+            '--skip-tags',
+            help='Skip tags (comma-separated)'
+        )
+
+        parser.add_argument(
+            '--extra-vars',
+            help='Extra variables as JSON string'
+        )
+
+        parser.add_argument(
+            '--enable-privileged-escalation',
+            action='store_true',
+            dest='become_enabled',
+            help='Enable privilege escalation (become)'
+        )
+
+        parser.add_argument(
+            '--enable-concurrent-jobs',
+            action='store_true',
+            dest='allow_simultaneous',
+            help='Allow multiple jobs to run simultaneously'
+        )
+
+        parser.add_argument(
+            '--enable-fact-storage',
+            action='store_true',
+            dest='use_fact_cache',
+            help='Enable fact storage/caching'
+        )
+
+        parser.add_argument(
+            '--prevent-instance-group-fallback',
+            action='store_true',
+            dest='prevent_instance_group_fallback',
+            help='Prevent fallback to other instance groups'
+        )
+
+        # Ask on launch arguments
+        parser.add_argument(
+            '--ask-credential-on-launch',
+            action='store_true',
+            dest='ask_credential_on_launch',
+            help='Prompt for credential when launching'
+        )
+
+        parser.add_argument(
+            '--ask-diff-mode-on-launch',
+            action='store_true',
+            dest='ask_diff_mode_on_launch',
+            help='Prompt for diff mode when launching'
+        )
+
+        parser.add_argument(
+            '--ask-execution-environment-on-launch',
+            action='store_true',
+            dest='ask_execution_environment_on_launch',
+            help='Prompt for execution environment when launching'
+        )
+
+        parser.add_argument(
+            '--ask-forks-on-launch',
+            action='store_true',
+            dest='ask_forks_on_launch',
+            help='Prompt for forks when launching'
+        )
+
+        parser.add_argument(
+            '--ask-instance-groups-on-launch',
+            action='store_true',
+            dest='ask_instance_groups_on_launch',
+            help='Prompt for instance groups when launching'
+        )
+
+        parser.add_argument(
+            '--ask-inventory-on-launch',
+            action='store_true',
+            dest='ask_inventory_on_launch',
+            help='Prompt for inventory when launching'
+        )
+
+        parser.add_argument(
+            '--ask-job-slice-count-on-launch',
+            action='store_true',
+            dest='ask_job_slice_count_on_launch',
+            help='Prompt for job slice count when launching'
+        )
+
+        parser.add_argument(
+            '--ask-job-type-on-launch',
+            action='store_true',
+            dest='ask_job_type_on_launch',
+            help='Prompt for job type when launching'
+        )
+
+        parser.add_argument(
+            '--ask-labels-on-launch',
+            action='store_true',
+            dest='ask_labels_on_launch',
+            help='Prompt for labels when launching'
+        )
+
+        parser.add_argument(
+            '--ask-limit-on-launch',
+            action='store_true',
+            dest='ask_limit_on_launch',
+            help='Prompt for limit when launching'
+        )
+
+        parser.add_argument(
+            '--ask-skip-tags-on-launch',
+            action='store_true',
+            dest='ask_skip_tags_on_launch',
+            help='Prompt for skip tags when launching'
+        )
+
+        parser.add_argument(
+            '--ask-tags-on-launch',
+            action='store_true',
+            dest='ask_tags_on_launch',
+            help='Prompt for tags when launching'
+        )
+
+        parser.add_argument(
+            '--ask-timeout-on-launch',
+            action='store_true',
+            dest='ask_timeout_on_launch',
+            help='Prompt for timeout when launching'
+        )
+
+        parser.add_argument(
+            '--ask-variables-on-launch',
+            action='store_true',
+            dest='ask_variables_on_launch',
+            help='Prompt for variables when launching'
+        )
+
+        parser.add_argument(
+            '--ask-verbosity-on-launch',
+            action='store_true',
+            dest='ask_verbosity_on_launch',
+            help='Prompt for verbosity when launching'
+        )
+
+        # Webhook arguments
+        parser.add_argument(
+            '--enable-webhook',
+            action='store_true',
+            dest='enable_webhook',
+            help='Enable webhook functionality for this job template'
+        )
+
+        parser.add_argument(
+            '--webhook-service',
+            choices=['gitlab', 'github', 'bitbucket_dc'],
+            dest='webhook_service',
+            help='Webhook service type (required when --enable-webhook is used)'
+        )
+        parser.add_argument(
+            '--webhook-credential',
+            dest='webhook_credential',
+            help='Credential to use for webhook authentication (optional)'
+        )
+
+
+
+        return parser
+
+    def take_action(self, parsed_args):
+        """Execute the job template create command."""
+        try:
+            # Get client from centralized client manager
+            client = self.controller_client
+
+            # Validate webhook arguments
+            if parsed_args.enable_webhook and not parsed_args.webhook_service:
+                raise AAPClientError("--webhook-service is required when --enable-webhook is used")
+
+            # Resolve inventory name to ID
+            inventory_id = resolve_inventory_name(client, parsed_args.inventory, api="controller")
+
+            # Resolve project name to ID
+            project_id = resolve_project_name(client, parsed_args.project, api="controller")
+
+            # Build job template data
+            template_data = {
+                "name": parsed_args.name,
+                "job_type": parsed_args.job_type,
+                "inventory": inventory_id,
+                "project": project_id,
+                "playbook": parsed_args.playbook
+            }
+
+            # Add optional description
+            if parsed_args.description:
+                template_data["description"] = parsed_args.description
+
+            # Resolve execution environment if provided
+            if parsed_args.execution_environment:
+                ee_id = resolve_execution_environment_name(client, parsed_args.execution_environment, api="controller")
+                template_data["execution_environment"] = ee_id
+
+            # Add optional numeric fields
+            if parsed_args.forks is not None:
+                template_data["forks"] = parsed_args.forks
+            if parsed_args.verbosity is not None:
+                template_data["verbosity"] = parsed_args.verbosity
+            if parsed_args.job_slices is not None:
+                template_data["job_slice_count"] = parsed_args.job_slices
+            if parsed_args.job_timeout is not None:
+                template_data["timeout"] = parsed_args.job_timeout
+
+            # Add optional string fields
+            if parsed_args.limit:
+                template_data["limit"] = parsed_args.limit
+            if parsed_args.job_tags:
+                template_data["job_tags"] = parsed_args.job_tags
+            if parsed_args.skip_tags:
+                template_data["skip_tags"] = parsed_args.skip_tags
+
+            # Add boolean fields
+            if parsed_args.diff_mode:
+                template_data["diff_mode"] = True
+            if parsed_args.become_enabled:
+                template_data["become_enabled"] = True
+            if parsed_args.allow_simultaneous:
+                template_data["allow_simultaneous"] = True
+            if parsed_args.use_fact_cache:
+                template_data["use_fact_cache"] = True
+            if parsed_args.prevent_instance_group_fallback:
+                template_data["prevent_instance_group_fallback"] = True
+
+            # Add ask_*_on_launch boolean fields
+            if parsed_args.ask_credential_on_launch:
+                template_data["ask_credential_on_launch"] = True
+            if parsed_args.ask_diff_mode_on_launch:
+                template_data["ask_diff_mode_on_launch"] = True
+            if parsed_args.ask_execution_environment_on_launch:
+                template_data["ask_execution_environment_on_launch"] = True
+            if parsed_args.ask_forks_on_launch:
+                template_data["ask_forks_on_launch"] = True
+            if parsed_args.ask_instance_groups_on_launch:
+                template_data["ask_instance_groups_on_launch"] = True
+            if parsed_args.ask_inventory_on_launch:
+                template_data["ask_inventory_on_launch"] = True
+            if parsed_args.ask_job_slice_count_on_launch:
+                template_data["ask_job_slice_count_on_launch"] = True
+            if parsed_args.ask_job_type_on_launch:
+                template_data["ask_job_type_on_launch"] = True
+            if parsed_args.ask_labels_on_launch:
+                template_data["ask_labels_on_launch"] = True
+            if parsed_args.ask_limit_on_launch:
+                template_data["ask_limit_on_launch"] = True
+            if parsed_args.ask_skip_tags_on_launch:
+                template_data["ask_skip_tags_on_launch"] = True
+            if parsed_args.ask_tags_on_launch:
+                template_data["ask_tags_on_launch"] = True
+            if parsed_args.ask_timeout_on_launch:
+                template_data["ask_timeout_on_launch"] = True
+            if parsed_args.ask_variables_on_launch:
+                template_data["ask_variables_on_launch"] = True
+            if parsed_args.ask_verbosity_on_launch:
+                template_data["ask_verbosity_on_launch"] = True
+
+            # Add webhook fields if enabled
+            if parsed_args.enable_webhook:
+                template_data["webhook_service"] = parsed_args.webhook_service
+                # Add webhook credential if provided
+                if parsed_args.webhook_credential:
+                    webhook_credential_id = resolve_credential_name(client, parsed_args.webhook_credential, api="controller")
+                    template_data["webhook_credential"] = webhook_credential_id
+
+            # Validate and add extra vars JSON as string
+            if parsed_args.extra_vars:
+                try:
+                    # Validate that it's valid JSON by parsing it
+                    json.loads(parsed_args.extra_vars)
+                    # But send the original string to the API
+                    template_data["extra_vars"] = parsed_args.extra_vars
+                except json.JSONDecodeError as e:
+                    raise AAPClientError(f"Invalid JSON in --extra-vars: {e}")
+
+            # Instance groups will be associated after template creation
+
+            # Create the job template
+            endpoint = f"{CONTROLLER_API_VERSION_ENDPOINT}job_templates/"
+            try:
+                response = client.post(endpoint, json=template_data)
+                if response.status_code == HTTP_CREATED:
+                    created_template = response.json()
+                    template_id = created_template['id']
+
+                    # Collect association failures to determine if we should rollback
+                    association_errors = []
+
+                    # Associate credentials if provided
+                    if parsed_args.credentials:
+                        for credential in parsed_args.credentials:
+                            try:
+                                credential_id = resolve_credential_name(client, credential, api="controller")
+                                # Associate credential with job template
+                                credential_endpoint = f"{CONTROLLER_API_VERSION_ENDPOINT}job_templates/{template_id}/credentials/"
+                                credential_response = client.post(credential_endpoint, json={"id": credential_id})
+                                if credential_response.status_code not in [HTTP_OK, HTTP_CREATED, HTTP_NO_CONTENT]:
+                                    association_errors.append(f"Failed to associate credential '{credential}' with job template")
+                            except Exception as e:
+                                association_errors.append(f"Failed to associate credential '{credential}': {e}")
+
+                    # Associate instance groups if provided
+                    if parsed_args.instance_groups:
+                        for instance_group in parsed_args.instance_groups:
+                            try:
+                                ig_id = resolve_instance_group_name(client, instance_group, api="controller")
+                                # Associate instance group with job template
+                                ig_endpoint = f"{CONTROLLER_API_VERSION_ENDPOINT}job_templates/{template_id}/instance_groups/"
+                                ig_response = client.post(ig_endpoint, json={"id": ig_id})
+                                if ig_response.status_code not in [HTTP_OK, HTTP_CREATED, HTTP_NO_CONTENT]:
+                                    association_errors.append(f"Failed to associate instance group '{instance_group}' with job template")
+                            except Exception as e:
+                                association_errors.append(f"Failed to associate instance group '{instance_group}': {e}")
+
+                    # If any associations failed, delete the created template and raise error
+                    if association_errors:
+                        # Delete the created template to clean up
+                        try:
+                            delete_endpoint = f"{CONTROLLER_API_VERSION_ENDPOINT}job_templates/{template_id}/"
+                            client.delete(delete_endpoint)
+                        except Exception:
+                            pass  # Don't fail if cleanup fails
+
+                        # Raise error with all association failures
+                        error_message = "Job template creation failed due to association errors:\n" + "\n".join(association_errors)
+                        raise AAPClientError(error_message)
+
+                    # Re-fetch the template to get updated associations
+                    updated_response = client.get(f"{CONTROLLER_API_VERSION_ENDPOINT}job_templates/{template_id}/")
+                    if updated_response.status_code == HTTP_OK:
+                        updated_template = updated_response.json()
+
+                        field_names, field_values = _format_job_template_data(updated_template, use_utc=False, client=client)
+                        return field_names, field_values
+                    else:
+                        # Fallback to original data if re-fetch fails
+                        field_names, field_values = _format_job_template_data(created_template, use_utc=False, client=client)
+                        return field_names, field_values
+                else:
+                    raise AAPClientError(f"Failed to create job template: HTTP {response.status_code}")
+            except AAPAPIError as api_error:
+                if hasattr(api_error, 'response') and api_error.response:
+                    try:
+                        error_data = api_error.response.json()
+                        if isinstance(error_data, dict):
+                            # Display API error messages directly
+                            error_messages = []
+                            for field, messages in error_data.items():
+                                if isinstance(messages, list):
+                                    for message in messages:
+                                        error_messages.append(f"{field}: {message}")
+                                elif isinstance(messages, str):
+                                    error_messages.append(f"{field}: {messages}")
+                                else:
+                                    error_messages.append(f"{field}: {messages}")
+                            raise AAPClientError(f"API error: {'; '.join(error_messages)}")
+                    except (ValueError, KeyError):
+                        pass
+                raise AAPClientError(f"API error: {api_error}")
+
+        except AAPResourceNotFoundError as e:
+            raise SystemExit(str(e))
+        except AAPClientError as e:
+            raise SystemExit(str(e))
+        except Exception as e:
+            raise SystemExit(f"Unexpected error: {e}")
+
+
+class JobTemplateSetCommand(AAPShowCommand):
+    """Update a job template."""
+
+    def get_parser(self, prog_name):
+        parser = super().get_parser(prog_name)
+
+        # Positional argument for template name/ID
+        parser.add_argument(
+            'template',
+            help='Job template name or ID to update'
+        )
+
+        # Optional fields that can be updated
+        parser.add_argument(
+            '--description',
+            help='Job template description'
+        )
+        parser.add_argument(
+            '--job-type',
+            choices=['check', 'run'],
+            dest='job_type',
+            help='Job type'
+        )
+        parser.add_argument(
+            '--inventory',
+            help='Inventory name or ID'
+        )
+        parser.add_argument(
+            '--project',
+            help='Project name or ID'
+        )
+        parser.add_argument(
+            '--playbook',
+            help='Playbook name'
+        )
+        parser.add_argument(
+            '--execution-environment',
+            dest='execution_environment',
+            help='Execution environment name or ID'
+        )
+        parser.add_argument(
+            '--credential',
+            action='append',
+            dest='credentials',
+            help='Credential name or ID (can be used multiple times)'
+        )
+        parser.add_argument(
+            '--forks',
+            type=int,
+            help='Number of parallel processes'
+        )
+        parser.add_argument(
+            '--limit',
+            help='Host pattern to limit job execution'
+        )
+        parser.add_argument(
+            '--verbosity',
+            type=int,
+            choices=[0, 1, 2, 3, 4, 5],
+            help='Verbosity level'
+        )
+        parser.add_argument(
+            '--job-slices',
+            type=int,
+            dest='job_slices',
+            help='Number of job slices'
+        )
+        parser.add_argument(
+            '--job-timeout',
+            type=int,
+            dest='job_timeout',
+            help='Job timeout in seconds'
+        )
+        parser.add_argument(
+            '--instance-group',
+            action='append',
+            dest='instance_groups',
+            help='Instance group name or ID (can be used multiple times)'
+        )
+        parser.add_argument(
+            '--job-tags',
+            dest='job_tags',
+            help='Job tags'
+        )
+        parser.add_argument(
+            '--skip-tags',
+            dest='skip_tags',
+            help='Skip tags'
+        )
+        parser.add_argument(
+            '--extra-vars',
+            dest='extra_vars',
+            help='Extra variables as JSON'
+        )
+
+        # Mutually exclusive boolean arguments for diff mode
+        diff_group = parser.add_mutually_exclusive_group()
+        diff_group.add_argument(
+            '--enable-diff-mode',
+            action='store_true',
+            dest='enable_diff_mode',
+            help='Enable diff mode'
+        )
+        diff_group.add_argument(
+            '--disable-diff-mode',
+            action='store_true',
+            dest='disable_diff_mode',
+            help='Disable diff mode'
+        )
+
+        # Mutually exclusive boolean arguments for privileged escalation
+        escalation_group = parser.add_mutually_exclusive_group()
+        escalation_group.add_argument(
+            '--enable-privileged-escalation',
+            action='store_true',
+            dest='enable_privileged_escalation',
+            help='Enable privileged escalation'
+        )
+        escalation_group.add_argument(
+            '--disable-privileged-escalation',
+            action='store_true',
+            dest='disable_privileged_escalation',
+            help='Disable privileged escalation'
+        )
+
+        # Mutually exclusive boolean arguments for concurrent jobs
+        concurrent_group = parser.add_mutually_exclusive_group()
+        concurrent_group.add_argument(
+            '--enable-concurrent-jobs',
+            action='store_true',
+            dest='enable_concurrent_jobs',
+            help='Enable concurrent jobs'
+        )
+        concurrent_group.add_argument(
+            '--disable-concurrent-jobs',
+            action='store_true',
+            dest='disable_concurrent_jobs',
+            help='Disable concurrent jobs'
+        )
+
+        # Mutually exclusive boolean arguments for fact storage
+        fact_storage_group = parser.add_mutually_exclusive_group()
+        fact_storage_group.add_argument(
+            '--enable-fact-storage',
+            action='store_true',
+            dest='enable_fact_storage',
+            help='Enable fact storage'
+        )
+        fact_storage_group.add_argument(
+            '--disable-fact-storage',
+            action='store_true',
+            dest='disable_fact_storage',
+            help='Disable fact storage'
+        )
+
+        # Mutually exclusive boolean arguments for instance group fallback
+        fallback_group = parser.add_mutually_exclusive_group()
+        fallback_group.add_argument(
+            '--enable-instance-group-fallback',
+            action='store_true',
+            dest='enable_instance_group_fallback',
+            help='Enable instance group fallback'
+        )
+        fallback_group.add_argument(
+            '--disable-instance-group-fallback',
+            action='store_true',
+            dest='disable_instance_group_fallback',
+            help='Disable instance group fallback'
+        )
+
+        # Add ask-on-launch boolean arguments
+        ask_credential_group = parser.add_mutually_exclusive_group()
+        ask_credential_group.add_argument(
+            '--enable-ask-credential-on-launch',
+            action='store_true',
+            dest='enable_ask_credential_on_launch',
+            help='Enable ask credential on launch'
+        )
+        ask_credential_group.add_argument(
+            '--disable-ask-credential-on-launch',
+            action='store_true',
+            dest='disable_ask_credential_on_launch',
+            help='Disable ask credential on launch'
+        )
+
+        ask_diff_mode_group = parser.add_mutually_exclusive_group()
+        ask_diff_mode_group.add_argument(
+            '--enable-ask-diff-mode-on-launch',
+            action='store_true',
+            dest='enable_ask_diff_mode_on_launch',
+            help='Enable ask diff mode on launch'
+        )
+        ask_diff_mode_group.add_argument(
+            '--disable-ask-diff-mode-on-launch',
+            action='store_true',
+            dest='disable_ask_diff_mode_on_launch',
+            help='Disable ask diff mode on launch'
+        )
+
+        ask_execution_environment_group = parser.add_mutually_exclusive_group()
+        ask_execution_environment_group.add_argument(
+            '--enable-ask-execution-environment-on-launch',
+            action='store_true',
+            dest='enable_ask_execution_environment_on_launch',
+            help='Enable ask execution environment on launch'
+        )
+        ask_execution_environment_group.add_argument(
+            '--disable-ask-execution-environment-on-launch',
+            action='store_true',
+            dest='disable_ask_execution_environment_on_launch',
+            help='Disable ask execution environment on launch'
+        )
+
+        ask_forks_group = parser.add_mutually_exclusive_group()
+        ask_forks_group.add_argument(
+            '--enable-ask-forks-on-launch',
+            action='store_true',
+            dest='enable_ask_forks_on_launch',
+            help='Enable ask forks on launch'
+        )
+        ask_forks_group.add_argument(
+            '--disable-ask-forks-on-launch',
+            action='store_true',
+            dest='disable_ask_forks_on_launch',
+            help='Disable ask forks on launch'
+        )
+
+        ask_instance_groups_group = parser.add_mutually_exclusive_group()
+        ask_instance_groups_group.add_argument(
+            '--enable-ask-instance-groups-on-launch',
+            action='store_true',
+            dest='enable_ask_instance_groups_on_launch',
+            help='Enable ask instance groups on launch'
+        )
+        ask_instance_groups_group.add_argument(
+            '--disable-ask-instance-groups-on-launch',
+            action='store_true',
+            dest='disable_ask_instance_groups_on_launch',
+            help='Disable ask instance groups on launch'
+        )
+
+        ask_inventory_group = parser.add_mutually_exclusive_group()
+        ask_inventory_group.add_argument(
+            '--enable-ask-inventory-on-launch',
+            action='store_true',
+            dest='enable_ask_inventory_on_launch',
+            help='Enable ask inventory on launch'
+        )
+        ask_inventory_group.add_argument(
+            '--disable-ask-inventory-on-launch',
+            action='store_true',
+            dest='disable_ask_inventory_on_launch',
+            help='Disable ask inventory on launch'
+        )
+
+        ask_job_slice_count_group = parser.add_mutually_exclusive_group()
+        ask_job_slice_count_group.add_argument(
+            '--enable-ask-job-slice-count-on-launch',
+            action='store_true',
+            dest='enable_ask_job_slice_count_on_launch',
+            help='Enable ask job slice count on launch'
+        )
+        ask_job_slice_count_group.add_argument(
+            '--disable-ask-job-slice-count-on-launch',
+            action='store_true',
+            dest='disable_ask_job_slice_count_on_launch',
+            help='Disable ask job slice count on launch'
+        )
+
+        ask_job_type_group = parser.add_mutually_exclusive_group()
+        ask_job_type_group.add_argument(
+            '--enable-ask-job-type-on-launch',
+            action='store_true',
+            dest='enable_ask_job_type_on_launch',
+            help='Enable ask job type on launch'
+        )
+        ask_job_type_group.add_argument(
+            '--disable-ask-job-type-on-launch',
+            action='store_true',
+            dest='disable_ask_job_type_on_launch',
+            help='Disable ask job type on launch'
+        )
+
+        ask_labels_group = parser.add_mutually_exclusive_group()
+        ask_labels_group.add_argument(
+            '--enable-ask-labels-on-launch',
+            action='store_true',
+            dest='enable_ask_labels_on_launch',
+            help='Enable ask labels on launch'
+        )
+        ask_labels_group.add_argument(
+            '--disable-ask-labels-on-launch',
+            action='store_true',
+            dest='disable_ask_labels_on_launch',
+            help='Disable ask labels on launch'
+        )
+
+        ask_limit_group = parser.add_mutually_exclusive_group()
+        ask_limit_group.add_argument(
+            '--enable-ask-limit-on-launch',
+            action='store_true',
+            dest='enable_ask_limit_on_launch',
+            help='Enable ask limit on launch'
+        )
+        ask_limit_group.add_argument(
+            '--disable-ask-limit-on-launch',
+            action='store_true',
+            dest='disable_ask_limit_on_launch',
+            help='Disable ask limit on launch'
+        )
+
+        ask_skip_tags_group = parser.add_mutually_exclusive_group()
+        ask_skip_tags_group.add_argument(
+            '--enable-ask-skip-tags-on-launch',
+            action='store_true',
+            dest='enable_ask_skip_tags_on_launch',
+            help='Enable ask skip tags on launch'
+        )
+        ask_skip_tags_group.add_argument(
+            '--disable-ask-skip-tags-on-launch',
+            action='store_true',
+            dest='disable_ask_skip_tags_on_launch',
+            help='Disable ask skip tags on launch'
+        )
+
+        ask_tags_group = parser.add_mutually_exclusive_group()
+        ask_tags_group.add_argument(
+            '--enable-ask-tags-on-launch',
+            action='store_true',
+            dest='enable_ask_tags_on_launch',
+            help='Enable ask tags on launch'
+        )
+        ask_tags_group.add_argument(
+            '--disable-ask-tags-on-launch',
+            action='store_true',
+            dest='disable_ask_tags_on_launch',
+            help='Disable ask tags on launch'
+        )
+
+        ask_timeout_group = parser.add_mutually_exclusive_group()
+        ask_timeout_group.add_argument(
+            '--enable-ask-timeout-on-launch',
+            action='store_true',
+            dest='enable_ask_timeout_on_launch',
+            help='Enable ask timeout on launch'
+        )
+        ask_timeout_group.add_argument(
+            '--disable-ask-timeout-on-launch',
+            action='store_true',
+            dest='disable_ask_timeout_on_launch',
+            help='Disable ask timeout on launch'
+        )
+
+        ask_variables_group = parser.add_mutually_exclusive_group()
+        ask_variables_group.add_argument(
+            '--enable-ask-variables-on-launch',
+            action='store_true',
+            dest='enable_ask_variables_on_launch',
+            help='Enable ask variables on launch'
+        )
+        ask_variables_group.add_argument(
+            '--disable-ask-variables-on-launch',
+            action='store_true',
+            dest='disable_ask_variables_on_launch',
+            help='Disable ask variables on launch'
+        )
+
+        ask_verbosity_group = parser.add_mutually_exclusive_group()
+        ask_verbosity_group.add_argument(
+            '--enable-ask-verbosity-on-launch',
+            action='store_true',
+            dest='enable_ask_verbosity_on_launch',
+            help='Enable ask verbosity on launch'
+        )
+        ask_verbosity_group.add_argument(
+            '--disable-ask-verbosity-on-launch',
+            action='store_true',
+            dest='disable_ask_verbosity_on_launch',
+            help='Disable ask verbosity on launch'
+        )
+
+        # Webhook arguments
+        webhook_group = parser.add_mutually_exclusive_group()
+        webhook_group.add_argument(
+            '--enable-webhook',
+            action='store_true',
+            dest='enable_webhook',
+            help='Enable webhook functionality'
+        )
+        webhook_group.add_argument(
+            '--disable-webhook',
+            action='store_true',
+            dest='disable_webhook',
+            help='Disable webhook functionality'
+        )
+
+        parser.add_argument(
+            '--webhook-service',
+            choices=['gitlab', 'github', 'bitbucket_dc'],
+            dest='webhook_service',
+            help='Webhook service type'
+        )
+        parser.add_argument(
+            '--webhook-credential',
+            dest='webhook_credential',
+            help='Credential to use for webhook authentication'
+        )
+
+        return parser
+
+    def take_action(self, parsed_args):
+        """Execute the job template update command."""
+        client = self.controller_client
+
+        try:
+            # Resolve template name to ID
+            template_id = resolve_job_template_name(client, parsed_args.template, api="controller")
+
+            # Build update data only for provided arguments
+            update_data = {}
+
+            # Handle simple field updates
+            if parsed_args.description is not None:
+                update_data["description"] = parsed_args.description
+            if parsed_args.job_type:
+                update_data["job_type"] = parsed_args.job_type
+            if parsed_args.playbook:
+                update_data["playbook"] = parsed_args.playbook
+
+            # Handle resource ID resolution
+            if parsed_args.inventory:
+                inventory_id = resolve_inventory_name(client, parsed_args.inventory, api="controller")
+                update_data["inventory"] = inventory_id
+            if parsed_args.project:
+                project_id = resolve_project_name(client, parsed_args.project, api="controller")
+                update_data["project"] = project_id
+            if parsed_args.execution_environment:
+                ee_id = resolve_execution_environment_name(client, parsed_args.execution_environment, api="controller")
+                update_data["execution_environment"] = ee_id
+
+            # Handle numeric fields
+            if parsed_args.forks is not None:
+                update_data["forks"] = parsed_args.forks
+            if parsed_args.verbosity is not None:
+                update_data["verbosity"] = parsed_args.verbosity
+            if parsed_args.job_slices is not None:
+                update_data["job_slice_count"] = parsed_args.job_slices
+            if parsed_args.job_timeout is not None:
+                update_data["timeout"] = parsed_args.job_timeout
+
+            # Handle string fields
+            if parsed_args.limit is not None:
+                update_data["limit"] = parsed_args.limit
+            if parsed_args.job_tags is not None:
+                update_data["job_tags"] = parsed_args.job_tags
+            if parsed_args.skip_tags is not None:
+                update_data["skip_tags"] = parsed_args.skip_tags
+
+            # Handle boolean fields with enable/disable options
+            if parsed_args.enable_diff_mode:
+                update_data["diff_mode"] = True
+            elif parsed_args.disable_diff_mode:
+                update_data["diff_mode"] = False
+
+            if parsed_args.enable_privileged_escalation:
+                update_data["become_enabled"] = True
+            elif parsed_args.disable_privileged_escalation:
+                update_data["become_enabled"] = False
+
+            if parsed_args.enable_concurrent_jobs:
+                update_data["allow_simultaneous"] = True
+            elif parsed_args.disable_concurrent_jobs:
+                update_data["allow_simultaneous"] = False
+
+            if parsed_args.enable_fact_storage:
+                update_data["use_fact_cache"] = True
+            elif parsed_args.disable_fact_storage:
+                update_data["use_fact_cache"] = False
+
+            if parsed_args.enable_instance_group_fallback:
+                update_data["prevent_instance_group_fallback"] = False
+            elif parsed_args.disable_instance_group_fallback:
+                update_data["prevent_instance_group_fallback"] = True
+
+            # Handle ask-on-launch fields
+            if parsed_args.enable_ask_credential_on_launch:
+                update_data["ask_credential_on_launch"] = True
+            elif parsed_args.disable_ask_credential_on_launch:
+                update_data["ask_credential_on_launch"] = False
+
+            if parsed_args.enable_ask_diff_mode_on_launch:
+                update_data["ask_diff_mode_on_launch"] = True
+            elif parsed_args.disable_ask_diff_mode_on_launch:
+                update_data["ask_diff_mode_on_launch"] = False
+
+            if parsed_args.enable_ask_execution_environment_on_launch:
+                update_data["ask_execution_environment_on_launch"] = True
+            elif parsed_args.disable_ask_execution_environment_on_launch:
+                update_data["ask_execution_environment_on_launch"] = False
+
+            if parsed_args.enable_ask_forks_on_launch:
+                update_data["ask_forks_on_launch"] = True
+            elif parsed_args.disable_ask_forks_on_launch:
+                update_data["ask_forks_on_launch"] = False
+
+            if parsed_args.enable_ask_instance_groups_on_launch:
+                update_data["ask_instance_groups_on_launch"] = True
+            elif parsed_args.disable_ask_instance_groups_on_launch:
+                update_data["ask_instance_groups_on_launch"] = False
+
+            if parsed_args.enable_ask_inventory_on_launch:
+                update_data["ask_inventory_on_launch"] = True
+            elif parsed_args.disable_ask_inventory_on_launch:
+                update_data["ask_inventory_on_launch"] = False
+
+            if parsed_args.enable_ask_job_slice_count_on_launch:
+                update_data["ask_job_slice_count_on_launch"] = True
+            elif parsed_args.disable_ask_job_slice_count_on_launch:
+                update_data["ask_job_slice_count_on_launch"] = False
+
+            if parsed_args.enable_ask_job_type_on_launch:
+                update_data["ask_job_type_on_launch"] = True
+            elif parsed_args.disable_ask_job_type_on_launch:
+                update_data["ask_job_type_on_launch"] = False
+
+            if parsed_args.enable_ask_labels_on_launch:
+                update_data["ask_labels_on_launch"] = True
+            elif parsed_args.disable_ask_labels_on_launch:
+                update_data["ask_labels_on_launch"] = False
+
+            if parsed_args.enable_ask_limit_on_launch:
+                update_data["ask_limit_on_launch"] = True
+            elif parsed_args.disable_ask_limit_on_launch:
+                update_data["ask_limit_on_launch"] = False
+
+            if parsed_args.enable_ask_skip_tags_on_launch:
+                update_data["ask_skip_tags_on_launch"] = True
+            elif parsed_args.disable_ask_skip_tags_on_launch:
+                update_data["ask_skip_tags_on_launch"] = False
+
+            if parsed_args.enable_ask_tags_on_launch:
+                update_data["ask_tags_on_launch"] = True
+            elif parsed_args.disable_ask_tags_on_launch:
+                update_data["ask_tags_on_launch"] = False
+
+            if parsed_args.enable_ask_timeout_on_launch:
+                update_data["ask_timeout_on_launch"] = True
+            elif parsed_args.disable_ask_timeout_on_launch:
+                update_data["ask_timeout_on_launch"] = False
+
+            if parsed_args.enable_ask_variables_on_launch:
+                update_data["ask_variables_on_launch"] = True
+            elif parsed_args.disable_ask_variables_on_launch:
+                update_data["ask_variables_on_launch"] = False
+
+            if parsed_args.enable_ask_verbosity_on_launch:
+                update_data["ask_verbosity_on_launch"] = True
+            elif parsed_args.disable_ask_verbosity_on_launch:
+                update_data["ask_verbosity_on_launch"] = False
+
+            # Handle webhook fields
+            if parsed_args.enable_webhook:
+                if not parsed_args.webhook_service:
+                    raise AAPClientError("--webhook-service is required when --enable-webhook is used")
+                update_data["webhook_service"] = parsed_args.webhook_service
+                if parsed_args.webhook_credential:
+                    webhook_credential_id = resolve_credential_name(client, parsed_args.webhook_credential, api="controller")
+                    update_data["webhook_credential"] = webhook_credential_id
+            elif parsed_args.disable_webhook:
+                update_data["webhook_service"] = ""
+                update_data["webhook_credential"] = None
+            else:
+                # Handle webhook fields when not explicitly enabling/disabling
+                if parsed_args.webhook_service:
+                    update_data["webhook_service"] = parsed_args.webhook_service
+                if parsed_args.webhook_credential:
+                    webhook_credential_id = resolve_credential_name(client, parsed_args.webhook_credential, api="controller")
+                    update_data["webhook_credential"] = webhook_credential_id
+
+            # Handle extra vars
+            if parsed_args.extra_vars is not None:
+                try:
+                    # Validate that it's valid JSON by parsing it
+                    json.loads(parsed_args.extra_vars)
+                    # But send the original string to the API
+                    update_data["extra_vars"] = parsed_args.extra_vars
+                except json.JSONDecodeError as e:
+                    raise AAPClientError(f"Invalid JSON in --extra-vars: {e}")
+
+            # Update the job template
+            endpoint = f"{CONTROLLER_API_VERSION_ENDPOINT}job_templates/{template_id}/"
+            try:
+                response = client.patch(endpoint, json=update_data)
+                if response.status_code == HTTP_OK:
+                    updated_template = response.json()
+
+                    # Handle credentials and instance groups associations if provided
+                    association_errors = []
+
+                    # Handle credentials
+                    if parsed_args.credentials:
+                        # Clear existing credentials first
+                        try:
+                            clear_response = client.post(f"{endpoint}credentials/", json=[])
+                            if clear_response.status_code not in [HTTP_OK, HTTP_CREATED, HTTP_NO_CONTENT]:
+                                association_errors.append(f"Failed to clear existing credentials: HTTP {clear_response.status_code}")
+                        except Exception as e:
+                            association_errors.append(f"Error clearing credentials: {str(e)}")
+
+                        # Add new credentials
+                        for credential in parsed_args.credentials:
+                            try:
+                                credential_id = resolve_credential_name(client, credential, api="controller")
+                                cred_response = client.post(f"{endpoint}credentials/", json={"id": credential_id})
+                                if cred_response.status_code not in [HTTP_OK, HTTP_CREATED, HTTP_NO_CONTENT]:
+                                    association_errors.append(f"Failed to associate credential '{credential}': HTTP {cred_response.status_code}")
+                            except Exception as e:
+                                association_errors.append(f"Error associating credential '{credential}': {str(e)}")
+
+                    # Handle instance groups
+                    if parsed_args.instance_groups:
+                        # Clear existing instance groups first
+                        try:
+                            clear_response = client.post(f"{endpoint}instance_groups/", json=[])
+                            if clear_response.status_code not in [HTTP_OK, HTTP_CREATED, HTTP_NO_CONTENT]:
+                                association_errors.append(f"Failed to clear existing instance groups: HTTP {clear_response.status_code}")
+                        except Exception as e:
+                            association_errors.append(f"Error clearing instance groups: {str(e)}")
+
+                        # Add new instance groups
+                        for instance_group in parsed_args.instance_groups:
+                            try:
+                                ig_id = resolve_instance_group_name(client, instance_group, api="controller")
+                                ig_response = client.post(f"{endpoint}instance_groups/", json={"id": ig_id})
+                                if ig_response.status_code not in [HTTP_OK, HTTP_CREATED, HTTP_NO_CONTENT]:
+                                    association_errors.append(f"Failed to associate instance group '{instance_group}': HTTP {ig_response.status_code}")
+                            except Exception as e:
+                                association_errors.append(f"Error associating instance group '{instance_group}': {str(e)}")
+
+                    # Display warnings for association errors but don't fail
+                    if association_errors:
+                        for error in association_errors:
+                            print(f"Warning: {error}", file=sys.stderr)
+
+                    # Re-fetch the template to get updated associations
+                    updated_response = client.get(f"{CONTROLLER_API_VERSION_ENDPOINT}job_templates/{template_id}/")
+                    if updated_response.status_code == HTTP_OK:
+                        updated_template = updated_response.json()
+                        field_names, field_values = _format_job_template_data(updated_template, use_utc=False, client=client)
+                        return field_names, field_values
+                    else:
+                        # Fallback to original data if re-fetch fails
+                        field_names, field_values = _format_job_template_data(updated_template, use_utc=False, client=client)
+                        return field_names, field_values
+                else:
+                    raise AAPClientError(f"Failed to update job template: HTTP {response.status_code}")
+            except AAPAPIError as api_error:
+                if hasattr(api_error, 'response') and api_error.response:
+                    try:
+                        error_data = api_error.response.json()
+                        if isinstance(error_data, dict):
+                            error_messages = []
+                            for field, messages in error_data.items():
+                                if isinstance(messages, list):
+                                    for message in messages:
+                                        error_messages.append(f"{field}: {message}")
+                                else:
+                                    error_messages.append(f"{field}: {messages}")
+                            raise AAPClientError("API error: " + "; ".join(error_messages))
+                    except (ValueError, KeyError):
+                        pass
+                raise AAPClientError(f"API error: {api_error}")
 
         except AAPResourceNotFoundError as e:
             raise SystemExit(str(e))
