@@ -182,15 +182,37 @@ class OrganizationShowCommand(AAPShowCommand):
             raise AAPClientError(f"Unexpected error: {e}")
 
 
-class OrganizationCreateCommand(AAPShowCommand):
-    """Create a new organization."""
+class OrganizationBaseCommand(AAPShowCommand):
+    """Base class for organization create and set commands."""
 
-    def get_parser(self, prog_name):
-        parser = super().get_parser(prog_name)
-        parser.add_argument(
-            'name',
-            help='Organization name'
-        )
+    def add_common_arguments(self, parser, required_args=True):
+        """Add common arguments for organization commands."""
+        if required_args:
+            # For create command
+            parser.add_argument(
+                'name',
+                help='Organization name'
+            )
+        else:
+            # For set command
+            parser.add_argument(
+                '--id',
+                type=int,
+                help='Organization ID (overrides positional parameter)'
+            )
+            parser.add_argument(
+                'organization',
+                nargs='?',
+                metavar='<organization>',
+                help='Organization name or ID to update'
+            )
+            parser.add_argument(
+                '--set-name',
+                dest='set_name',
+                help='New organization name'
+            )
+
+        # Common arguments for both commands
         parser.add_argument(
             '--description',
             help='Organization description'
@@ -201,26 +223,61 @@ class OrganizationCreateCommand(AAPShowCommand):
             dest='max_hosts',
             help='Maximum number of hosts allowed in this organization'
         )
+
+    def resolve_resources(self, client, parsed_args, for_create=True):
+        """Resolve resource names to IDs."""
+        resolved = {}
+
+        if not for_create:
+            # For set command - organization resolution
+            if parsed_args.id:
+                resolved['organization_id'] = parsed_args.id
+            elif parsed_args.organization:
+                resolved['organization_id'] = resolve_organization_name(client, parsed_args.organization, api="gateway")
+            else:
+                raise AAPClientError("Organization identifier is required")
+
+        return resolved
+
+    def build_organization_data(self, parsed_args, resolved_resources, for_create=True):
+        """Build organization data for API requests."""
+        organization_data = {}
+
+        if for_create:
+            organization_data['name'] = parsed_args.name
+        else:
+            # For set command
+            if getattr(parsed_args, 'set_name', None):
+                organization_data['name'] = parsed_args.set_name
+
+        # Common fields
+        if hasattr(parsed_args, 'description') and parsed_args.description is not None:
+            organization_data['description'] = parsed_args.description
+
+        if hasattr(parsed_args, 'max_hosts') and getattr(parsed_args, 'max_hosts', None) is not None:
+            organization_data['max_hosts'] = parsed_args.max_hosts
+
+        return organization_data
+
+
+class OrganizationCreateCommand(OrganizationBaseCommand):
+    """Create a new organization."""
+
+    def get_parser(self, prog_name):
+        parser = super().get_parser(prog_name)
+        self.add_common_arguments(parser, required_args=True)
         return parser
 
     def take_action(self, parsed_args):
         """Execute the organization create command."""
         try:
-            # Get client from centralized client manager
             client = self.gateway_client
 
-            # Get parser for usage message
-            parser = self.get_parser('aap organization create')
+            # Resolve resources
+            resolved_resources = self.resolve_resources(client, parsed_args, for_create=True)
 
-            organization_data = {
-                'name': parsed_args.name
-            }
-
-            # Add optional fields
-            if parsed_args.description:
-                organization_data['description'] = parsed_args.description
-            if getattr(parsed_args, 'max_hosts', None):
-                organization_data['max_hosts'] = parsed_args.max_hosts
+            # Build organization data
+            organization_data = self.build_organization_data(parsed_args, resolved_resources, for_create=True)
 
             # Create organization
             endpoint = f"{GATEWAY_API_VERSION_ENDPOINT}organizations/"
@@ -253,42 +310,12 @@ class OrganizationCreateCommand(AAPShowCommand):
             raise SystemExit(f"Unexpected error: {e}")
 
 
-class OrganizationSetCommand(AAPShowCommand):
+class OrganizationSetCommand(OrganizationBaseCommand):
     """Update an existing organization."""
 
     def get_parser(self, prog_name):
         parser = super().get_parser(prog_name)
-
-        # ID option to override positional parameter
-        parser.add_argument(
-            '--id',
-            type=int,
-            help='Organization ID (overrides positional parameter)'
-        )
-
-        # Positional parameter for name lookup with ID fallback
-        parser.add_argument(
-            'organization',
-            nargs='?',
-            metavar='<organization>',
-            help='Organization name or ID to update'
-        )
-
-        parser.add_argument(
-            '--set-name',
-            dest='set_name',
-            help='New organization name'
-        )
-        parser.add_argument(
-            '--description',
-            help='Organization description'
-        )
-        parser.add_argument(
-            '--max-hosts',
-            type=int,
-            dest='max_hosts',
-            help='Maximum number of hosts allowed in this organization'
-        )
+        self.add_common_arguments(parser, required_args=False)
         return parser
 
     def take_action(self, parsed_args):

@@ -240,23 +240,59 @@ class ProjectShowCommand(AAPShowCommand):
             raise SystemExit(f"Unexpected error: {e}")
 
 
-class ProjectCreateCommand(AAPShowCommand):
-    """Create a new project."""
+class ProjectBaseCommand(AAPShowCommand):
+    """Base class for project create and set commands."""
 
-    def get_parser(self, prog_name):
-        parser = super().get_parser(prog_name)
-        parser.add_argument(
-            'name',
-            help='Project name'
-        )
+    def add_common_arguments(self, parser, required_args=True):
+        """Add common arguments for project commands."""
+        if required_args:
+            # For create command
+            parser.add_argument(
+                'name',
+                help='Project name'
+            )
+            parser.add_argument(
+                '--organization',
+                required=True,
+                help='Organization'
+            )
+            parser.add_argument(
+                '--scm-type',
+                required=True,
+                choices=['git', 'svn', 'insights', 'archive'],
+                help='Source control type'
+            )
+        else:
+            # For set command
+            parser.add_argument(
+                '--id',
+                type=int,
+                help='Project ID (overrides positional parameter)'
+            )
+            parser.add_argument(
+                'project',
+                nargs='?',
+                help='Project name or ID'
+            )
+            parser.add_argument(
+                '--set-name',
+                dest='set_name',
+                help='Update project name'
+            )
+            parser.add_argument(
+                '--organization',
+                help='Update organization'
+            )
+            parser.add_argument(
+                '--scm-type',
+                choices=['git', 'svn', 'insights', 'archive'],
+                help='Update source control type'
+            )
+
+        # Common arguments for both commands
         parser.add_argument(
             '--description',
             help='Project description'
-        )
-        parser.add_argument(
-            '--organization',
-            required=True,
-            help='Organization'
         )
         parser.add_argument(
             '--execution-environment',
@@ -265,12 +301,6 @@ class ProjectCreateCommand(AAPShowCommand):
         parser.add_argument(
             '--signature-validation-credential',
             help='Signature validation Credential'
-        )
-        parser.add_argument(
-            '--scm-type',
-            required=True,
-            choices=['git', 'svn', 'insights', 'archive'],
-            help='Source control type'
         )
         parser.add_argument(
             '--scm-credential',
@@ -290,118 +320,239 @@ class ProjectCreateCommand(AAPShowCommand):
             help='Source control refspec (git)'
         )
         parser.add_argument(
-            '--enable-scm-track-submodules',
-            action='store_true',
-            dest='scm_track_submodules',
-            help='Enable tracking submodules for git SCM type'
-        )
-        parser.add_argument(
-            '--enable-scm-update-on-launch',
-            action='store_true',
-            dest='scm_update_on_launch',
-            help='Enable source control update on job launch'
-        )
-        parser.add_argument(
-            '--enable-scm-allow-branch-override',
-            action='store_true',
-            dest='allow_override',
-            help='Enable allowing a job template to override the branch or revision'
-        )
-        parser.add_argument(
-            '--enable-scm-clean',
-            action='store_true',
-            dest='scm_clean',
-            help='Enable removing local repository modifications prior to project update'
-        )
-        parser.add_argument(
-            '--enable-scm-delete-on-update',
-            action='store_true',
-            dest='scm_delete_on_update',
-            help='Enable deleting local repository prior to project update'
-        )
-        parser.add_argument(
             '--scm-update-cache-timeout',
             type=int,
             help='Delete local repository prior to project update'
         )
+
+    def add_boolean_arguments(self, parser, mutually_exclusive=False):
+        """Add boolean SCM arguments for project commands."""
+        if mutually_exclusive:
+            # For set command with enable/disable options
+            track_submodules_group = parser.add_mutually_exclusive_group()
+            track_submodules_group.add_argument(
+                '--enable-scm-track-submodules',
+                action='store_true',
+                help='Enable tracking submodules for git SCM type'
+            )
+            track_submodules_group.add_argument(
+                '--disable-scm-track-submodules',
+                action='store_true',
+                help='Disable tracking submodules for git SCM type'
+            )
+
+            update_on_launch_group = parser.add_mutually_exclusive_group()
+            update_on_launch_group.add_argument(
+                '--enable-scm-update-on-launch',
+                action='store_true',
+                help='Enable source control update on job launch'
+            )
+            update_on_launch_group.add_argument(
+                '--disable-scm-update-on-launch',
+                action='store_true',
+                help='Disable source control update on job launch'
+            )
+
+            allow_override_group = parser.add_mutually_exclusive_group()
+            allow_override_group.add_argument(
+                '--enable-scm-allow-branch-override',
+                action='store_true',
+                help='Enable allowing a job template to override the branch or revision'
+            )
+            allow_override_group.add_argument(
+                '--disable-scm-allow-branch-override',
+                action='store_true',
+                help='Disable allowing a job template to override the branch or revision'
+            )
+
+            scm_clean_group = parser.add_mutually_exclusive_group()
+            scm_clean_group.add_argument(
+                '--enable-scm-clean',
+                action='store_true',
+                help='Enable removing local repository modifications prior to project update'
+            )
+            scm_clean_group.add_argument(
+                '--disable-scm-clean',
+                action='store_true',
+                help='Disable removing local repository modifications prior to project update'
+            )
+
+            scm_delete_group = parser.add_mutually_exclusive_group()
+            scm_delete_group.add_argument(
+                '--enable-scm-delete-on-update',
+                action='store_true',
+                help='Enable deleting local repository prior to project update'
+            )
+            scm_delete_group.add_argument(
+                '--disable-scm-delete-on-update',
+                action='store_true',
+                help='Disable deleting local repository prior to project update'
+            )
+        else:
+            # For create command with simple store_true
+            parser.add_argument(
+                '--enable-scm-track-submodules',
+                action='store_true',
+                dest='scm_track_submodules',
+                help='Enable tracking submodules for git SCM type'
+            )
+            parser.add_argument(
+                '--enable-scm-update-on-launch',
+                action='store_true',
+                dest='scm_update_on_launch',
+                help='Enable source control update on job launch'
+            )
+            parser.add_argument(
+                '--enable-scm-allow-branch-override',
+                action='store_true',
+                dest='allow_override',
+                help='Enable allowing a job template to override the branch or revision'
+            )
+            parser.add_argument(
+                '--enable-scm-clean',
+                action='store_true',
+                dest='scm_clean',
+                help='Enable removing local repository modifications prior to project update'
+            )
+            parser.add_argument(
+                '--enable-scm-delete-on-update',
+                action='store_true',
+                dest='scm_delete_on_update',
+                help='Enable deleting local repository prior to project update'
+            )
+
+    def resolve_resources(self, client, parsed_args, for_create=True):
+        """Resolve resource names to IDs."""
+        resolved = {}
+
+        if for_create:
+            resolved['organization_id'] = resolve_organization_name(client, parsed_args.organization, api="controller")
+        else:
+            # For set command - project resolution
+            if parsed_args.id:
+                resolved['project_id'] = parsed_args.id
+            elif parsed_args.project:
+                resolved['project_id'] = resolve_project_name(client, parsed_args.project, api="controller")
+            else:
+                raise AAPClientError("Project identifier is required")
+
+            if getattr(parsed_args, 'organization', None):
+                resolved['organization_id'] = resolve_organization_name(client, parsed_args.organization, api="controller")
+
+        # Common resource resolution
+        if getattr(parsed_args, 'credential', None):
+            resolved['credential_id'] = resolve_credential_name(client, parsed_args.credential, api="controller")
+
+        if getattr(parsed_args, 'execution_environment', None):
+            resolved['execution_environment_id'] = resolve_execution_environment_name(client, parsed_args.execution_environment, api="controller")
+
+        if getattr(parsed_args, 'signature_validation_credential', None):
+            resolved['signature_validation_credential_id'] = resolve_credential_name(client, parsed_args.signature_validation_credential, api="controller")
+
+        return resolved
+
+    def validate_scm_requirements(self, parsed_args, parser):
+        """Validate SCM type requirements."""
+        if hasattr(parsed_args, 'scm_type') and parsed_args.scm_type:
+            if parsed_args.scm_type in ['git', 'svn', 'archive']:
+                if not getattr(parsed_args, 'scm_url', None):
+                    parser.error(f"argument --scm-url is required when using SCM type '{parsed_args.scm_type}'")
+            elif parsed_args.scm_type == 'insights':
+                if not getattr(parsed_args, 'credential', None):
+                    parser.error("argument --scm-credential is required when using SCM type 'insights'")
+
+    def build_project_data(self, parsed_args, resolved_resources, for_create=True):
+        """Build project data for API requests."""
+        project_data = {}
+
+        if for_create:
+            project_data['name'] = parsed_args.name
+            project_data['organization'] = resolved_resources['organization_id']
+            project_data['scm_type'] = parsed_args.scm_type
+        else:
+            # For set command
+            if getattr(parsed_args, 'set_name', None):
+                project_data['name'] = parsed_args.set_name
+            if 'organization_id' in resolved_resources:
+                project_data['organization'] = resolved_resources['organization_id']
+            if hasattr(parsed_args, 'scm_type') and parsed_args.scm_type:
+                project_data['scm_type'] = parsed_args.scm_type
+
+        # Common fields
+        if hasattr(parsed_args, 'description') and parsed_args.description is not None:
+            project_data['description'] = parsed_args.description
+
+        # Resource IDs
+        if 'credential_id' in resolved_resources:
+            project_data['credential'] = resolved_resources['credential_id']
+        if 'execution_environment_id' in resolved_resources:
+            project_data['default_environment'] = resolved_resources['execution_environment_id']
+        if 'signature_validation_credential_id' in resolved_resources:
+            project_data['signature_validation_credential'] = resolved_resources['signature_validation_credential_id']
+
+        # SCM fields
+        for field in ['scm_url', 'scm_branch', 'scm_refspec', 'scm_update_cache_timeout']:
+            if hasattr(parsed_args, field) and getattr(parsed_args, field) is not None:
+                project_data[field] = getattr(parsed_args, field)
+
+        # Boolean SCM fields
+        if for_create:
+            for field in ['scm_track_submodules', 'scm_update_on_launch', 'allow_override', 'scm_clean', 'scm_delete_on_update']:
+                if hasattr(parsed_args, field) and getattr(parsed_args, field):
+                    project_data[field] = getattr(parsed_args, field)
+        else:
+            # Boolean SCM fields for set (handle enable/disable pairs)
+            if hasattr(parsed_args, 'enable_scm_track_submodules') and parsed_args.enable_scm_track_submodules:
+                project_data['scm_track_submodules'] = True
+            elif hasattr(parsed_args, 'disable_scm_track_submodules') and parsed_args.disable_scm_track_submodules:
+                project_data['scm_track_submodules'] = False
+
+            if hasattr(parsed_args, 'enable_scm_update_on_launch') and parsed_args.enable_scm_update_on_launch:
+                project_data['scm_update_on_launch'] = True
+            elif hasattr(parsed_args, 'disable_scm_update_on_launch') and parsed_args.disable_scm_update_on_launch:
+                project_data['scm_update_on_launch'] = False
+
+            if hasattr(parsed_args, 'enable_scm_allow_branch_override') and parsed_args.enable_scm_allow_branch_override:
+                project_data['allow_override'] = True
+            elif hasattr(parsed_args, 'disable_scm_allow_branch_override') and parsed_args.disable_scm_allow_branch_override:
+                project_data['allow_override'] = False
+
+            if hasattr(parsed_args, 'enable_scm_clean') and parsed_args.enable_scm_clean:
+                project_data['scm_clean'] = True
+            elif hasattr(parsed_args, 'disable_scm_clean') and parsed_args.disable_scm_clean:
+                project_data['scm_clean'] = False
+
+            if hasattr(parsed_args, 'enable_scm_delete_on_update') and parsed_args.enable_scm_delete_on_update:
+                project_data['scm_delete_on_update'] = True
+            elif hasattr(parsed_args, 'disable_scm_delete_on_update') and parsed_args.disable_scm_delete_on_update:
+                project_data['scm_delete_on_update'] = False
+
+        return project_data
+
+
+class ProjectCreateCommand(ProjectBaseCommand):
+    """Create a new project."""
+
+    def get_parser(self, prog_name):
+        parser = super().get_parser(prog_name)
+        self.add_common_arguments(parser, required_args=True)
+        self.add_boolean_arguments(parser, mutually_exclusive=False)
         return parser
 
     def take_action(self, parsed_args):
         """Execute the project create command."""
         try:
-            # Get client from centralized client manager
             client = self.controller_client
 
-            # Get parser for usage message
+            # Validate SCM requirements
             parser = self.get_parser('aap project create')
+            self.validate_scm_requirements(parsed_args, parser)
 
-            # Verify required arguments for different SCM types
-            if parsed_args.scm_type in ['git', 'svn', 'archive']:
-                if not parsed_args.scm_url:
-                    parser.error("argument --scm-url is required when using SCM type '%s'" % parsed_args.scm_type)
-            if parsed_args.scm_type == 'insights':
-                if not parsed_args.credential:
-                    parser.error("argument --scm-credential is required when using SCM type 'insights'")
+            # Resolve resources
+            resolved_resources = self.resolve_resources(client, parsed_args, for_create=True)
 
-            # Resolve organization - handle both ID and name
-            org_id = resolve_organization_name(client, parsed_args.organization, api="controller")
-
-            # Resolve credential - handle both ID and name (if provided)
-            credential_id = None
-            if getattr(parsed_args, 'credential', None):
-                credential_id = resolve_credential_name(client, parsed_args.credential, api="controller")
-
-            # Resolve execution environment - handle both ID and name (if provided)
-            execution_environment_id = None
-            if getattr(parsed_args, 'execution_environment', None):
-                execution_environment_id = resolve_execution_environment_name(client, parsed_args.execution_environment, api="controller")
-
-            # Resolve signature validation credential - handle both ID and name (if provided)
-            signature_validation_credential_id = None
-            if getattr(parsed_args, 'signature_validation_credential', None):
-                try:
-                    signature_validation_credential_id = resolve_credential_name(client, parsed_args.signature_validation_credential, api="controller")
-                except AAPResourceNotFoundError:
-                    parser.error(f"Signature validation credential '{parsed_args.signature_validation_credential}' not found")
-
-            project_data = {
-                'name': parsed_args.name,
-                'organization': org_id,
-                'scm_type': parsed_args.scm_type
-            }
-
-            # Add credential if provided
-            if credential_id is not None:
-                project_data['credential'] = credential_id
-
-            # Add execution environment if provided
-            if execution_environment_id is not None:
-                project_data['default_environment'] = execution_environment_id
-
-            # Add signature validation credential if provided
-            if signature_validation_credential_id is not None:
-                project_data['signature_validation_credential'] = signature_validation_credential_id
-
-            if parsed_args.description:
-                project_data['description'] = parsed_args.description
-            if getattr(parsed_args, 'scm_url', None):
-                project_data['scm_url'] = parsed_args.scm_url
-            if getattr(parsed_args, 'scm_branch', None):
-                project_data['scm_branch'] = parsed_args.scm_branch
-            if getattr(parsed_args, 'scm_refspec', None):
-                project_data['scm_refspec'] = parsed_args.scm_refspec
-            if getattr(parsed_args, 'scm_track_submodules', None):
-                project_data['scm_track_submodules'] = parsed_args.scm_track_submodules
-            if getattr(parsed_args, 'scm_update_on_launch', None):
-                project_data['scm_update_on_launch'] = parsed_args.scm_update_on_launch
-            if getattr(parsed_args, 'allow_override', None):
-                project_data['allow_override'] = parsed_args.allow_override
-            if getattr(parsed_args, 'scm_clean', None):
-                project_data['scm_clean'] = parsed_args.scm_clean
-            if getattr(parsed_args, 'scm_delete_on_update', None):
-                project_data['scm_delete_on_update'] = parsed_args.scm_delete_on_update
-            if getattr(parsed_args, 'scm_update_cache_timeout', None):
-                project_data['scm_update_cache_timeout'] = parsed_args.scm_update_cache_timeout
+            # Build project data
+            project_data = self.build_project_data(parsed_args, resolved_resources, for_create=True)
 
             # Create project
             endpoint = f"{CONTROLLER_API_VERSION_ENDPOINT}projects/"
@@ -411,10 +562,9 @@ class ProjectCreateCommand(AAPShowCommand):
                 self.handle_api_error(api_error, "Controller API", parsed_args.name)
 
             if response.status_code == HTTP_CREATED:
-                project_data = response.json()
-                print(f"Project '{project_data.get('name', '')}' created successfully")
-
-                return _format_project_data(project_data)
+                created_project = response.json()
+                print(f"Project '{created_project.get('name', '')}' created successfully")
+                return _format_project_data(created_project)
             else:
                 raise AAPClientError(f"Project creation failed with status {response.status_code}")
 
@@ -426,139 +576,14 @@ class ProjectCreateCommand(AAPShowCommand):
             raise SystemExit(f"Unexpected error: {e}")
 
 
-class ProjectSetCommand(AAPShowCommand):
+class ProjectSetCommand(ProjectBaseCommand):
     """Update an existing project."""
 
     def get_parser(self, prog_name):
         parser = super().get_parser(prog_name)
 
-        # ID option to override positional parameter
-        parser.add_argument(
-            '--id',
-            type=int,
-            help='Project ID (overrides positional parameter)'
-        )
-
-        # Positional parameter for name lookup with ID fallback
-        parser.add_argument(
-            'project',
-            nargs='?',
-            help='Project name or ID'
-        )
-
-        # Update fields
-        parser.add_argument(
-            '--set-name',
-            dest='set_name',
-            help='Update project name'
-        )
-        parser.add_argument(
-            '--description',
-            help='Update project description'
-        )
-        parser.add_argument(
-            '--organization',
-            help='Update organization'
-        )
-        parser.add_argument(
-            '--execution-environment',
-            help='Update default execution environment for jobs associated with this project'
-        )
-        parser.add_argument(
-            '--signature-validation-credential',
-            help='Update signature validation Credential'
-        )
-        parser.add_argument(
-            '--scm-type',
-            choices=['git', 'svn', 'insights', 'archive'],
-            help='Update source control type'
-        )
-        parser.add_argument(
-            '--scm-credential',
-            dest='credential',
-            help='Update source Control Credential (git, svn, archive) or Insights Credential (insights)'
-        )
-        parser.add_argument(
-            '--scm-url',
-            help='Update source control URL for git, svn, or archive SCM type'
-        )
-        parser.add_argument(
-            '--scm-branch',
-            help='Update branch/tag/commit (git) or revision (svn)'
-        )
-        parser.add_argument(
-            '--scm-refspec',
-            help='Update source control refspec (git)'
-        )
-        # SCM Track Submodules group
-        track_submodules_group = parser.add_mutually_exclusive_group()
-        track_submodules_group.add_argument(
-            '--enable-scm-track-submodules',
-            action='store_true',
-            help='Enable tracking submodules for git SCM type'
-        )
-        track_submodules_group.add_argument(
-            '--disable-scm-track-submodules',
-            action='store_true',
-            help='Disable tracking submodules for git SCM type'
-        )
-
-        # SCM Update on Launch group
-        update_on_launch_group = parser.add_mutually_exclusive_group()
-        update_on_launch_group.add_argument(
-            '--enable-scm-update-on-launch',
-            action='store_true',
-            help='Enable source control update on job launch'
-        )
-        update_on_launch_group.add_argument(
-            '--disable-scm-update-on-launch',
-            action='store_true',
-            help='Disable source control update on job launch'
-        )
-
-        # SCM Allow Branch Override group
-        allow_override_group = parser.add_mutually_exclusive_group()
-        allow_override_group.add_argument(
-            '--enable-scm-allow-branch-override',
-            action='store_true',
-            help='Enable allowing a job template to override the branch or revision'
-        )
-        allow_override_group.add_argument(
-            '--disable-scm-allow-branch-override',
-            action='store_true',
-            help='Disable allowing a job template to override the branch or revision'
-        )
-
-        # SCM Clean group
-        scm_clean_group = parser.add_mutually_exclusive_group()
-        scm_clean_group.add_argument(
-            '--enable-scm-clean',
-            action='store_true',
-            help='Enable removing local repository modifications prior to project update'
-        )
-        scm_clean_group.add_argument(
-            '--disable-scm-clean',
-            action='store_true',
-            help='Disable removing local repository modifications prior to project update'
-        )
-
-        # SCM Delete on Update group
-        delete_on_update_group = parser.add_mutually_exclusive_group()
-        delete_on_update_group.add_argument(
-            '--enable-scm-delete-on-update',
-            action='store_true',
-            help='Enable deleting local repository prior to project update'
-        )
-        delete_on_update_group.add_argument(
-            '--disable-scm-delete-on-update',
-            action='store_true',
-            help='Disable deleting local repository prior to project update'
-        )
-        parser.add_argument(
-            '--scm-update-cache-timeout',
-            type=int,
-            help='Update SCM cache timeout'
-        )
+        self.add_common_arguments(parser, required_args=False)
+        self.add_boolean_arguments(parser, mutually_exclusive=True)
         return parser
 
     def take_action(self, parsed_args):

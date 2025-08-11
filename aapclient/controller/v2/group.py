@@ -235,58 +235,123 @@ class GroupShowCommand(AAPShowCommand):
             raise AAPClientError(f"Unexpected error: {e}")
 
 
-class GroupCreateCommand(AAPShowCommand):
-    """Create a new group."""
+class GroupBaseCommand(AAPShowCommand):
+    """Base class for group create and set commands."""
 
-    def get_parser(self, prog_name):
-        parser = super().get_parser(prog_name)
-        parser.add_argument(
-            'name',
-            help='Group name'
-        )
+    def add_common_arguments(self, parser, required_args=True):
+        """Add common arguments for group commands."""
+        if required_args:
+            # For create command
+            parser.add_argument(
+                'name',
+                help='Group name'
+            )
+            parser.add_argument(
+                '--inventory',
+                required=True,
+                help='Inventory name or ID that the group belongs to'
+            )
+        else:
+            # For set command
+            parser.add_argument(
+                '--id',
+                type=int,
+                help='Group ID'
+            )
+            parser.add_argument(
+                'group',
+                nargs='?',
+                metavar='<group>',
+                help='Group name or ID to update'
+            )
+            parser.add_argument(
+                '--set-name',
+                dest='set_name',
+                help='New group name'
+            )
+
+        # Common arguments for both commands
         parser.add_argument(
             '--description',
             help='Group description'
         )
         parser.add_argument(
-            '--inventory',
-            required=True,
-            help='Inventory name or ID that the group belongs to'
-        )
-        parser.add_argument(
             '--variables',
             help='Group variables in JSON format'
         )
+
+    def resolve_resources(self, client, parsed_args, for_create=True):
+        """Resolve resource names to IDs."""
+        resolved_resources = {}
+
+        if for_create:
+            # For create command, resolve inventory
+            resolved_resources['inventory_id'] = resolve_inventory_name(
+                client, parsed_args.inventory, api="controller"
+            )
+        else:
+            # For set command, resolve group
+            group_identifier = getattr(parsed_args, 'id', None) or parsed_args.group
+            if not group_identifier:
+                parser = self.get_parser('aap group set')
+                parser.error("Group name/ID is required")
+
+            resolved_resources['group_id'] = resolve_group_name(
+                client, group_identifier, api="controller"
+            )
+
+        return resolved_resources
+
+    def build_group_data(self, parsed_args, resolved_resources, for_create=True):
+        """Build group data dictionary for API requests."""
+        group_data = {}
+
+        if for_create:
+            # Required fields for create
+            group_data['name'] = parsed_args.name
+            group_data['inventory'] = resolved_resources['inventory_id']
+        else:
+            # Optional name update for set
+            if getattr(parsed_args, 'set_name', None):
+                group_data['name'] = parsed_args.set_name
+
+        # Common optional fields
+        for field in ['description']:
+            value = getattr(parsed_args, field, None)
+            if value is not None:
+                group_data[field] = value
+
+        # Handle variables (JSON validation)
+        if getattr(parsed_args, 'variables', None):
+            try:
+                # Validate JSON
+                json.loads(parsed_args.variables)
+                group_data['variables'] = parsed_args.variables
+            except json.JSONDecodeError:
+                parser = self.get_parser('aap group create' if for_create else 'aap group set')
+                parser.error("argument --variables: must be valid JSON")
+
+        return group_data
+
+
+class GroupCreateCommand(GroupBaseCommand):
+    """Create a new group."""
+
+    def get_parser(self, prog_name):
+        parser = super().get_parser(prog_name)
+        self.add_common_arguments(parser, required_args=True)
         return parser
 
     def take_action(self, parsed_args):
         """Execute the group create command."""
         try:
-            # Get client from centralized client manager
             client = self.controller_client
 
-            # Get parser for usage message
-            parser = self.get_parser('aap group create')
+            # Resolve resources
+            resolved_resources = self.resolve_resources(client, parsed_args, for_create=True)
 
-            # Resolve inventory name to ID
-            inventory_id = resolve_inventory_name(client, parsed_args.inventory, api="controller")
-
-            group_data = {
-                'name': parsed_args.name,
-                'inventory': inventory_id
-            }
-
-            # Add optional fields
-            if parsed_args.description:
-                group_data['description'] = parsed_args.description
-
-            if parsed_args.variables:
-                try:
-                    # Validate JSON
-                    json.loads(parsed_args.variables)
-                    group_data['variables'] = parsed_args.variables
-                except json.JSONDecodeError:
-                    parser.error("argument --variables: must be valid JSON")
+            # Build group data
+            group_data = self.build_group_data(parsed_args, resolved_resources, for_create=True)
 
             # Create group
             endpoint = f"{CONTROLLER_API_VERSION_ENDPOINT}groups/"
@@ -311,72 +376,28 @@ class GroupCreateCommand(AAPShowCommand):
             raise SystemExit(f"Unexpected error: {e}")
 
 
-class GroupSetCommand(AAPShowCommand):
+class GroupSetCommand(GroupBaseCommand):
     """Update an existing group."""
 
     def get_parser(self, prog_name):
         parser = super().get_parser(prog_name)
-        parser.add_argument(
-            '--id',
-            type=int,
-            help='Group ID'
-        )
-        parser.add_argument(
-            'group',
-            nargs='?',
-            metavar='<group>',
-            help='Group name or ID to update'
-        )
-        parser.add_argument(
-            '--set-name',
-            dest='set_name',
-            help='New group name'
-        )
-        parser.add_argument(
-            '--description',
-            help='Group description'
-        )
-        parser.add_argument(
-            '--variables',
-            help='Group variables in JSON format'
-        )
+        self.add_common_arguments(parser, required_args=False)
         return parser
 
     def take_action(self, parsed_args):
         """Execute the group set command."""
         try:
-            # Get client from centralized client manager
             client = self.controller_client
 
-            # Get parser for usage message
-            parser = self.get_parser('aap group set')
+            # Resolve resources
+            resolved_resources = self.resolve_resources(client, parsed_args, for_create=False)
+            group_id = resolved_resources['group_id']
 
-            # Determine how to resolve the group
-            if parsed_args.id:
-                # Use explicit ID (ignores positional parameter)
-                group_id = parsed_args.id
-            elif parsed_args.group:
-                # Use positional parameter - name first, then ID fallback if numeric
-                group_id = resolve_group_name(client, parsed_args.group, api="controller")
-            else:
-                raise AAPClientError("Group identifier is required")
-
-            # Prepare group update data
-            group_data = {}
-
-            if parsed_args.set_name:
-                group_data['name'] = parsed_args.set_name
-            if parsed_args.description is not None:
-                group_data['description'] = parsed_args.description
-            if parsed_args.variables:
-                try:
-                    # Validate JSON
-                    json.loads(parsed_args.variables)
-                    group_data['variables'] = parsed_args.variables
-                except json.JSONDecodeError:
-                    parser.error("argument --variables: must be valid JSON")
+            # Build group data
+            group_data = self.build_group_data(parsed_args, resolved_resources, for_create=False)
 
             if not group_data:
+                parser = self.get_parser('aap group set')
                 parser.error("No update fields provided")
 
             # Update group
@@ -629,10 +650,11 @@ class GroupChildrenListCommand(AAPListCommand):
             raise SystemExit(f"Unexpected error: {e}")
 
 
-class GroupHostsModifyCommand(AAPCommand):
-    """Base class for adding/removing hosts to/from groups."""
+class GroupHostsBaseCommand(AAPCommand):
+    """Base class for group hosts add and remove commands."""
 
-    def get_parser(self, prog_name):
+    def get_common_parser(self, prog_name, operation):
+        """Get parser with common arguments for host operations."""
         parser = super().get_parser(prog_name)
         parser.add_argument(
             '--id',
@@ -648,25 +670,19 @@ class GroupHostsModifyCommand(AAPCommand):
             'hosts',
             nargs='+',
             metavar='<host>',
-            help='Host name(s) or ID(s) to modify in the group'
+            help=f'Host name(s) or ID(s) to {operation} the group'
         )
         return parser
 
-    def take_action(self, parsed_args):
-        """Execute the group hosts modify command."""
+    def execute_host_operation(self, parsed_args, operation, payload_func, success_msg_func, duplicate_check_func):
+        """Execute host operation with common logic."""
         try:
-            # Get client from centralized client manager
             client = self.controller_client
 
-            # Get parser for usage message
-            parser = self.get_parser(f'aap group hosts {self.get_operation_name()}')
-
-            # Determine how to resolve the group
+            # Resolve group
             if parsed_args.id:
-                # Use explicit ID (ignores positional parameter)
                 group_id = parsed_args.id
             else:
-                # Use positional parameter - name first, then ID fallback if numeric
                 group_id = resolve_group_name(client, parsed_args.group, api="controller")
 
             # Resolve all host identifiers to IDs
@@ -678,7 +694,7 @@ class GroupHostsModifyCommand(AAPCommand):
                 except Exception as e:
                     raise AAPClientError(f"Failed to resolve host '{host_identifier}': {e}")
 
-            # Modify each host in the group
+            # Process each host
             successful_operations = []
             failed_operations = []
 
@@ -686,36 +702,39 @@ class GroupHostsModifyCommand(AAPCommand):
                 host_identifier = parsed_args.hosts[i]
 
                 try:
-                    # POST to modify host relationship with group
                     endpoint = f"{CONTROLLER_API_VERSION_ENDPOINT}groups/{group_id}/hosts/"
-                    payload = self.get_api_payload(host_id)
+                    payload = payload_func(host_id)
 
                     try:
                         response = client.post(endpoint, json=payload)
                     except AAPAPIError as api_error:
                         if api_error.status_code == HTTP_BAD_REQUEST:
-                            # Check if it's a duplicate/not-found error specific to the operation
                             error_msg = str(api_error).lower()
-                            if self.handle_duplicate_error(host_identifier, error_msg):
-                                continue  # Skip this host
-                        self.handle_api_error(api_error, "Controller API", f"group {parsed_args.group or parsed_args.id} hosts {self.get_operation_name()}")
+                            if duplicate_check_func(host_identifier, error_msg):
+                                successful_operations.append(host_identifier)
+                                continue
+                        raise
 
-                    if response.status_code in (HTTP_CREATED, HTTP_NO_CONTENT, HTTP_OK):
+                    if response.status_code == HTTP_NO_CONTENT:
                         successful_operations.append(host_identifier)
-                        print(self.get_success_message(host_identifier))
+                        print(success_msg_func(host_identifier))
                     else:
-                        failed_operations.append(host_identifier)
-                        print(f"Failed to {self.get_operation_name()} host '{host_identifier}' {self.get_operation_preposition()} group: HTTP {response.status_code}")
+                        failed_operations.append((host_identifier, f"Unexpected status code: {response.status_code}"))
 
                 except Exception as e:
-                    failed_operations.append(host_identifier)
-                    print(f"Failed to {self.get_operation_name()} host '{host_identifier}' {self.get_operation_preposition()} group: {e}")
+                    failed_operations.append((host_identifier, str(e)))
 
             # Summary
             if successful_operations:
-                print(f"\nSuccessfully {self.get_operation_past_tense()} {len(successful_operations)} host(s) {self.get_operation_preposition()} group")
+                if operation == "add":
+                    print(f"Successfully added {len(successful_operations)} host(s) to the group")
+                else:
+                    print(f"Successfully removed {len(successful_operations)} host(s) from the group")
+
             if failed_operations:
-                print(f"Failed to {self.get_operation_name()} {len(failed_operations)} host(s) {self.get_operation_preposition()} group")
+                print(f"Failed to {operation} {len(failed_operations)} host(s):")
+                for host_identifier, error in failed_operations:
+                    print(f"  - {host_identifier}: {error}")
                 raise SystemExit(1)
 
         except AAPResourceNotFoundError as e:
@@ -725,91 +744,66 @@ class GroupHostsModifyCommand(AAPCommand):
         except Exception as e:
             raise SystemExit(f"Unexpected error: {e}")
 
-    # Abstract methods to be implemented by subclasses
-    def get_operation_name(self):
-        """Return the operation name ('add' or 'remove')."""
-        raise NotImplementedError("Subclass must implement get_operation_name")
 
-    def get_operation_past_tense(self):
-        """Return the operation past tense ('added' or 'removed')."""
-        raise NotImplementedError("Subclass must implement get_operation_past_tense")
-
-    def get_operation_preposition(self):
-        """Return the operation preposition ('to' or 'from')."""
-        raise NotImplementedError("Subclass must implement get_operation_preposition")
-
-    def get_api_payload(self, host_id):
-        """Return the API payload for the operation."""
-        raise NotImplementedError("Subclass must implement get_api_payload")
-
-    def get_success_message(self, host_identifier):
-        """Return success message for the operation."""
-        raise NotImplementedError("Subclass must implement get_success_message")
-
-    def handle_duplicate_error(self, host_identifier, error_msg):
-        """Handle operation-specific duplicate/not-found errors. Return True to skip host."""
-        raise NotImplementedError("Subclass must implement handle_duplicate_error")
-
-
-class GroupHostsAddCommand(GroupHostsModifyCommand):
+class GroupHostsAddCommand(GroupHostsBaseCommand):
     """Add hosts to a group."""
 
-    def get_operation_name(self):
-        return "add"
+    def get_parser(self, prog_name):
+        return self.get_common_parser(prog_name, "add to")
 
-    def get_operation_past_tense(self):
-        return "added"
+    def take_action(self, parsed_args):
+        """Execute the group hosts add command."""
+        self.execute_host_operation(
+            parsed_args,
+            "add",
+            payload_func=lambda host_id: {'id': host_id},
+            success_msg_func=lambda host_identifier: f"Host '{host_identifier}' added to group successfully",
+            duplicate_check_func=self._handle_add_duplicate_error
+        )
 
-    def get_operation_preposition(self):
-        return "to"
-
-    def get_api_payload(self, host_id):
-        return {'id': host_id}
-
-    def get_success_message(self, host_identifier):
-        return f"Host '{host_identifier}' added to group successfully"
-
-    def handle_duplicate_error(self, host_identifier, error_msg):
+    def _handle_add_duplicate_error(self, host_identifier, error_msg):
+        """Handle duplicate error for add operation."""
         if 'already' in error_msg or 'duplicate' in error_msg:
             print(f"Host '{host_identifier}' is already in the group")
-            return True  # Skip this host
+            return True
         return False
 
 
-class GroupHostsRemoveCommand(GroupHostsModifyCommand):
+
+class GroupHostsRemoveCommand(GroupHostsBaseCommand):
     """Remove hosts from a group."""
 
-    def get_operation_name(self):
-        return "remove"
+    def get_parser(self, prog_name):
+        return self.get_common_parser(prog_name, "remove from")
 
-    def get_operation_past_tense(self):
-        return "removed"
+    def take_action(self, parsed_args):
+        """Execute the group hosts remove command."""
+        self.execute_host_operation(
+            parsed_args,
+            "remove",
+            payload_func=lambda host_id: {'id': host_id, 'disassociate': True},
+            success_msg_func=lambda host_identifier: f"Host '{host_identifier}' removed from group successfully",
+            duplicate_check_func=self._handle_remove_duplicate_error
+        )
 
-    def get_operation_preposition(self):
-        return "from"
-
-    def get_api_payload(self, host_id):
-        return {'id': host_id, 'disassociate': True}
-
-    def get_success_message(self, host_identifier):
-        return f"Host '{host_identifier}' removed from group successfully"
-
-    def handle_duplicate_error(self, host_identifier, error_msg):
+    def _handle_remove_duplicate_error(self, host_identifier, error_msg):
+        """Handle duplicate error for remove operation."""
         if 'not found' in error_msg or 'does not exist' in error_msg:
             print(f"Host '{host_identifier}' is not in the group")
-            return True  # Skip this host
+            return True
         return False
 
 
-class GroupChildrenModifyCommand(AAPCommand):
-    """Base class for adding/removing child groups to/from parent groups."""
+class GroupChildrenBaseCommand(AAPCommand):
+    """Base class for group children add and remove commands."""
 
-    def get_parser(self, prog_name):
+    def get_common_parser(self, prog_name, operation):
+        """Get parser with common arguments for child group operations."""
         parser = super().get_parser(prog_name)
         parser.add_argument(
             '--id',
             type=int,
-            help='Parent group ID (overrides parent group positional argument)'
+            help='Parent Group ID (overrides parent_group positional argument)'
         )
         parser.add_argument(
             'parent_group',
@@ -820,25 +814,19 @@ class GroupChildrenModifyCommand(AAPCommand):
             'child_groups',
             nargs='+',
             metavar='<child_group>',
-            help='Child group name(s) or ID(s) to modify in the parent group'
+            help=f'Child group name(s) or ID(s) to {operation} the parent group'
         )
         return parser
 
-    def take_action(self, parsed_args):
-        """Execute the group children modify command."""
+    def execute_children_operation(self, parsed_args, operation, payload_func, success_msg_func, duplicate_check_func):
+        """Execute child group operation with common logic."""
         try:
-            # Get client from centralized client manager
             client = self.controller_client
 
-            # Get parser for usage message
-            parser = self.get_parser(f'aap group children {self.get_operation_name()}')
-
-            # Determine how to resolve the parent group
+            # Resolve parent group
             if parsed_args.id:
-                # Use explicit ID (ignores positional parameter)
                 parent_group_id = parsed_args.id
             else:
-                # Use positional parameter - name first, then ID fallback if numeric
                 parent_group_id = resolve_group_name(client, parsed_args.parent_group, api="controller")
 
             # Resolve all child group identifiers to IDs
@@ -850,7 +838,7 @@ class GroupChildrenModifyCommand(AAPCommand):
                 except Exception as e:
                     raise AAPClientError(f"Failed to resolve child group '{child_identifier}': {e}")
 
-            # Modify each child group relationship with the parent group
+            # Process each child group
             successful_operations = []
             failed_operations = []
 
@@ -858,36 +846,39 @@ class GroupChildrenModifyCommand(AAPCommand):
                 child_identifier = parsed_args.child_groups[i]
 
                 try:
-                    # POST to modify child group relationship with parent group
                     endpoint = f"{CONTROLLER_API_VERSION_ENDPOINT}groups/{parent_group_id}/children/"
-                    payload = self.get_api_payload(child_group_id)
+                    payload = payload_func(child_group_id)
 
                     try:
                         response = client.post(endpoint, json=payload)
                     except AAPAPIError as api_error:
                         if api_error.status_code == HTTP_BAD_REQUEST:
-                            # Check if it's a duplicate/not-found error specific to the operation
                             error_msg = str(api_error).lower()
-                            if self.handle_duplicate_error(child_identifier, error_msg):
-                                continue  # Skip this child group
-                        self.handle_api_error(api_error, "Controller API", f"group {parsed_args.parent_group or parsed_args.id} children {self.get_operation_name()}")
+                            if duplicate_check_func(child_identifier, error_msg):
+                                successful_operations.append(child_identifier)
+                                continue
+                        raise
 
-                    if response.status_code in (HTTP_CREATED, HTTP_NO_CONTENT, HTTP_OK):
+                    if response.status_code == HTTP_NO_CONTENT:
                         successful_operations.append(child_identifier)
-                        print(self.get_success_message(child_identifier))
+                        print(success_msg_func(child_identifier))
                     else:
-                        failed_operations.append(child_identifier)
-                        print(f"Failed to {self.get_operation_name()} child group '{child_identifier}' {self.get_operation_preposition()} parent group: HTTP {response.status_code}")
+                        failed_operations.append((child_identifier, f"Unexpected status code: {response.status_code}"))
 
                 except Exception as e:
-                    failed_operations.append(child_identifier)
-                    print(f"Failed to {self.get_operation_name()} child group '{child_identifier}' {self.get_operation_preposition()} parent group: {e}")
+                    failed_operations.append((child_identifier, str(e)))
 
             # Summary
             if successful_operations:
-                print(f"\nSuccessfully {self.get_operation_past_tense()} {len(successful_operations)} child group(s) {self.get_operation_preposition()} parent group")
+                if operation == "add":
+                    print(f"Successfully added {len(successful_operations)} child group(s) to the parent group")
+                else:
+                    print(f"Successfully removed {len(successful_operations)} child group(s) from the parent group")
+
             if failed_operations:
-                print(f"Failed to {self.get_operation_name()} {len(failed_operations)} child group(s) {self.get_operation_preposition()} parent group")
+                print(f"Failed to {operation} {len(failed_operations)} child group(s):")
+                for child_identifier, error in failed_operations:
+                    print(f"  - {child_identifier}: {error}")
                 raise SystemExit(1)
 
         except AAPResourceNotFoundError as e:
@@ -897,79 +888,52 @@ class GroupChildrenModifyCommand(AAPCommand):
         except Exception as e:
             raise SystemExit(f"Unexpected error: {e}")
 
-    # Abstract methods to be implemented by subclasses
-    def get_operation_name(self):
-        """Return the operation name ('add' or 'remove')."""
-        raise NotImplementedError("Subclass must implement get_operation_name")
 
-    def get_operation_past_tense(self):
-        """Return the operation past tense ('added' or 'removed')."""
-        raise NotImplementedError("Subclass must implement get_operation_past_tense")
-
-    def get_operation_preposition(self):
-        """Return the operation preposition ('to' or 'from')."""
-        raise NotImplementedError("Subclass must implement get_operation_preposition")
-
-    def get_api_payload(self, child_group_id):
-        """Return the API payload for the operation."""
-        raise NotImplementedError("Subclass must implement get_api_payload")
-
-    def get_success_message(self, child_identifier):
-        """Return success message for the operation."""
-        raise NotImplementedError("Subclass must implement get_success_message")
-
-    def handle_duplicate_error(self, child_identifier, error_msg):
-        """Handle operation-specific duplicate/not-found errors. Return True to skip child group."""
-        raise NotImplementedError("Subclass must implement handle_duplicate_error")
-
-
-class GroupChildrenAddCommand(GroupChildrenModifyCommand):
+class GroupChildrenAddCommand(GroupChildrenBaseCommand):
     """Add child groups to a parent group."""
 
-    def get_operation_name(self):
-        return "add"
+    def get_parser(self, prog_name):
+        return self.get_common_parser(prog_name, "add to")
 
-    def get_operation_past_tense(self):
-        return "added"
+    def take_action(self, parsed_args):
+        """Execute the group children add command."""
+        self.execute_children_operation(
+            parsed_args,
+            "add",
+            payload_func=lambda child_group_id: {'id': child_group_id},
+            success_msg_func=lambda child_identifier: f"Child group '{child_identifier}' added to parent group successfully",
+            duplicate_check_func=self._handle_add_duplicate_error
+        )
 
-    def get_operation_preposition(self):
-        return "to"
-
-    def get_api_payload(self, child_group_id):
-        return {'id': child_group_id}
-
-    def get_success_message(self, child_identifier):
-        return f"Child group '{child_identifier}' added to parent group successfully"
-
-    def handle_duplicate_error(self, child_identifier, error_msg):
+    def _handle_add_duplicate_error(self, child_identifier, error_msg):
+        """Handle duplicate error for add operation."""
         if 'already' in error_msg or 'duplicate' in error_msg:
             print(f"Child group '{child_identifier}' is already in the parent group")
-            return True  # Skip this child group
+            return True
         return False
 
 
-class GroupChildrenRemoveCommand(GroupChildrenModifyCommand):
+class GroupChildrenRemoveCommand(GroupChildrenBaseCommand):
     """Remove child groups from a parent group."""
 
-    def get_operation_name(self):
-        return "remove"
+    def get_parser(self, prog_name):
+        return self.get_common_parser(prog_name, "remove from")
 
-    def get_operation_past_tense(self):
-        return "removed"
+    def take_action(self, parsed_args):
+        """Execute the group children remove command."""
+        self.execute_children_operation(
+            parsed_args,
+            "remove",
+            payload_func=lambda child_group_id: {'id': child_group_id, 'disassociate': True},
+            success_msg_func=lambda child_identifier: f"Child group '{child_identifier}' removed from parent group successfully",
+            duplicate_check_func=self._handle_remove_duplicate_error
+        )
 
-    def get_operation_preposition(self):
-        return "from"
-
-    def get_api_payload(self, child_group_id):
-        return {'id': child_group_id, 'disassociate': True}
-
-    def get_success_message(self, child_identifier):
-        return f"Child group '{child_identifier}' removed from parent group successfully"
-
-    def handle_duplicate_error(self, child_identifier, error_msg):
+    def _handle_remove_duplicate_error(self, child_identifier, error_msg):
+        """Handle duplicate error for remove operation."""
         if 'not found' in error_msg or 'does not exist' in error_msg:
             print(f"Child group '{child_identifier}' is not in the parent group")
-            return True  # Skip this child group
+            return True
         return False
 
 

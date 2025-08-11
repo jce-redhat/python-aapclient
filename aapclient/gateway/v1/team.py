@@ -195,46 +195,110 @@ class TeamShowCommand(AAPShowCommand):
             raise AAPClientError(f"Unexpected error: {e}")
 
 
-class TeamCreateCommand(AAPShowCommand):
-    """Create a new team."""
+class TeamBaseCommand(AAPShowCommand):
+    """Base class for team create and set commands."""
 
-    def get_parser(self, prog_name):
-        parser = super().get_parser(prog_name)
-        parser.add_argument(
-            'name',
-            help='Team name'
-        )
+    def add_common_arguments(self, parser, required_args=True):
+        """Add common arguments for team commands."""
+        if required_args:
+            # For create command
+            parser.add_argument(
+                'name',
+                help='Team name'
+            )
+            parser.add_argument(
+                '--organization',
+                required=True,
+                help='Organization name or ID'
+            )
+        else:
+            # For set command
+            parser.add_argument(
+                '--id',
+                type=int,
+                help='Team ID (overrides positional parameter)'
+            )
+            parser.add_argument(
+                'team',
+                nargs='?',
+                metavar='<team>',
+                help='Team name or ID to update'
+            )
+            parser.add_argument(
+                '--set-name',
+                dest='set_name',
+                help='New team name'
+            )
+            parser.add_argument(
+                '--organization',
+                help='Organization name or ID'
+            )
+
+        # Common arguments for both commands
         parser.add_argument(
             '--description',
             help='Team description'
         )
-        parser.add_argument(
-            '--organization',
-            required=True,
-            help='Organization name or ID'
-        )
+
+    def resolve_resources(self, client, parsed_args, for_create=True):
+        """Resolve resource names to IDs."""
+        resolved = {}
+
+        if for_create:
+            resolved['organization_id'] = resolve_organization_name(client, parsed_args.organization, api="gateway")
+        else:
+            # For set command - team resolution
+            if parsed_args.id:
+                resolved['team_id'] = parsed_args.id
+            elif parsed_args.team:
+                resolved['team_id'] = resolve_team_name(client, parsed_args.team, api="gateway")
+            else:
+                raise AAPClientError("Team identifier is required")
+
+            if getattr(parsed_args, 'organization', None):
+                resolved['organization_id'] = resolve_organization_name(client, parsed_args.organization, api="gateway")
+
+        return resolved
+
+    def build_team_data(self, parsed_args, resolved_resources, for_create=True):
+        """Build team data for API requests."""
+        team_data = {}
+
+        if for_create:
+            team_data['name'] = parsed_args.name
+            team_data['organization'] = resolved_resources['organization_id']
+        else:
+            # For set command
+            if getattr(parsed_args, 'set_name', None):
+                team_data['name'] = parsed_args.set_name
+            if 'organization_id' in resolved_resources:
+                team_data['organization'] = resolved_resources['organization_id']
+
+        # Common fields
+        if hasattr(parsed_args, 'description') and parsed_args.description is not None:
+            team_data['description'] = parsed_args.description
+
+        return team_data
+
+
+class TeamCreateCommand(TeamBaseCommand):
+    """Create a new team."""
+
+    def get_parser(self, prog_name):
+        parser = super().get_parser(prog_name)
+        self.add_common_arguments(parser, required_args=True)
         return parser
 
     def take_action(self, parsed_args):
         """Execute the team create command."""
         try:
-            # Get client from centralized client manager
             client = self.gateway_client
 
-            # Get parser for usage message
-            parser = self.get_parser('aap team create')
+            # Resolve resources
+            resolved_resources = self.resolve_resources(client, parsed_args, for_create=True)
 
-            # Resolve organization
-            org_id = resolve_organization_name(client, parsed_args.organization, api="gateway")
-
-            team_data = {
-                'name': parsed_args.name,
-                'organization': org_id
-            }
-
-            # Add optional fields
-            if parsed_args.description:
-                team_data['description'] = parsed_args.description
+            # Build team data
+            team_data = self.build_team_data(parsed_args, resolved_resources, for_create=True)
 
             # Create team
             endpoint = f"{GATEWAY_API_VERSION_ENDPOINT}teams/"
@@ -267,40 +331,12 @@ class TeamCreateCommand(AAPShowCommand):
             raise SystemExit(f"Unexpected error: {e}")
 
 
-class TeamSetCommand(AAPShowCommand):
+class TeamSetCommand(TeamBaseCommand):
     """Update an existing team."""
 
     def get_parser(self, prog_name):
         parser = super().get_parser(prog_name)
-
-        # ID option to override positional parameter
-        parser.add_argument(
-            '--id',
-            type=int,
-            help='Team ID (overrides positional parameter)'
-        )
-
-        # Positional parameter for name lookup with ID fallback
-        parser.add_argument(
-            'team',
-            nargs='?',
-            metavar='<team>',
-            help='Team name or ID to update'
-        )
-
-        parser.add_argument(
-            '--set-name',
-            dest='set_name',
-            help='New team name'
-        )
-        parser.add_argument(
-            '--description',
-            help='Team description'
-        )
-        parser.add_argument(
-            '--organization',
-            help='Organization name or ID'
-        )
+        self.add_common_arguments(parser, required_args=False)
         return parser
 
     def take_action(self, parsed_args):

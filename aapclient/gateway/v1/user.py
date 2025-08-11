@@ -36,7 +36,7 @@ def _format_user_data(user_data, use_utc=False):
     first_name = user_data.get('first_name', '')
     last_name = user_data.get('last_name', '')
     is_superuser = user_data.get('is_superuser', False)
-    is_system_auditor = user_data.get('is_system_auditor', False)
+    is_system_auditor = user_data.get('is_platform_auditor', False)
 
     # Format datetime fields using common function
     date_joined = format_datetime(user_data.get('date_joined', ''), use_utc)
@@ -194,15 +194,36 @@ class UserShowCommand(AAPShowCommand):
             raise AAPClientError(f"Unexpected error: {e}")
 
 
-class UserCreateCommand(AAPShowCommand):
-    """Create a new user."""
+class UserBaseCommand(AAPShowCommand):
+    """Base class for user create and set commands."""
 
-    def get_parser(self, prog_name):
-        parser = super().get_parser(prog_name)
-        parser.add_argument(
-            'username',
-            help='Username'
-        )
+    def add_common_arguments(self, parser, required_args=True):
+        """Add common arguments for user commands."""
+        if required_args:
+            # For create command
+            parser.add_argument(
+                'username',
+                help='Username'
+            )
+        else:
+            # For set command
+            parser.add_argument(
+                '--id',
+                type=int,
+                help='User ID (overrides positional parameter)'
+            )
+            parser.add_argument(
+                'user',
+                nargs='?',
+                metavar='<user>',
+                help='Username or ID to update'
+            )
+            parser.add_argument(
+                '--username',
+                help='New username'
+            )
+
+        # Common arguments for both commands
         parser.add_argument(
             '--email',
             help='Email address'
@@ -221,45 +242,123 @@ class UserCreateCommand(AAPShowCommand):
             '--password',
             help='Password'
         )
-        parser.add_argument(
-            '--superuser',
-            action='store_true',
-            help='Grant superuser privileges'
-        )
-        parser.add_argument(
-            '--system-auditor',
-            action='store_true',
-            dest='system_auditor',
-            help='Grant system auditor privileges'
-        )
+
+    def add_boolean_arguments(self, parser, mutually_exclusive=False):
+        """Add boolean arguments for user commands."""
+        if mutually_exclusive:
+            # For set command with enable/disable options
+            superuser_group = parser.add_mutually_exclusive_group()
+            superuser_group.add_argument(
+                '--enable-superuser',
+                action='store_true',
+                dest='enable_superuser',
+                help='Grant superuser privileges'
+            )
+            superuser_group.add_argument(
+                '--disable-superuser',
+                action='store_true',
+                dest='disable_superuser',
+                help='Revoke superuser privileges'
+            )
+
+            auditor_group = parser.add_mutually_exclusive_group()
+            auditor_group.add_argument(
+                '--enable-system-auditor',
+                action='store_true',
+                dest='enable_system_auditor',
+                help='Grant system auditor privileges'
+            )
+            auditor_group.add_argument(
+                '--disable-system-auditor',
+                action='store_true',
+                dest='disable_system_auditor',
+                help='Revoke system auditor privileges'
+            )
+        else:
+            # For create command with simple store_true
+            parser.add_argument(
+                '--superuser',
+                action='store_true',
+                help='Grant superuser privileges'
+            )
+            parser.add_argument(
+                '--system-auditor',
+                action='store_true',
+                dest='system_auditor',
+                help='Grant system auditor privileges'
+            )
+
+    def resolve_resources(self, client, parsed_args, for_create=True):
+        """Resolve resource names to IDs."""
+        resolved = {}
+
+        if not for_create:
+            # For set command - user resolution
+            if parsed_args.id:
+                resolved['user_id'] = parsed_args.id
+            elif parsed_args.user:
+                resolved['user_id'] = resolve_user_name(client, parsed_args.user, api="gateway")
+            else:
+                raise AAPClientError("User identifier is required")
+
+        return resolved
+
+    def build_user_data(self, parsed_args, resolved_resources, for_create=True):
+        """Build user data for API requests."""
+        user_data = {}
+
+        if for_create:
+            user_data['username'] = parsed_args.username
+        else:
+            # For set command
+            if getattr(parsed_args, 'username', None):
+                user_data['username'] = parsed_args.username
+
+        # Common fields
+        for field in ['email', 'first_name', 'last_name', 'password']:
+            if hasattr(parsed_args, field) and getattr(parsed_args, field) is not None:
+                user_data[field] = getattr(parsed_args, field)
+
+        # Boolean fields
+        if for_create:
+            if hasattr(parsed_args, 'superuser') and parsed_args.superuser:
+                user_data['is_superuser'] = True
+            if hasattr(parsed_args, 'system_auditor') and parsed_args.system_auditor:
+                user_data['is_platform_auditor'] = True
+        else:
+            # Boolean fields for set (handle enable/disable pairs)
+            if hasattr(parsed_args, 'enable_superuser') and parsed_args.enable_superuser:
+                user_data['is_superuser'] = True
+            elif hasattr(parsed_args, 'disable_superuser') and parsed_args.disable_superuser:
+                user_data['is_superuser'] = False
+
+            if hasattr(parsed_args, 'enable_system_auditor') and parsed_args.enable_system_auditor:
+                user_data['is_platform_auditor'] = True
+            elif hasattr(parsed_args, 'disable_system_auditor') and parsed_args.disable_system_auditor:
+                user_data['is_platform_auditor'] = False
+
+        return user_data
+
+
+class UserCreateCommand(UserBaseCommand):
+    """Create a new user."""
+
+    def get_parser(self, prog_name):
+        parser = super().get_parser(prog_name)
+        self.add_common_arguments(parser, required_args=True)
+        self.add_boolean_arguments(parser, mutually_exclusive=False)
         return parser
 
     def take_action(self, parsed_args):
         """Execute the user create command."""
         try:
-            # Get client from centralized client manager
             client = self.gateway_client
 
-            # Get parser for usage message
-            parser = self.get_parser('aap user create')
+            # Resolve resources
+            resolved_resources = self.resolve_resources(client, parsed_args, for_create=True)
 
-            user_data = {
-                'username': parsed_args.username
-            }
-
-            # Add optional fields
-            if getattr(parsed_args, 'email', None):
-                user_data['email'] = parsed_args.email
-            if getattr(parsed_args, 'first_name', None):
-                user_data['first_name'] = parsed_args.first_name
-            if getattr(parsed_args, 'last_name', None):
-                user_data['last_name'] = parsed_args.last_name
-            if getattr(parsed_args, 'password', None):
-                user_data['password'] = parsed_args.password
-            if parsed_args.superuser:
-                user_data['is_superuser'] = True
-            if parsed_args.system_auditor:
-                user_data['is_system_auditor'] = True
+            # Build user data
+            user_data = self.build_user_data(parsed_args, resolved_resources, for_create=True)
 
             # Create user
             endpoint = f"{GATEWAY_API_VERSION_ENDPOINT}users/"
@@ -292,119 +391,30 @@ class UserCreateCommand(AAPShowCommand):
             raise SystemExit(f"Unexpected error: {e}")
 
 
-class UserSetCommand(AAPShowCommand):
+class UserSetCommand(UserBaseCommand):
     """Update an existing user."""
 
     def get_parser(self, prog_name):
         parser = super().get_parser(prog_name)
+        self.add_common_arguments(parser, required_args=False)
 
-        # ID option to override positional parameter
-        parser.add_argument(
-            '--id',
-            type=int,
-            help='User ID (overrides positional parameter)'
-        )
-
-        # Positional parameter for username lookup with ID fallback
-        parser.add_argument(
-            'user',
-            nargs='?',
-            metavar='<user>',
-            help='Username or ID to update'
-        )
-
-        parser.add_argument(
-            '--username',
-            help='New username'
-        )
-        parser.add_argument(
-            '--email',
-            help='Email address'
-        )
-        parser.add_argument(
-            '--first-name',
-            dest='first_name',
-            help='First name'
-        )
-        parser.add_argument(
-            '--last-name',
-            dest='last_name',
-            help='Last name'
-        )
-        parser.add_argument(
-            '--password',
-            help='New password'
-        )
-
-        # Enable/disable flags for privileges
-        superuser_group = parser.add_mutually_exclusive_group()
-        superuser_group.add_argument(
-            '--enable-superuser',
-            action='store_true',
-            dest='enable_superuser',
-            help='Grant superuser privileges'
-        )
-        superuser_group.add_argument(
-            '--disable-superuser',
-            action='store_true',
-            dest='disable_superuser',
-            help='Revoke superuser privileges'
-        )
-
-        auditor_group = parser.add_mutually_exclusive_group()
-        auditor_group.add_argument(
-            '--enable-system-auditor',
-            action='store_true',
-            dest='enable_auditor',
-            help='Grant system auditor privileges'
-        )
-        auditor_group.add_argument(
-            '--disable-system-auditor',
-            action='store_true',
-            dest='disable_auditor',
-            help='Revoke system auditor privileges'
-        )
-
+        self.add_boolean_arguments(parser, mutually_exclusive=True)
         return parser
 
     def take_action(self, parsed_args):
         """Execute the user set command."""
         try:
-            # Get client from centralized client manager
             client = self.gateway_client
 
-            # Get parser for usage message
-            parser = self.get_parser('aap user set')
+            # Resolve resources
+            resolved_resources = self.resolve_resources(client, parsed_args, for_create=False)
+            user_id = resolved_resources['user_id']
 
-            # Resolve user - handle both ID and username
-            user_id = resolve_user_name(client, parsed_args.user, api="gateway")
-
-            # Prepare user update data
-            user_data = {}
-
-            if getattr(parsed_args, 'username', None):
-                user_data['username'] = parsed_args.username
-            if getattr(parsed_args, 'email', None):
-                user_data['email'] = parsed_args.email
-            if getattr(parsed_args, 'first_name', None):
-                user_data['first_name'] = parsed_args.first_name
-            if getattr(parsed_args, 'last_name', None):
-                user_data['last_name'] = parsed_args.last_name
-            if getattr(parsed_args, 'password', None):
-                user_data['password'] = parsed_args.password
-
-            # Handle enable/disable flags
-            if parsed_args.enable_superuser:
-                user_data['is_superuser'] = True
-            elif parsed_args.disable_superuser:
-                user_data['is_superuser'] = False
-
-            if parsed_args.enable_auditor:
-                user_data['is_system_auditor'] = True
-            elif parsed_args.disable_auditor:
-                user_data['is_system_auditor'] = False
+            # Build user data
+            user_data = self.build_user_data(parsed_args, resolved_resources, for_create=False)
 
             if not user_data:
+                parser = self.get_parser('aap user set')
                 parser.error("No update fields provided")
 
             # Update user

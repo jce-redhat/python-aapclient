@@ -393,44 +393,149 @@ class InventoryVariablesShowCommand(AAPShowCommand):
             raise SystemExit(f"Unexpected error: {e}")
 
 
-class InventoryCreateCommand(AAPShowCommand):
-    """Create a new inventory."""
+class InventoryBaseCommand(AAPShowCommand):
+    """Base class for inventory create and set commands."""
 
-    def get_parser(self, prog_name):
-        parser = super().get_parser(prog_name)
-        parser.add_argument(
-            'name',
-            help='Inventory name'
-        )
+    def add_common_arguments(self, parser, required_args=True):
+        """Add common arguments for inventory commands."""
+        if required_args:
+            # For create command
+            parser.add_argument(
+                'name',
+                help='Inventory name'
+            )
+            parser.add_argument(
+                '--organization',
+                required=True,
+                help='Organization name or ID'
+            )
+        else:
+            # For set command
+            parser.add_argument(
+                'inventory',
+                metavar='<inventory>',
+                help='Inventory name or ID to update'
+            )
+            parser.add_argument(
+                '--set-name',
+                dest='set_name',
+                help='New inventory name'
+            )
+            parser.add_argument(
+                '--organization',
+                help='Organization name or ID'
+            )
+
+        # Common arguments for both commands
         parser.add_argument(
             '--description',
             help='Inventory description'
         )
         parser.add_argument(
-            '--organization',
-            required=True,
-            help='Organization name or ID'
-        )
-        parser.add_argument(
             '--variables',
             help='Inventory variables as JSON string'
         )
-        parser.add_argument(
-            '--prevent-instance-group-fallback',
-            action='store_true',
-            dest='prevent_instance_group_fallback',
-            help='Prevent instance group fallback'
-        )
-        parser.add_argument(
-            '--instance-groups',
-            nargs='+',
-            dest='instance_groups',
-            help='Instance group names or IDs to assign to inventory'
-        )
-        return parser
 
-    def _assign_instance_groups(self, client, inventory_id, instance_groups):
+    def add_boolean_arguments(self, parser, mutually_exclusive=False):
+        """Add boolean arguments for inventory commands."""
+        if mutually_exclusive:
+            # For set command with enable/disable options
+            fallback_group = parser.add_mutually_exclusive_group()
+            fallback_group.add_argument(
+                '--allow-instance-group-fallback',
+                action='store_false',
+                dest='prevent_instance_group_fallback',
+                help='Allow instance group fallback'
+            )
+            fallback_group.add_argument(
+                '--prevent-instance-group-fallback',
+                action='store_true',
+                dest='prevent_instance_group_fallback',
+                help='Prevent instance group fallback'
+            )
+        else:
+            # For create command with simple store_true
+            parser.add_argument(
+                '--prevent-instance-group-fallback',
+                action='store_true',
+                dest='prevent_instance_group_fallback',
+                help='Prevent instance group fallback'
+            )
+
+    def add_instance_group_arguments(self, parser, for_create=True):
+        """Add instance group arguments for inventory commands."""
+        if for_create:
+            parser.add_argument(
+                '--instance-groups',
+                nargs='+',
+                dest='instance_groups',
+                help='Instance group names or IDs to assign to inventory'
+            )
+        else:
+            parser.add_argument(
+                '--add-instance-group',
+                action='append',
+                dest='add_instance_groups',
+                help='Instance group name or ID to add to inventory (can be used multiple times)'
+            )
+            parser.add_argument(
+                '--remove-instance-group',
+                action='append',
+                dest='remove_instance_groups',
+                help='Instance group name or ID to remove from inventory (can be used multiple times)'
+            )
+
+    def resolve_resources(self, client, parsed_args, for_create=True):
+        """Resolve resource names to IDs."""
+        resolved = {}
+
+        if for_create:
+            resolved['organization_id'] = resolve_organization_name(client, parsed_args.organization, api="controller")
+        else:
+            # For set command
+            resolved['inventory_id'] = resolve_inventory_name(client, parsed_args.inventory, api="controller")
+            if getattr(parsed_args, 'organization', None):
+                resolved['organization_id'] = resolve_organization_name(client, parsed_args.organization, api="controller")
+
+        return resolved
+
+    def build_inventory_data(self, parsed_args, resolved_resources, for_create=True):
+        """Build inventory data for API requests."""
+        inventory_data = {}
+
+        if for_create:
+            inventory_data['name'] = parsed_args.name
+            inventory_data['organization'] = resolved_resources['organization_id']
+        else:
+            # For set command
+            if parsed_args.set_name:
+                inventory_data['name'] = parsed_args.set_name
+            if 'organization_id' in resolved_resources:
+                inventory_data['organization'] = resolved_resources['organization_id']
+
+        # Common fields
+        if hasattr(parsed_args, 'description') and parsed_args.description is not None:
+            inventory_data['description'] = parsed_args.description
+
+        # Handle variables with JSON validation
+        if getattr(parsed_args, 'variables', None):
+            try:
+                # Validate JSON format but store as string
+                json.loads(parsed_args.variables)
+                inventory_data['variables'] = parsed_args.variables
+            except json.JSONDecodeError as e:
+                raise AAPClientError(f"Invalid JSON in --variables: {e}")
+
+        # Handle instance group fallback flag
+        if hasattr(parsed_args, 'prevent_instance_group_fallback') and parsed_args.prevent_instance_group_fallback is not None:
+            inventory_data['prevent_instance_group_fallback'] = parsed_args.prevent_instance_group_fallback
+
+        return inventory_data
+
+    def assign_instance_groups(self, client, inventory_id, instance_groups):
         """Assign instance groups to the inventory."""
+        association_errors = []
+
         for instance_group in instance_groups:
             try:
                 # Resolve instance group name/ID to actual ID
@@ -442,138 +547,17 @@ class InventoryCreateCommand(AAPShowCommand):
 
                 ig_response = client.post(ig_endpoint, json=ig_data)
                 if ig_response.status_code not in [HTTP_CREATED, HTTP_NO_CONTENT]:
-                    print(f"Warning: Failed to assign instance group '{instance_group}' to inventory")
+                    association_errors.append(f"Failed to assign instance group '{instance_group}' to inventory")
 
             except (AAPResourceNotFoundError, AAPAPIError) as e:
-                print(f"Warning: Failed to assign instance group '{instance_group}': {e}")
+                association_errors.append(f"Failed to assign instance group '{instance_group}': {e}")
 
-    def take_action(self, parsed_args):
-        """Execute the inventory create command."""
-        try:
-            # Get client from centralized client manager
-            client = self.controller_client
+        return association_errors
 
-            # Get parser for usage message
-            parser = self.get_parser('aap inventory create')
-
-            # Resolve organization
-            org_id = resolve_organization_name(client, parsed_args.organization, api="controller")
-
-            inventory_data = {
-                'name': parsed_args.name,
-                'organization': org_id
-            }
-
-            # Add optional fields
-            if parsed_args.description:
-                inventory_data['description'] = parsed_args.description
-
-            if getattr(parsed_args, 'variables', None):
-                try:
-                    # Validate JSON format but store as string
-                    json.loads(parsed_args.variables)
-                    inventory_data['variables'] = parsed_args.variables
-                except json.JSONDecodeError:
-                    parser.error("argument --variables: must be valid JSON")
-
-            # Handle instance group fallback flag
-            if parsed_args.prevent_instance_group_fallback:
-                inventory_data['prevent_instance_group_fallback'] = True
-
-            # Create inventory
-            endpoint = f"{CONTROLLER_API_VERSION_ENDPOINT}inventories/"
-            try:
-                response = client.post(endpoint, json=inventory_data)
-            except AAPAPIError as api_error:
-                self.handle_api_error(api_error, "Controller API", parsed_args.name)
-
-            if response.status_code == HTTP_CREATED:
-                inventory_data = response.json()
-                inventory_id = inventory_data.get('id')
-
-                # Assign instance groups if provided
-                if getattr(parsed_args, 'instance_groups', None) and inventory_id:
-                    self._assign_instance_groups(client, inventory_id, parsed_args.instance_groups)
-
-                print(f"Inventory '{inventory_data.get('name', '')}' created successfully")
-
-                return _format_inventory_data(inventory_data, False, client)
-            else:
-                raise AAPClientError(f"Inventory creation failed with status {response.status_code}")
-
-        except AAPResourceNotFoundError as e:
-            raise SystemExit(str(e))
-        except AAPClientError as e:
-            raise SystemExit(str(e))
-        except Exception as e:
-            raise SystemExit(f"Unexpected error: {e}")
-
-
-class InventorySetCommand(AAPShowCommand):
-    """Update an existing inventory."""
-
-    def get_parser(self, prog_name):
-        parser = super().get_parser(prog_name)
-
-        # Positional parameter for name lookup with ID fallback
-        parser.add_argument(
-            'inventory',
-            metavar='<inventory>',
-            help='Inventory name or ID to update'
-        )
-
-        parser.add_argument(
-            '--set-name',
-            dest='set_name',
-            help='New inventory name'
-        )
-        parser.add_argument(
-            '--description',
-            help='Inventory description'
-        )
-        parser.add_argument(
-            '--organization',
-            help='Organization name or ID'
-        )
-
-        parser.add_argument(
-            '--variables',
-            help='Inventory variables as JSON string'
-        )
-
-        # Enable/disable flags for instance group fallback
-        fallback_group = parser.add_mutually_exclusive_group()
-        fallback_group.add_argument(
-            '--allow-instance-group-fallback',
-            action='store_false',
-            dest='prevent_instance_group_fallback',
-            help='Allow instance group fallback'
-        )
-        fallback_group.add_argument(
-            '--prevent-instance-group-fallback',
-            action='store_true',
-            dest='prevent_instance_group_fallback',
-            help='Prevent instance group fallback'
-        )
-
-        parser.add_argument(
-            '--add-instance-group',
-            action='append',
-            dest='add_instance_groups',
-            help='Instance group name or ID to add to inventory (can be used multiple times)'
-        )
-        parser.add_argument(
-            '--remove-instance-group',
-            action='append',
-            dest='remove_instance_groups',
-            help='Instance group name or ID to remove from inventory (can be used multiple times)'
-        )
-
-        return parser
-
-    def _manage_instance_groups(self, client, inventory_id, add_groups=None, remove_groups=None):
+    def manage_instance_groups(self, client, inventory_id, add_groups=None, remove_groups=None):
         """Add or remove instance groups from the inventory."""
         ig_endpoint = f"{CONTROLLER_API_VERSION_ENDPOINT}inventories/{inventory_id}/instance_groups/"
+        association_errors = []
 
         # Remove instance groups
         if remove_groups:
@@ -586,10 +570,10 @@ class InventorySetCommand(AAPShowCommand):
                     ig_data = {"id": instance_group_id, "disassociate": True}
                     ig_response = client.post(ig_endpoint, json=ig_data)
                     if ig_response.status_code not in [HTTP_CREATED, HTTP_NO_CONTENT, HTTP_OK]:
-                        print(f"Warning: Failed to remove instance group '{instance_group}' from inventory")
+                        association_errors.append(f"Failed to remove instance group '{instance_group}' from inventory")
 
                 except (AAPResourceNotFoundError, AAPAPIError) as e:
-                    print(f"Warning: Failed to remove instance group '{instance_group}': {e}")
+                    association_errors.append(f"Failed to remove instance group '{instance_group}': {e}")
 
         # Add instance groups
         if add_groups:
@@ -602,76 +586,127 @@ class InventorySetCommand(AAPShowCommand):
                     ig_data = {"id": instance_group_id}
                     ig_response = client.post(ig_endpoint, json=ig_data)
                     if ig_response.status_code not in [HTTP_CREATED, HTTP_NO_CONTENT, HTTP_OK]:
-                        print(f"Warning: Failed to add instance group '{instance_group}' to inventory")
+                        association_errors.append(f"Failed to add instance group '{instance_group}' to inventory")
 
                 except (AAPResourceNotFoundError, AAPAPIError) as e:
-                    print(f"Warning: Failed to add instance group '{instance_group}': {e}")
+                    association_errors.append(f"Failed to add instance group '{instance_group}': {e}")
+
+        return association_errors
+
+
+class InventoryCreateCommand(InventoryBaseCommand):
+    """Create a new inventory."""
+
+    def get_parser(self, prog_name):
+        parser = super().get_parser(prog_name)
+        self.add_common_arguments(parser, required_args=True)
+        self.add_boolean_arguments(parser, mutually_exclusive=False)
+        self.add_instance_group_arguments(parser, for_create=True)
+        return parser
+
+    def take_action(self, parsed_args):
+        """Execute the inventory create command."""
+        try:
+            client = self.controller_client
+
+            # Resolve resources
+            resolved_resources = self.resolve_resources(client, parsed_args, for_create=True)
+
+            # Build inventory data
+            inventory_data = self.build_inventory_data(parsed_args, resolved_resources, for_create=True)
+
+            # Create inventory
+            endpoint = f"{CONTROLLER_API_VERSION_ENDPOINT}inventories/"
+            try:
+                response = client.post(endpoint, json=inventory_data)
+            except AAPAPIError as api_error:
+                self.handle_api_error(api_error, "Controller API", parsed_args.name)
+
+            if response.status_code == HTTP_CREATED:
+                created_inventory = response.json()
+                inventory_id = created_inventory.get('id')
+
+                # Assign instance groups if provided
+                association_errors = []
+                if getattr(parsed_args, 'instance_groups', None) and inventory_id:
+                    association_errors = self.assign_instance_groups(client, inventory_id, parsed_args.instance_groups)
+
+                # Display warnings for association errors
+                for error in association_errors:
+                    print(f"Warning: {error}")
+
+                print(f"Inventory '{created_inventory.get('name', '')}' created successfully")
+
+                return _format_inventory_data(created_inventory, False, client)
+            else:
+                raise AAPClientError(f"Inventory creation failed with status {response.status_code}")
+
+        except AAPResourceNotFoundError as e:
+            raise SystemExit(str(e))
+        except AAPClientError as e:
+            raise SystemExit(str(e))
+        except Exception as e:
+            raise SystemExit(f"Unexpected error: {e}")
+
+
+class InventorySetCommand(InventoryBaseCommand):
+    """Update an existing inventory."""
+
+    def get_parser(self, prog_name):
+        parser = super().get_parser(prog_name)
+        self.add_common_arguments(parser, required_args=False)
+        self.add_boolean_arguments(parser, mutually_exclusive=True)
+        self.add_instance_group_arguments(parser, for_create=False)
+        return parser
 
     def take_action(self, parsed_args):
         """Execute the inventory set command."""
         try:
-            # Get client from centralized client manager
             client = self.controller_client
 
-            # Get parser for usage message
-            parser = self.get_parser('aap inventory set')
+            # Resolve resources
+            resolved_resources = self.resolve_resources(client, parsed_args, for_create=False)
+            inventory_id = resolved_resources['inventory_id']
 
-            # Resolve inventory - handle both ID and name
-            inventory_id = resolve_inventory_name(client, parsed_args.inventory, api="controller")
+            # Build inventory data
+            inventory_data = self.build_inventory_data(parsed_args, resolved_resources, for_create=False)
 
-            # Resolve organization if provided
-            if getattr(parsed_args, 'organization', None):
-                org_id = resolve_organization_name(client, parsed_args.organization, api="controller")
-            else:
-                org_id = None
+            # Check if any update fields were provided (excluding instance group management)
+            add_groups = getattr(parsed_args, 'add_instance_groups', None)
+            remove_groups = getattr(parsed_args, 'remove_instance_groups', None)
 
-            # Prepare inventory update data
-            inventory_data = {}
-
-            if parsed_args.set_name:
-                inventory_data['name'] = parsed_args.set_name
-            if parsed_args.description is not None:  # Allow empty string
-                inventory_data['description'] = parsed_args.description
-            if org_id is not None:
-                inventory_data['organization'] = org_id
-
-            if getattr(parsed_args, 'variables', None):
-                try:
-                    # Validate JSON format but store as string
-                    json.loads(parsed_args.variables)
-                    inventory_data['variables'] = parsed_args.variables
-                except json.JSONDecodeError:
-                    parser.error("argument --variables: must be valid JSON")
-
-            # Handle instance group fallback flag
-            if hasattr(parsed_args, 'prevent_instance_group_fallback') and parsed_args.prevent_instance_group_fallback is not None:
-                inventory_data['prevent_instance_group_fallback'] = parsed_args.prevent_instance_group_fallback
-
-            if not inventory_data:
+            if not inventory_data and not (add_groups or remove_groups):
+                parser = self.get_parser('aap inventory set')
                 parser.error("No update fields provided")
 
-            # Update inventory
-            endpoint = f"{CONTROLLER_API_VERSION_ENDPOINT}inventories/{inventory_id}/"
-            try:
-                response = client.patch(endpoint, json=inventory_data)
-            except AAPAPIError as api_error:
-                self.handle_api_error(api_error, "Controller API", parsed_args.inventory)
+            # Update inventory if there's data to update
+            if inventory_data:
+                endpoint = f"{CONTROLLER_API_VERSION_ENDPOINT}inventories/{inventory_id}/"
+                try:
+                    response = client.patch(endpoint, json=inventory_data)
+                except AAPAPIError as api_error:
+                    self.handle_api_error(api_error, "Controller API", parsed_args.inventory)
 
-            if response.status_code == HTTP_OK:
-                inventory_data = response.json()
-                inventory_id = inventory_data.get('id')
+                if response.status_code != HTTP_OK:
+                    raise AAPClientError(f"Inventory update failed with status {response.status_code}")
 
-                # Manage instance groups if provided
-                add_groups = getattr(parsed_args, 'add_instance_groups', None)
-                remove_groups = getattr(parsed_args, 'remove_instance_groups', None)
-                if (add_groups or remove_groups) and inventory_id:
-                    self._manage_instance_groups(client, inventory_id, add_groups, remove_groups)
+            # Manage instance groups if provided
+            association_errors = []
+            if (add_groups or remove_groups) and inventory_id:
+                association_errors = self.manage_instance_groups(client, inventory_id, add_groups, remove_groups)
 
-                print(f"Inventory '{inventory_data.get('name', '')}' updated successfully")
+            # Display warnings for association errors
+            for error in association_errors:
+                print(f"Warning: {error}")
 
-                return _format_inventory_data(inventory_data, False, client)
+            # Fetch updated inventory for display
+            updated_response = client.get(f"{CONTROLLER_API_VERSION_ENDPOINT}inventories/{inventory_id}/")
+            if updated_response.status_code == HTTP_OK:
+                updated_inventory = updated_response.json()
+                print(f"Inventory '{updated_inventory.get('name', '')}' updated successfully")
+                return _format_inventory_data(updated_inventory, False, client)
             else:
-                raise AAPClientError(f"Inventory update failed with status {response.status_code}")
+                raise AAPClientError(f"Failed to fetch updated inventory: HTTP {updated_response.status_code}")
 
         except AAPResourceNotFoundError as e:
             raise SystemExit(str(e))

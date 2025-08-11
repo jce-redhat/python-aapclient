@@ -199,15 +199,48 @@ class CredentialShowCommand(AAPShowCommand):
             raise AAPClientError(f"Unexpected error: {e}")
 
 
-class CredentialCreateCommand(AAPShowCommand):
-    """Create a new credential."""
+class CredentialBaseCommand(AAPShowCommand):
+    """Base class for credential create and set commands."""
 
-    def get_parser(self, prog_name):
-        parser = super().get_parser(prog_name)
-        parser.add_argument(
-            'name',
-            help='Credential name'
-        )
+    def add_common_arguments(self, parser, required_args=True):
+        """Add common arguments for credential commands."""
+        if required_args:
+            # For create command
+            parser.add_argument(
+                'name',
+                help='Credential name'
+            )
+            parser.add_argument(
+                '--credential-type',
+                required=True,
+                type=int,
+                help='Credential type ID'
+            )
+        else:
+            # For set command
+            parser.add_argument(
+                '--id',
+                type=int,
+                help='Credential ID (overrides positional parameter)'
+            )
+            parser.add_argument(
+                'credential',
+                nargs='?',
+                metavar='<credential>',
+                help='Credential name or ID to update'
+            )
+            parser.add_argument(
+                '--set-name',
+                dest='set_name',
+                help='New credential name'
+            )
+            parser.add_argument(
+                '--credential-type',
+                type=int,
+                help='Credential type ID'
+            )
+
+        # Common arguments for both commands
         parser.add_argument(
             '--description',
             help='Credential description'
@@ -217,48 +250,81 @@ class CredentialCreateCommand(AAPShowCommand):
             help='Organization name or ID'
         )
         parser.add_argument(
-            '--credential-type',
-            required=True,
-            type=int,
-            help='Credential type ID'
-        )
-        parser.add_argument(
             '--inputs',
             help='Credential inputs as JSON string'
         )
+
+    def resolve_resources(self, client, parsed_args, for_create=True):
+        """Resolve resource names to IDs."""
+        resolved = {}
+
+        if not for_create:
+            # For set command - credential resolution
+            if parsed_args.id:
+                resolved['credential_id'] = parsed_args.id
+            elif parsed_args.credential:
+                resolved['credential_id'] = resolve_credential_name(client, parsed_args.credential, api="controller")
+            else:
+                raise AAPClientError("Credential identifier is required")
+
+        # Organization resolution (optional for both commands)
+        if getattr(parsed_args, 'organization', None):
+            resolved['organization_id'] = resolve_organization_name(client, parsed_args.organization, api="controller")
+
+        return resolved
+
+    def build_credential_data(self, parsed_args, resolved_resources, for_create=True):
+        """Build credential data for API requests."""
+        credential_data = {}
+
+        if for_create:
+            credential_data['name'] = parsed_args.name
+            credential_data['credential_type'] = parsed_args.credential_type
+        else:
+            # For set command
+            if getattr(parsed_args, 'set_name', None):
+                credential_data['name'] = parsed_args.set_name
+            if hasattr(parsed_args, 'credential_type') and parsed_args.credential_type:
+                credential_data['credential_type'] = parsed_args.credential_type
+
+        # Common fields
+        if hasattr(parsed_args, 'description') and parsed_args.description is not None:
+            credential_data['description'] = parsed_args.description
+
+        # Organization (optional)
+        if 'organization_id' in resolved_resources:
+            credential_data['organization'] = resolved_resources['organization_id']
+
+        # Handle inputs with JSON validation
+        if getattr(parsed_args, 'inputs', None):
+            try:
+                # Validate JSON format and parse it
+                inputs = json.loads(parsed_args.inputs)
+                credential_data['inputs'] = inputs
+            except json.JSONDecodeError as e:
+                raise AAPClientError(f"Invalid JSON in --inputs: {e}")
+
+        return credential_data
+
+
+class CredentialCreateCommand(CredentialBaseCommand):
+    """Create a new credential."""
+
+    def get_parser(self, prog_name):
+        parser = super().get_parser(prog_name)
+        self.add_common_arguments(parser, required_args=True)
         return parser
 
     def take_action(self, parsed_args):
         """Execute the credential create command."""
         try:
-            # Get client from centralized client manager
             client = self.controller_client
 
-            # Get parser for usage message
-            parser = self.get_parser('aap credential create')
+            # Resolve resources
+            resolved_resources = self.resolve_resources(client, parsed_args, for_create=True)
 
-            # Resolve organization if provided
-            org_id = None
-            if getattr(parsed_args, 'organization', None):
-                org_id = resolve_organization_name(client, parsed_args.organization, api="controller")
-
-            credential_data = {
-                'name': parsed_args.name,
-                'credential_type': parsed_args.credential_type
-            }
-
-            # Add organization if provided
-            if org_id is not None:
-                credential_data['organization'] = org_id
-
-            if parsed_args.description:
-                credential_data['description'] = parsed_args.description
-            if getattr(parsed_args, 'inputs', None):
-                try:
-                    import json
-                    credential_data['inputs'] = json.loads(parsed_args.inputs)
-                except json.JSONDecodeError:
-                    parser.error("argument --inputs: must be valid JSON")
+            # Build credential data
+            credential_data = self.build_credential_data(parsed_args, resolved_resources, for_create=True)
 
             # Create credential
             endpoint = f"{CONTROLLER_API_VERSION_ENDPOINT}credentials/"
@@ -291,49 +357,12 @@ class CredentialCreateCommand(AAPShowCommand):
             raise SystemExit(f"Unexpected error: {e}")
 
 
-class CredentialSetCommand(AAPShowCommand):
+class CredentialSetCommand(CredentialBaseCommand):
     """Update an existing credential."""
 
     def get_parser(self, prog_name):
         parser = super().get_parser(prog_name)
-
-        # ID option to override positional parameter
-        parser.add_argument(
-            '--id',
-            type=int,
-            help='Credential ID (overrides positional parameter)'
-        )
-
-        # Positional parameter for name lookup with ID fallback
-        parser.add_argument(
-            'credential',
-            nargs='?',
-            metavar='<credential>',
-            help='Credential name or ID to update'
-        )
-
-        parser.add_argument(
-            '--set-name',
-            dest='set_name',
-            help='New credential name'
-        )
-        parser.add_argument(
-            '--description',
-            help='Credential description'
-        )
-        parser.add_argument(
-            '--organization',
-            help='Organization name or ID'
-        )
-        parser.add_argument(
-            '--credential-type',
-            type=int,
-            help='Credential type ID'
-        )
-        parser.add_argument(
-            '--inputs',
-            help='Credential inputs as JSON string'
-        )
+        self.add_common_arguments(parser, required_args=False)
         return parser
 
     def take_action(self, parsed_args):

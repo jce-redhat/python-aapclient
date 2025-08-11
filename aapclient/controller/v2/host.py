@@ -210,55 +210,152 @@ class HostShowCommand(AAPShowCommand):
             raise AAPClientError(f"Unexpected error: {e}")
 
 
-class HostCreateCommand(AAPShowCommand):
-    """Create a new host."""
+class HostBaseCommand(AAPShowCommand):
+    """Base class for host create and set commands."""
 
-    def get_parser(self, prog_name):
-        parser = super().get_parser(prog_name)
-        parser.add_argument(
-            'name',
-            help='Host name'
-        )
+    def add_common_arguments(self, parser, required_args=True):
+        """Add common arguments for host commands."""
+        if required_args:
+            # For create command
+            parser.add_argument(
+                'name',
+                help='Host name'
+            )
+            parser.add_argument(
+                '--inventory',
+                required=True,
+                help='Inventory name or ID'
+            )
+        else:
+            # For set command
+            parser.add_argument(
+                '--id',
+                type=int,
+                help='Host ID (overrides positional parameter)'
+            )
+            parser.add_argument(
+                'host',
+                nargs='?',
+                metavar='<host>',
+                help='Host name or ID to update'
+            )
+            parser.add_argument(
+                '--set-name',
+                dest='set_name',
+                help='New host name'
+            )
+
+        # Common arguments for both commands
         parser.add_argument(
             '--description',
             help='Host description'
         )
         parser.add_argument(
-            '--inventory',
-            required=True,
-            help='Inventory name or ID'
-        )
-        parser.add_argument(
             '--variables',
             help='Host variables as JSON string'
         )
+
+    def add_boolean_arguments(self, parser, mutually_exclusive=False):
+        """Add boolean arguments for host commands."""
+        if mutually_exclusive:
+            # For set command with enable/disable options
+            enable_group = parser.add_mutually_exclusive_group()
+            enable_group.add_argument(
+                '--enable',
+                action='store_true',
+                dest='enable_host',
+                help='Enable the host'
+            )
+            enable_group.add_argument(
+                '--disable',
+                action='store_true',
+                dest='disable_host',
+                help='Disable the host'
+            )
+
+    def resolve_resources(self, client, parsed_args, for_create=True):
+        """Resolve resource names to IDs."""
+        resolved_resources = {}
+
+        if for_create:
+            # For create command, resolve inventory
+            resolved_resources['inventory_id'] = resolve_inventory_name(
+                client, parsed_args.inventory, api="controller"
+            )
+        else:
+            # For set command, resolve host
+            host_identifier = getattr(parsed_args, 'id', None) or parsed_args.host
+            if not host_identifier:
+                parser = self.get_parser('aap host set')
+                parser.error("Host name/ID is required")
+
+            resolved_resources['host_id'] = resolve_host_name(
+                client, host_identifier, api="controller"
+            )
+
+        return resolved_resources
+
+    def build_host_data(self, parsed_args, resolved_resources, for_create=True):
+        """Build host data dictionary for API requests."""
+        host_data = {}
+
+        if for_create:
+            # Required fields for create
+            host_data['name'] = parsed_args.name
+            host_data['inventory'] = resolved_resources['inventory_id']
+        else:
+            # Optional name update for set
+            if getattr(parsed_args, 'set_name', None):
+                host_data['name'] = parsed_args.set_name
+
+        # Common optional fields
+        for field in ['description']:
+            value = getattr(parsed_args, field, None)
+            if value is not None:
+                host_data[field] = value
+
+        # Handle variables (JSON validation)
+        if getattr(parsed_args, 'variables', None):
+            try:
+                if for_create:
+                    # For create, store as parsed JSON
+                    host_data['variables'] = json.loads(parsed_args.variables)
+                else:
+                    # For set, store as string (API expects string for PATCH)
+                    json.loads(parsed_args.variables)  # Validate JSON
+                    host_data['variables'] = parsed_args.variables
+            except json.JSONDecodeError:
+                parser = self.get_parser('aap host create' if for_create else 'aap host set')
+                parser.error("argument --variables: must be valid JSON")
+
+        # Boolean fields for set command
+        if not for_create:
+            if getattr(parsed_args, 'enable_host', False):
+                host_data['enabled'] = True
+            elif getattr(parsed_args, 'disable_host', False):
+                host_data['enabled'] = False
+
+        return host_data
+
+
+class HostCreateCommand(HostBaseCommand):
+    """Create a new host."""
+
+    def get_parser(self, prog_name):
+        parser = super().get_parser(prog_name)
+        self.add_common_arguments(parser, required_args=True)
         return parser
 
     def take_action(self, parsed_args):
         """Execute the host create command."""
         try:
-            # Get client from centralized client manager
             client = self.controller_client
 
-            # Get parser for usage message
-            parser = self.get_parser('aap host create')
+            # Resolve resources
+            resolved_resources = self.resolve_resources(client, parsed_args, for_create=True)
 
-            # Resolve inventory
-            inventory_id = resolve_inventory_name(client, parsed_args.inventory, api="controller")
-
-            host_data = {
-                'name': parsed_args.name,
-                'inventory': inventory_id
-            }
-
-            # Add optional fields
-            if parsed_args.description:
-                host_data['description'] = parsed_args.description
-            if getattr(parsed_args, 'variables', None):
-                try:
-                    host_data['variables'] = json.loads(parsed_args.variables)
-                except json.JSONDecodeError:
-                    parser.error("argument --variables: must be valid JSON")
+            # Build host data
+            host_data = self.build_host_data(parsed_args, resolved_resources, for_create=True)
 
             # Create host
             endpoint = f"{CONTROLLER_API_VERSION_ENDPOINT}hosts/"
@@ -283,90 +380,29 @@ class HostCreateCommand(AAPShowCommand):
             raise SystemExit(f"Unexpected error: {e}")
 
 
-class HostSetCommand(AAPShowCommand):
+class HostSetCommand(HostBaseCommand):
     """Update an existing host."""
 
     def get_parser(self, prog_name):
         parser = super().get_parser(prog_name)
-
-        # ID option to override positional parameter
-        parser.add_argument(
-            '--id',
-            type=int,
-            help='Host ID (overrides positional parameter)'
-        )
-
-        # Positional parameter for name lookup with ID fallback
-        parser.add_argument(
-            'host',
-            nargs='?',
-            metavar='<host>',
-            help='Host name or ID to update'
-        )
-
-        parser.add_argument(
-            '--set-name',
-            dest='set_name',
-            help='New host name'
-        )
-        parser.add_argument(
-            '--description',
-            help='Host description'
-        )
-        parser.add_argument(
-            '--variables',
-            help='Host variables as JSON string'
-        )
-
-        # Enable/disable flags for enabled status
-        enable_group = parser.add_mutually_exclusive_group()
-        enable_group.add_argument(
-            '--enable',
-            action='store_true',
-            dest='enable_host',
-            help='Enable the host'
-        )
-        enable_group.add_argument(
-            '--disable',
-            action='store_true',
-            dest='disable_host',
-            help='Disable the host'
-        )
-
+        self.add_common_arguments(parser, required_args=False)
+        self.add_boolean_arguments(parser, mutually_exclusive=True)
         return parser
 
     def take_action(self, parsed_args):
         """Execute the host set command."""
         try:
-            # Get client from centralized client manager
             client = self.controller_client
 
-            # Get parser for usage message
-            parser = self.get_parser('aap host set')
+            # Resolve resources
+            resolved_resources = self.resolve_resources(client, parsed_args, for_create=False)
+            host_id = resolved_resources['host_id']
 
-            # Resolve host - handle both ID and name
-            host_id = resolve_host_name(client, parsed_args.host, api="controller")
-
-            # Prepare host update data
-            host_data = {}
-
-            if parsed_args.set_name:
-                host_data['name'] = parsed_args.set_name
-            if parsed_args.description is not None:  # Allow empty string
-                host_data['description'] = parsed_args.description
-            if getattr(parsed_args, 'variables', None):
-                try:
-                    host_data['variables'] = json.loads(parsed_args.variables)
-                except json.JSONDecodeError:
-                    parser.error("argument --variables: must be valid JSON")
-
-            # Handle enable/disable flags
-            if parsed_args.enable_host:
-                host_data['enabled'] = True
-            elif parsed_args.disable_host:
-                host_data['enabled'] = False
+            # Build host data
+            host_data = self.build_host_data(parsed_args, resolved_resources, for_create=False)
 
             if not host_data:
+                parser = self.get_parser('aap host set')
                 parser.error("No update fields provided")
 
             # Update host
