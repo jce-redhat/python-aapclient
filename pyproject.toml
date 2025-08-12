@@ -24,7 +24,9 @@ classifiers = [
     "Programming Language :: Python :: 3.13",
 ]
 dependencies = [
-    "cliff>=4.4.0",
+    "cliff>=4.4.0",        # Keep for backwards compatibility during transition
+    "click>=8.0.0",        # New CLI framework
+    "rich>=13.0.0",        # Enhanced output formatting
     "requests>=2.28.0",
     "PyYAML>=6.0",
     "python-dotenv>=1.0.0",
@@ -145,7 +147,9 @@ whoami = "aapclient.common.whoami:WhoamiCommand"
 "group variables show" = "aapclient.controller.v2.group:GroupVariablesShowCommand"
 
 [project.scripts]
-aap = "aapclient.shell:main"
+aap = "aapclient.unified:main"           # Unified dispatcher (new default)
+aap-legacy = "aapclient.shell:main"      # Explicit cliff-based CLI
+aap-rich = "aapclient.cli.core:main"     # Explicit click+rich CLI
 
 [tool.setuptools.packages.find]
 where = ["."]

@@ -463,15 +463,15 @@ def resolve_credential_name(client, identifier, api="controller"):
                 # Name lookup failed, continue to ID lookup
                 pass
         else:
-            # Try to extract API error message
+            # Extract and re-throw the API error message
             api_message = extract_api_error_message(response)
             if api_message:
-                raise AAPClientError(api_message)
+                raise AAPAPIError(api_message, response.status_code)
             else:
-                raise AAPClientError(f"Failed to search for credential '{identifier}'")
+                raise AAPAPIError(f"Failed to search for credential '{identifier}'", response.status_code)
     except AAPAPIError as api_error:
-        # Use the API error message directly - it already contains the API's message
-        raise AAPClientError(str(api_error))
+        # Re-raise API errors unchanged to preserve the original message
+        raise
 
     # Name lookup failed, try as ID if it's numeric
     try:
@@ -482,18 +482,31 @@ def resolve_credential_name(client, identifier, api="controller"):
         if response.status_code == HTTP_OK:
             return credential_id
         else:
-            # Try to extract API error message for ID lookup
+            # Extract and re-throw the API error message
             api_message = extract_api_error_message(response)
             if api_message:
-                raise AAPClientError(api_message)
+                raise AAPAPIError(api_message, response.status_code)
             else:
-                raise AAPResourceNotFoundError("Credential", identifier)
+                raise AAPAPIError(f"No Credential matches the given query.", response.status_code)
     except ValueError:
         # Not a valid integer, and name lookup already failed
-        raise AAPResourceNotFoundError("Credential", identifier)
+        # Try to get a proper API error by making a request to a non-existent credential
+        try:
+            endpoint = f"{api_endpoint}credentials/999999999/"  # Use obviously invalid ID
+            response = client.get(endpoint)
+            api_message = extract_api_error_message(response)
+            if api_message:
+                raise AAPAPIError(api_message, response.status_code)
+            else:
+                raise AAPAPIError(f"No Credential matches the given query.", response.status_code)
+        except AAPAPIError:
+            raise  # Re-raise the API error
+        except Exception:
+            # Fallback if we can't get an API error
+            raise AAPAPIError(f"No Credential matches the given query.", 404)
     except AAPAPIError as api_error:
-        # Use the API error message directly - it already contains the API's message
-        raise AAPClientError(str(api_error))
+        # Re-raise API errors unchanged to preserve the original message
+        raise
 
 
 def resolve_inventory_name(client, identifier, api="controller"):
@@ -537,15 +550,15 @@ def resolve_inventory_name(client, identifier, api="controller"):
                 # Name lookup failed, continue to ID lookup
                 pass
         else:
-            # Try to extract API error message
+            # Extract and re-throw the API error message
             api_message = extract_api_error_message(response)
             if api_message:
-                raise AAPClientError(api_message)
+                raise AAPAPIError(api_message, response.status_code)
             else:
-                raise AAPClientError(f"Failed to search for inventory '{identifier}'")
+                raise AAPAPIError(f"Failed to search for inventory '{identifier}'", response.status_code)
     except AAPAPIError as api_error:
-        # Use the API error message directly - it already contains the API's message
-        raise AAPClientError(str(api_error))
+        # Re-raise API errors unchanged to preserve the original message
+        raise
 
     # Name lookup failed, try as ID if it's numeric
     try:
@@ -556,18 +569,31 @@ def resolve_inventory_name(client, identifier, api="controller"):
         if response.status_code == HTTP_OK:
             return inventory_id
         else:
-            # Try to extract API error message for ID lookup
+            # Extract and re-throw the API error message
             api_message = extract_api_error_message(response)
             if api_message:
-                raise AAPClientError(api_message)
+                raise AAPAPIError(api_message, response.status_code)
             else:
-                raise AAPResourceNotFoundError("Inventory", identifier)
+                raise AAPAPIError(f"No Inventory matches the given query.", response.status_code)
     except ValueError:
         # Not a valid integer, and name lookup already failed
-        raise AAPResourceNotFoundError("Inventory", identifier)
+        # Try to get a proper API error by making a request to a non-existent inventory
+        try:
+            endpoint = f"{api_endpoint}inventories/999999999/"  # Use obviously invalid ID
+            response = client.get(endpoint)
+            api_message = extract_api_error_message(response)
+            if api_message:
+                raise AAPAPIError(api_message, response.status_code)
+            else:
+                raise AAPAPIError(f"No Inventory matches the given query.", response.status_code)
+        except AAPAPIError:
+            raise  # Re-raise the API error
+        except Exception:
+            # Fallback if we can't get an API error
+            raise AAPAPIError(f"No Inventory matches the given query.", 404)
     except AAPAPIError as api_error:
-        # Use the API error message directly - it already contains the API's message
-        raise AAPClientError(str(api_error))
+        # Re-raise API errors unchanged to preserve the original message
+        raise
 
 
 def resolve_instance_group_name(client, identifier, api="controller"):
@@ -829,15 +855,15 @@ def resolve_project_name(client, identifier, api="controller"):
                 # Name lookup failed, continue to ID lookup
                 pass
         else:
-            # Try to extract API error message
+            # Extract and re-throw the API error message
             api_message = extract_api_error_message(response)
             if api_message:
-                raise AAPClientError(api_message)
+                raise AAPAPIError(api_message, response.status_code)
             else:
-                raise AAPClientError(f"Failed to search for project '{identifier}'")
+                raise AAPAPIError(f"Failed to search for project '{identifier}'", response.status_code)
     except AAPAPIError as api_error:
-        # Use the API error message directly - it already contains the API's message
-        raise AAPClientError(str(api_error))
+        # Re-raise API errors unchanged to preserve the original message
+        raise
 
     # Name lookup failed, try as ID if it's numeric
     try:
@@ -848,18 +874,31 @@ def resolve_project_name(client, identifier, api="controller"):
         if response.status_code == HTTP_OK:
             return project_id
         else:
-            # Try to extract API error message for ID lookup
+            # Extract and re-throw the API error message
             api_message = extract_api_error_message(response)
             if api_message:
-                raise AAPClientError(api_message)
+                raise AAPAPIError(api_message, response.status_code)
             else:
-                raise AAPResourceNotFoundError("Project", identifier)
+                raise AAPAPIError(f"No Project matches the given query.", response.status_code)
     except ValueError:
         # Not a valid integer, and name lookup already failed
-        raise AAPResourceNotFoundError("Project", identifier)
+        # Try to get a proper API error by making a request to a non-existent project
+        try:
+            endpoint = f"{api_endpoint}projects/999999999/"  # Use obviously invalid ID
+            response = client.get(endpoint)
+            api_message = extract_api_error_message(response)
+            if api_message:
+                raise AAPAPIError(api_message, response.status_code)
+            else:
+                raise AAPAPIError(f"No Project matches the given query.", response.status_code)
+        except AAPAPIError:
+            raise  # Re-raise the API error
+        except Exception:
+            # Fallback if we can't get an API error
+            raise AAPAPIError(f"No Project matches the given query.", 404)
     except AAPAPIError as api_error:
-        # Use the API error message directly - it already contains the API's message
-        raise AAPClientError(str(api_error))
+        # Re-raise API errors unchanged to preserve the original message
+        raise
 
 
 def resolve_group_name(client, identifier, api="controller"):
@@ -1184,15 +1223,15 @@ def resolve_job_template_name(client, identifier, api="controller"):
                 # Name lookup failed, continue to ID lookup
                 pass
         else:
-            # Try to extract API error message
+            # Extract and re-throw the API error message
             api_message = extract_api_error_message(response)
             if api_message:
-                raise AAPClientError(api_message)
+                raise AAPAPIError(api_message, response.status_code)
             else:
-                raise AAPClientError(f"Failed to search for job template '{identifier}'")
+                raise AAPAPIError(f"Failed to search for job template '{identifier}'", response.status_code)
     except AAPAPIError as api_error:
-        # Use the API error message directly - it already contains the API's message
-        raise AAPClientError(str(api_error))
+        # Re-raise API errors unchanged to preserve the original message
+        raise
 
     # Name lookup failed, try as ID if it's numeric
     try:
@@ -1203,18 +1242,31 @@ def resolve_job_template_name(client, identifier, api="controller"):
         if response.status_code == HTTP_OK:
             return template_id
         else:
-            # Try to extract API error message for ID lookup
+            # Extract and re-throw the API error message
             api_message = extract_api_error_message(response)
             if api_message:
-                raise AAPClientError(api_message)
+                raise AAPAPIError(api_message, response.status_code)
             else:
-                raise AAPResourceNotFoundError("Job Template", identifier)
+                raise AAPAPIError(f"No JobTemplate matches the given query.", response.status_code)
     except ValueError:
         # Not a valid integer, and name lookup already failed
-        raise AAPResourceNotFoundError("Job Template", identifier)
+        # Try to get a proper API error by making a request to a non-existent template
+        try:
+            endpoint = f"{api_endpoint}job_templates/999999999/"  # Use obviously invalid ID
+            response = client.get(endpoint)
+            api_message = extract_api_error_message(response)
+            if api_message:
+                raise AAPAPIError(api_message, response.status_code)
+            else:
+                raise AAPAPIError(f"No JobTemplate matches the given query.", response.status_code)
+        except AAPAPIError:
+            raise  # Re-raise the API error
+        except Exception:
+            # Fallback if we can't get an API error
+            raise AAPAPIError(f"No JobTemplate matches the given query.", 404)
     except AAPAPIError as api_error:
-        # Use the API error message directly - it already contains the API's message
-        raise AAPClientError(str(api_error))
+        # Re-raise API errors unchanged to preserve the original message
+        raise
 
 
 def format_variables_display(variables_data, command_name, length_limit=120):
