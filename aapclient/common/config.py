@@ -1,7 +1,7 @@
 """Configuration management for AAP client."""
 import os
 from dotenv import load_dotenv
-from aapclient.common.constants import AAP_HOST, AAP_USERNAME, AAP_PASSWORD, AAP_TOKEN, AAP_TIMEOUT, AAP_VERIFY_SSL, AAP_CA_BUNDLE, DEFAULT_TIMEOUT, DEFAULT_VERIFY_SSL
+from aapclient.common.constants import DEFAULT_REQUEST_TIMEOUT, DEFAULT_VALIDATE_CERTS
 from aapclient.common.exceptions import AAPClientError
 
 # Load environment variables from .env file
@@ -17,50 +17,50 @@ class AAPConfig:
 
         Args:
             config_overrides: Dict of configuration overrides from command-line arguments.
-                             Keys can be 'host', 'username', 'password', 'token', 'timeout',
-                             'verify_ssl', 'ca_bundle'.
+                             Keys can be 'hostname', 'username', 'password', 'token', 'request_timeout',
+                             'validate_certs', 'ca_bundle'.
         """
         overrides = config_overrides or {}
 
         # Apply overrides with precedence: command-line > environment variables
-        self.host = overrides.get('host') or os.getenv(AAP_HOST)
-        self.username = overrides.get('username') or os.getenv(AAP_USERNAME)
-        self.password = overrides.get('password') or os.getenv(AAP_PASSWORD)
-        self.token = overrides.get('token') or os.getenv(AAP_TOKEN)
-        self._timeout = overrides.get('timeout') or os.getenv(AAP_TIMEOUT)
+        self.hostname = overrides.get('hostname') or os.getenv('AAP_HOSTNAME')
+        self.username = overrides.get('username') or os.getenv('AAP_USERNAME')
+        self.password = overrides.get('password') or os.getenv('AAP_PASSWORD')
+        self.token = overrides.get('token') or os.getenv('AAP_TOKEN')
+        self._request_timeout = overrides.get('request_timeout') or os.getenv('AAP_REQUEST_TIMEOUT')
 
-        # Handle verify_ssl carefully to preserve False values
-        if 'verify_ssl' in overrides:
-            self._verify_ssl = overrides['verify_ssl']
+        # Handle validate_certs carefully to preserve False values
+        if 'validate_certs' in overrides:
+            self._validate_certs = overrides['validate_certs']
         else:
-            self._verify_ssl = os.getenv(AAP_VERIFY_SSL)
+            self._validate_certs = os.getenv('AAP_VALIDATE_CERTS')
 
-        self.ca_bundle = overrides.get('ca_bundle') or os.getenv(AAP_CA_BUNDLE)
+        self.ca_bundle = overrides.get('ca_bundle') or os.getenv('AAP_CA_BUNDLE')
 
     def validate(self):
         """Validate configuration."""
-        if not self.host:
-            raise AAPClientError("AAP_HOST environment variable or --aap-host argument is required")
+        if not self.hostname:
+            raise AAPClientError("AAP_HOSTNAME environment variable or --hostname argument is required")
 
         if not (self.token or (self.username and self.password)):
             raise AAPClientError(
-                "Either AAP_TOKEN/--aap-token or both AAP_USERNAME/--aap-username and AAP_PASSWORD/--aap-password are required"
+                "Either AAP_TOKEN/--token or both AAP_USERNAME/--username and AAP_PASSWORD/--password are required"
             )
 
     @property
     def base_url(self):
         """Get base URL for AAP."""
-        if not self.host:
+        if not self.hostname:
             return None
 
-        # AAP_HOST must be a full URL with scheme
-        if not self.host.startswith(('http://', 'https://')):
+        # AAP_HOSTNAME must be a full URL with scheme
+        if not self.hostname.startswith(('http://', 'https://')):
             raise AAPClientError(
-                f"AAP_HOST must be a full URL with scheme (http:// or https://), "
-                f"got: {self.host}"
+                f"AAP_HOSTNAME must be a full URL with scheme (http:// or https://), "
+                f"got: {self.hostname}"
             )
 
-        return self.host.rstrip('/')
+        return self.hostname.rstrip('/')
 
     @property
     def auth_headers(self):
@@ -77,31 +77,31 @@ class AAPConfig:
         return None
 
     @property
-    def timeout(self):
+    def request_timeout(self):
         """Get connection timeout."""
-        if self._timeout:
+        if self._request_timeout:
             try:
-                return int(self._timeout)
+                return int(self._request_timeout)
             except ValueError:
-                return DEFAULT_TIMEOUT
-        return DEFAULT_TIMEOUT
+                return DEFAULT_REQUEST_TIMEOUT
+        return DEFAULT_REQUEST_TIMEOUT
 
     @property
-    def verify_ssl(self):
+    def validate_certs(self):
         """Get SSL verification setting."""
-        if self._verify_ssl is not None:
+        if self._validate_certs is not None:
             # Handle string values from environment variables
-            if isinstance(self._verify_ssl, str):
-                return self._verify_ssl.lower() in ('true', '1', 'yes', 'on')
+            if isinstance(self._validate_certs, str):
+                return self._validate_certs.lower() in ('true', '1', 'yes', 'on')
             # Handle boolean values from command-line overrides
-            return bool(self._verify_ssl)
-        # Default to DEFAULT_VERIFY_SSL (verify SSL certificates)
-        return DEFAULT_VERIFY_SSL
+            return bool(self._validate_certs)
+        # Default to DEFAULT_VALIDATE_CERTS (verify SSL certificates)
+        return DEFAULT_VALIDATE_CERTS
 
     @property
     def ssl_verify_value(self):
         """Get SSL verification value for requests library."""
-        if not self.verify_ssl:
+        if not self.validate_certs:
             return False
         if self.ca_bundle:
             return self.ca_bundle

@@ -68,7 +68,7 @@ class PingCommand(AAPShowCommand):
 
                 # Host
                 columns.append('Host')
-                values.append(self.client_manager.config.host)
+                values.append(self.client_manager.config.hostname)
 
                 # Service Status (from Gateway API)
                 if 'status' in gateway_data:

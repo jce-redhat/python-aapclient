@@ -33,9 +33,9 @@ class AAPApp(App):
         # Add global AAP connection arguments
         aap_group = parser.add_argument_group('AAP Connection')
         aap_group.add_argument(
-            '--host',
-            metavar='<host>',
-            help='AAP host URL (overrides AAP_HOST environment variable)'
+            '--hostname',
+            metavar='<hostname>',
+            help='AAP hostname URL (overrides AAP_HOSTNAME environment variable)'
         )
         aap_group.add_argument(
             '--username',
@@ -53,16 +53,16 @@ class AAPApp(App):
             help='AAP API token (overrides AAP_TOKEN environment variable)'
         )
         aap_group.add_argument(
-            '--timeout',
+            '--request-timeout',
             type=int,
             metavar='<seconds>',
-            help='Connection timeout in seconds (overrides AAP_TIMEOUT environment variable)'
+            help='Connection timeout in seconds (overrides AAP_REQUEST_TIMEOUT environment variable)'
         )
         aap_group.add_argument(
-            '--ssl-verify',
+            '--validate-certs',
             choices=['true', 'false'],
             metavar='<true|false>',
-            help='Enable or disable SSL certificate verification (overrides AAP_VERIFY_SSL environment variable)'
+            help='Enable or disable SSL certificate verification (overrides AAP_VALIDATE_CERTS environment variable)'
         )
         aap_group.add_argument(
             '--ca-bundle',
@@ -86,20 +86,20 @@ class AAPApp(App):
         if self._client_manager is None:
                         # Extract AAP connection overrides from command-line arguments
             config_overrides = {}
-            if hasattr(self.options, 'host') and self.options.host:
-                config_overrides['host'] = self.options.host
+            if hasattr(self.options, 'hostname') and self.options.hostname:
+                config_overrides['hostname'] = self.options.hostname
             if hasattr(self.options, 'username') and self.options.username:
                 config_overrides['username'] = self.options.username
             if hasattr(self.options, 'password') and self.options.password:
                 config_overrides['password'] = self.options.password
             if hasattr(self.options, 'token') and self.options.token:
                 config_overrides['token'] = self.options.token
-            if hasattr(self.options, 'timeout') and self.options.timeout:
-                config_overrides['timeout'] = self.options.timeout
+            if hasattr(self.options, 'request_timeout') and self.options.request_timeout:
+                config_overrides['request_timeout'] = self.options.request_timeout
 
             # Handle SSL verification argument
-            if hasattr(self.options, 'ssl_verify') and self.options.ssl_verify:
-                config_overrides['verify_ssl'] = self.options.ssl_verify.lower() == 'true'
+            if hasattr(self.options, 'validate_certs') and self.options.validate_certs:
+                config_overrides['validate_certs'] = self.options.validate_certs.lower() == 'true'
 
             if hasattr(self.options, 'ca_bundle') and self.options.ca_bundle:
                 config_overrides['ca_bundle'] = self.options.ca_bundle

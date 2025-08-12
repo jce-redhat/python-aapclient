@@ -10,7 +10,7 @@ import requests
 from requests.adapters import HTTPAdapter
 from aapclient.common.config import AAPConfig
 from aapclient.common.constants import (
-    DEFAULT_TIMEOUT,
+    DEFAULT_REQUEST_TIMEOUT,
     HTTP_UNAUTHORIZED,
     HTTP_FORBIDDEN,
     HTTP_TOO_MANY_REQUESTS,
@@ -46,10 +46,10 @@ class AAPHTTPClient:
         self.session.mount("https://", adapter)
 
         # Set timeout from config
-        self.timeout = self.config.timeout
+        self.request_timeout = self.config.request_timeout
 
         # Configure SSL warnings based on verification setting
-        if not self.config.verify_ssl:
+        if not self.config.validate_certs:
             import urllib3
             urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
@@ -73,7 +73,7 @@ class AAPHTTPClient:
             kwargs['auth'] = self.config.auth_tuple
 
         # Set timeout
-        kwargs.setdefault('timeout', self.timeout)
+        kwargs.setdefault('timeout', self.request_timeout)
 
         # Set SSL verification based on configuration
         kwargs.setdefault('verify', self.config.ssl_verify_value)
