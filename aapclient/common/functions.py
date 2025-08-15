@@ -389,37 +389,57 @@ def resolve_execution_environment_name(client, identifier, api="controller"):
                 # Name lookup failed, continue to ID lookup
                 pass
         else:
-            # Try to extract API error message
+            # Extract and re-throw the API error message
             api_message = extract_api_error_message(response)
             if api_message:
-                raise AAPClientError(api_message)
+                raise AAPAPIError(api_message, response.status_code)
             else:
-                raise AAPClientError(f"Failed to search for execution environment '{identifier}'")
+                raise AAPAPIError(f"Failed to search for execution environment '{identifier}'", response.status_code)
     except AAPAPIError as api_error:
-        # Use the API error message directly - it already contains the API's message
-        raise AAPClientError(str(api_error))
+        # Re-raise API errors unchanged to preserve the original message
+        raise
 
     # Name lookup failed, try as ID if it's numeric
     try:
         ee_id = int(identifier)
         # Verify the ID exists by trying to get it
         endpoint = f"{api_endpoint}execution_environments/{ee_id}/"
-        response = client.get(endpoint)
-        if response.status_code == HTTP_OK:
-            return ee_id
-        else:
-            # Try to extract API error message for ID lookup
-            api_message = extract_api_error_message(response)
-            if api_message:
-                raise AAPClientError(api_message)
+        try:
+            response = client.get(endpoint)
+            if response.status_code == HTTP_OK:
+                return ee_id
             else:
-                raise AAPResourceNotFoundError("Execution Environment", identifier)
+                # Extract and re-throw the API error message for ID lookup
+                api_message = extract_api_error_message(response)
+                if api_message:
+                    raise AAPAPIError(api_message, response.status_code)
+                else:
+                    raise AAPAPIError(f"No Execution Environment matches the given query.", response.status_code)
+        except AAPAPIError:
+            # Re-raise the API error
+            raise
+        except Exception:
+            # Fallback if we can't get an API error
+            raise AAPAPIError(f"No Execution Environment matches the given query.", 404)
     except ValueError:
         # Not a valid integer, and name lookup already failed
-        raise AAPResourceNotFoundError("Execution Environment", identifier)
+        # Try to get a proper API 404 error by attempting to look up a non-existent ID
+        try:
+            response = client.get(f"{api_endpoint}execution_environments/999999999/")
+            api_message = extract_api_error_message(response)
+            if api_message:
+                raise AAPAPIError(api_message, response.status_code)
+            else:
+                raise AAPAPIError(f"No Execution Environment matches the given query.", response.status_code)
+        except AAPAPIError:
+            # Re-raise the API error
+            raise
+        except Exception:
+            # Fallback if we can't get an API error
+            raise AAPAPIError(f"No Execution Environment matches the given query.", 404)
     except AAPAPIError as api_error:
-        # Use the API error message directly - it already contains the API's message
-        raise AAPClientError(str(api_error))
+        # Re-raise API errors unchanged to preserve the original message
+        raise
 
 
 def resolve_credential_name(client, identifier, api="controller"):
@@ -634,15 +654,15 @@ def resolve_instance_group_name(client, identifier, api="controller"):
             else:
                 raise AAPClientError(f"Multiple instance groups found with name '{identifier}'")
         else:
-            # Try to extract API error message
+            # Extract and re-throw the API error message
             api_message = extract_api_error_message(response)
             if api_message:
-                raise AAPClientError(api_message)
+                raise AAPAPIError(api_message, response.status_code)
             else:
                 raise AAPAPIError("Failed to search instance groups", response.status_code)
     except AAPAPIError as api_error:
-        # Use the API error message directly - it already contains the API's message
-        raise AAPClientError(str(api_error))
+        # Re-raise API errors unchanged to preserve the original message
+        raise
 
     # Try ID lookup if name lookup failed or if identifier is numeric
     try:
@@ -652,18 +672,28 @@ def resolve_instance_group_name(client, identifier, api="controller"):
         if response.status_code == HTTP_OK:
             return instance_group_id
         else:
-            # Try to extract API error message for ID lookup
+            # Extract and re-throw the API error message
             api_message = extract_api_error_message(response)
             if api_message:
-                raise AAPClientError(api_message)
+                raise AAPAPIError(api_message, response.status_code)
             else:
-                raise AAPResourceNotFoundError("Instance Group", identifier)
+                raise AAPAPIError(f"No Instance Group matches the given query.", response.status_code)
     except ValueError:
         # Not a valid integer, and name lookup already failed
-        raise AAPResourceNotFoundError("Instance Group", identifier)
+        # Try to get a proper API error by making a request to a non-existent instance group
+        try:
+            endpoint = f"{api_endpoint}instance_groups/999999999/"  # Use obviously invalid ID
+            response = client.get(endpoint)
+            api_message = extract_api_error_message(response)
+            if api_message:
+                raise AAPAPIError(api_message, response.status_code)
+            else:
+                raise AAPAPIError(f"No Instance Group matches the given query.", response.status_code)
+        except AAPAPIError:
+            raise
     except AAPAPIError as api_error:
-        # Use the API error message directly - it already contains the API's message
-        raise AAPClientError(str(api_error))
+        # Re-raise API errors unchanged to preserve the original message
+        raise
 
 
 def resolve_host_name(client, identifier, api="controller"):
@@ -781,15 +811,15 @@ def resolve_instance_name(client, identifier, api="controller"):
                 # Hostname lookup failed, continue to ID lookup
                 pass
         else:
-            # Try to extract API error message
+            # Extract and re-throw the API error message
             api_message = extract_api_error_message(response)
             if api_message:
-                raise AAPClientError(api_message)
+                raise AAPAPIError(api_message, response.status_code)
             else:
-                raise AAPClientError(f"Failed to search for instance '{identifier}'")
+                raise AAPAPIError(f"Failed to search for instance '{identifier}'", response.status_code)
     except AAPAPIError as api_error:
-        # Use the API error message directly - it already contains the API's message
-        raise AAPClientError(str(api_error))
+        # Re-raise API errors unchanged to preserve the original message
+        raise
 
     # Hostname lookup failed, try as ID if it's numeric
     try:
@@ -800,18 +830,28 @@ def resolve_instance_name(client, identifier, api="controller"):
         if response.status_code == HTTP_OK:
             return instance_id
         else:
-            # Try to extract API error message for ID lookup
+            # Extract and re-throw the API error message
             api_message = extract_api_error_message(response)
             if api_message:
-                raise AAPClientError(api_message)
+                raise AAPAPIError(api_message, response.status_code)
             else:
-                raise AAPResourceNotFoundError("Instance", identifier)
+                raise AAPAPIError(f"No Instance matches the given query.", response.status_code)
     except ValueError:
         # Not a valid integer, and hostname lookup already failed
-        raise AAPResourceNotFoundError("Instance", identifier)
+        # Try to get a proper API error by making a request to a non-existent instance
+        try:
+            endpoint = f"{api_endpoint}instances/999999999/"  # Use obviously invalid ID
+            response = client.get(endpoint)
+            api_message = extract_api_error_message(response)
+            if api_message:
+                raise AAPAPIError(api_message, response.status_code)
+            else:
+                raise AAPAPIError(f"No Instance matches the given query.", response.status_code)
+        except AAPAPIError:
+            raise
     except AAPAPIError as api_error:
-        # Use the API error message directly - it already contains the API's message
-        raise AAPClientError(str(api_error))
+        # Re-raise API errors unchanged to preserve the original message
+        raise
 
 
 def resolve_project_name(client, identifier, api="controller"):
