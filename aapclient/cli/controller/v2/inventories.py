@@ -189,7 +189,7 @@ def show_inventory(console, output_format, utc, inventory_name, id):
     inventory = response.json()
 
     # Rich formatted display - pass client for complete data
-    data = _format_inventory_data(inventory, utc, client)
+    data = _format_inventory_data(inventory, utc, client, output_format)
 
     if output_format == 'json':
         show_raw_json(data)
@@ -544,7 +544,7 @@ def _map_sort_field_to_api(sort_field: str) -> str:
     return field_mapping.get(sort_field, 'id')
 
 
-def _format_inventory_data(inventory: Dict[str, Any], use_utc: bool = False, client=None) -> Dict[str, Any]:
+def _format_inventory_data(inventory: Dict[str, Any], use_utc: bool = False, client=None, output_format: str = 'table') -> Dict[str, Any]:
     """Format inventory data for rich display - match cliff version exactly."""
     data = {}
 
@@ -598,11 +598,11 @@ def _format_inventory_data(inventory: Dict[str, Any], use_utc: bool = False, cli
         data['Variables'] = ''
 
     # Timestamps - match cliff exactly
-    data['Created'] = format_datetime_rich(inventory.get('created'), use_utc)
+    data['Created'] = format_datetime_rich(inventory.get('created'), use_utc, output_format)
     created_by = inventory.get('summary_fields', {}).get('created_by', {})
     data['Created By'] = created_by.get('username', '') if created_by else ''
 
-    data['Modified'] = format_datetime_rich(inventory.get('modified'), use_utc)
+    data['Modified'] = format_datetime_rich(inventory.get('modified'), use_utc, output_format)
     modified_by = inventory.get('summary_fields', {}).get('modified_by', {})
     data['Modified By'] = modified_by.get('username', '') if modified_by else ''
 

@@ -171,6 +171,42 @@ def show_details_table(console: Console, data: Dict[str, Any]) -> None:
     console.print(table)
 
 
+def format_value_for_output(value: Any, key: str, output_format: str = 'table') -> str:
+    """
+    Format a value for display with or without rich markup based on output format.
+
+    Args:
+        value: The value to format
+        key: The field name (used for context-specific formatting)
+        output_format: Output format ('table', 'json', 'yaml')
+
+    Returns:
+        Formatted value string
+    """
+    if output_format in ['json', 'yaml']:
+        # Plain formatting for JSON/YAML
+        if isinstance(value, bool):
+            return "Yes" if value else "No"
+        elif value in ['good', 'successful', 'ok', 'active', 'running', 'failed', 'error', 'inactive', 'stopped', 'pending', 'waiting', 'unknown']:
+            return str(value)
+        else:
+            return str(value) if value is not None else "None"
+    else:
+        # Rich formatting for table output
+        if isinstance(value, bool):
+            return "[green]Yes[/green]" if value else "[red]No[/red]"
+        elif isinstance(value, (int, float)) and key.lower() in ['timeout', 'port', 'capacity']:
+            return f"[cyan]{value}[/cyan]"
+        elif value in ['good', 'successful', 'ok', 'active', 'running']:
+            return f"[green]{value}[/green]"
+        elif value in ['failed', 'error', 'inactive', 'stopped']:
+            return f"[red]{value}[/red]"
+        elif value in ['pending', 'waiting', 'unknown']:
+            return f"[yellow]{value}[/yellow]"
+        else:
+            return str(value) if value is not None else "[dim]None[/dim]"
+
+
 
 def show_raw_json(data: Any) -> None:
     """
@@ -256,51 +292,55 @@ def create_tree_view(root_name: str) -> Tree:
     return Tree(f"[bold blue]{root_name}[/bold blue]")
 
 
-def format_datetime_rich(dt_str: str, use_utc: bool = False) -> str:
+def format_datetime_rich(dt_str: str, use_utc: bool = False, output_format: str = 'table') -> str:
     """
-    Format datetime string with rich styling.
+    Format datetime string with rich styling for table output or plain text for JSON/YAML.
 
     Args:
         dt_str: ISO format datetime string
         use_utc: Whether to display in UTC
+        output_format: Output format ('table', 'json', 'yaml')
 
     Returns:
-        Formatted datetime string with styling
+        Formatted datetime string with or without rich styling based on output format
     """
     if not dt_str:
-        return "[dim]Never[/dim]"
+        return "Never" if output_format in ['json', 'yaml'] else "[dim]Never[/dim]"
 
     try:
         # This would use the existing format_datetime function from common.functions
         from aapclient.common.functions import format_datetime
         formatted = format_datetime(dt_str, use_utc)
-        return f"[dim]{formatted}[/dim]"
+        return formatted if output_format in ['json', 'yaml'] else f"[dim]{formatted}[/dim]"
     except Exception:
-        return f"[dim]{dt_str}[/dim]"
+        return dt_str if output_format in ['json', 'yaml'] else f"[dim]{dt_str}[/dim]"
 
 
-def format_duration_rich(seconds: Union[int, float]) -> str:
+def format_duration_rich(seconds: Union[int, float], output_format: str = 'table') -> str:
     """
-    Format duration in seconds to human-readable format with styling.
+    Format duration in seconds to human-readable format with styling for table or plain for JSON/YAML.
 
     Args:
         seconds: Duration in seconds
+        output_format: Output format ('table', 'json', 'yaml')
 
     Returns:
-        Formatted duration string with styling
+        Formatted duration string with or without rich styling based on output format
     """
     if not seconds or seconds <= 0:
-        return "[dim]N/A[/dim]"
+        return "N/A" if output_format in ['json', 'yaml'] else "[dim]N/A[/dim]"
 
     hours, remainder = divmod(int(seconds), 3600)
     minutes, secs = divmod(remainder, 60)
 
     if hours > 0:
-        return f"[cyan]{hours}h {minutes}m {secs}s[/cyan]"
+        duration_str = f"{hours}h {minutes}m {secs}s"
     elif minutes > 0:
-        return f"[cyan]{minutes}m {secs}s[/cyan]"
+        duration_str = f"{minutes}m {secs}s"
     else:
-        return f"[cyan]{secs}s[/cyan]"
+        duration_str = f"{secs}s"
+
+    return duration_str if output_format in ['json', 'yaml'] else f"[cyan]{duration_str}[/cyan]"
 
 
 def _style_status_cell(value: str) -> str:

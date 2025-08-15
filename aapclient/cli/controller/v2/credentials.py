@@ -238,21 +238,17 @@ def show_credential(console, output_format, utc, credential_name, id):
     credential_data = response.json()
 
     # Format the data for display
-    formatted_data = _format_credential_data(credential_data, use_utc=utc)
+    formatted_data = _format_credential_data(credential_data, use_utc=utc, output_format=output_format)
 
     if output_format == 'json':
-        # For JSON/YAML output, use plain formatting without Rich markup
-        plain_data = _format_credential_data_plain(credential_data, use_utc=utc)
-        show_raw_json(plain_data)
+        show_raw_json(formatted_data)
     elif output_format == 'yaml':
-        # For YAML output, use plain formatting without Rich markup
-        plain_data = _format_credential_data_plain(credential_data, use_utc=utc)
-        show_raw_yaml(plain_data)
+        show_raw_yaml(formatted_data)
     else:
         show_details_table(console, formatted_data)
 
 
-def _format_credential_data(credential: Dict[str, Any], use_utc: bool = False) -> Dict[str, Any]:
+def _format_credential_data(credential: Dict[str, Any], use_utc: bool = False, output_format: str = 'table') -> Dict[str, Any]:
     """Format credential data for consistent display across commands."""
     summary_fields = credential.get('summary_fields', {})
 
@@ -282,8 +278,8 @@ def _format_credential_data(credential: Dict[str, Any], use_utc: bool = False) -
             data[formatted_key] = str(value) if value is not None else ''
 
     # Timestamps
-    data['Created'] = format_datetime_rich(credential.get('created'), use_utc)
-    data['Modified'] = format_datetime_rich(credential.get('modified'), use_utc)
+    data['Created'] = format_datetime_rich(credential.get('created'), use_utc, output_format)
+    data['Modified'] = format_datetime_rich(credential.get('modified'), use_utc, output_format)
 
     return data
 

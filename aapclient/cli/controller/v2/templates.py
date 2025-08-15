@@ -161,7 +161,7 @@ def list_templates(console, output_format, utc, limit, offset, organization, pro
 
     for template in templates:
         last_job = template.get('last_job_run')
-        last_run = format_datetime_rich(last_job, utc) if last_job else 'Never'
+        last_run = format_datetime_rich(last_job, utc, output_format) if last_job else ('Never' if output_format in ['json', 'yaml'] else 'Never')
 
         processed_data.append({
             'ID': template['id'],
@@ -209,7 +209,7 @@ def show_template(console, output_format, utc, template_name, id):
     template = response.json()
 
     # Rich formatted display
-    data = _format_template_data(template, use_utc=utc, client=client)
+    data = _format_template_data(template, use_utc=utc, client=client, output_format=output_format)
 
     if output_format == 'json':
         show_raw_json(data)
@@ -469,7 +469,7 @@ def _sort_templates_client_side(templates: List[Dict[str, Any]], sort_by: str, r
     return sorted(templates, key=get_sort_key, reverse=reverse)
 
 
-def _format_template_data(template: Dict[str, Any], use_utc: bool = False, client=None) -> Dict[str, Any]:
+def _format_template_data(template: Dict[str, Any], use_utc: bool = False, client=None, output_format: str = 'table') -> Dict[str, Any]:
     """Format template data for rich display."""
     data = {}
 
@@ -602,7 +602,7 @@ def _format_template_data(template: Dict[str, Any], use_utc: bool = False, clien
     data['Webhook Key'] = webhook_key
 
     # Last job info
-    data['Last Job Run'] = format_datetime_rich(template.get('last_job_run'), use_utc)
+    data['Last Job Run'] = format_datetime_rich(template.get('last_job_run'), use_utc, output_format)
     # Use last_job from summary_fields like legacy version
     last_job_info = template.get('summary_fields', {}).get('last_job', {})
     if last_job_info:
@@ -612,11 +612,11 @@ def _format_template_data(template: Dict[str, Any], use_utc: bool = False, clien
     data['Last Job Status'] = last_job_status
 
     # Timestamps
-    data['Created'] = format_datetime_rich(template.get('created'), use_utc)
+    data['Created'] = format_datetime_rich(template.get('created'), use_utc, output_format)
     created_by = template.get('summary_fields', {}).get('created_by', {})
     data['Created By'] = created_by.get('username', 'N/A')
 
-    data['Modified'] = format_datetime_rich(template.get('modified'), use_utc)
+    data['Modified'] = format_datetime_rich(template.get('modified'), use_utc, output_format)
     modified_by = template.get('summary_fields', {}).get('modified_by', {})
     data['Modified By'] = modified_by.get('username', 'N/A')
 
@@ -847,7 +847,7 @@ def set_template(console, template_name, id, set_name, **kwargs):
 
         if response.status_code == HTTP_OK:
             template_data = response.json()
-            data = _format_template_data(template_data, use_utc=False, client=client)
+            data = _format_template_data(template_data, use_utc=False, client=client, output_format='table')
             show_details_table(console, data)
         else:
             show_error_message(console, f"Failed to update job template: HTTP {response.status_code}")

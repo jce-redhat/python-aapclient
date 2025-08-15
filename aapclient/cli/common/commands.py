@@ -85,7 +85,9 @@ def ping(console, detail, output_format, utc):
                 controller_data,
                 gateway_time_ms,
                 controller_time_ms,
-                detail
+                detail,
+                output_format,
+                utc
             )
 
             # Format output according to user preference
@@ -134,7 +136,7 @@ def whoami(console, output_format, utc):
             user_data = data['results'][0]  # Get first (and only) user result
 
             # Build display data
-            display_data = _build_whoami_data(user_data)
+            display_data = _build_whoami_data(user_data, utc, output_format)
 
             # Format output according to user preference
             if output_format == 'json':
@@ -201,7 +203,9 @@ def _build_ping_data(
     controller_data: Dict[str, Any],
     gateway_time_ms: int,
     controller_time_ms: int,
-    show_detail: bool
+    show_detail: bool,
+    output_format: str = 'table',
+    use_utc: bool = False
 ) -> Dict[str, Any]:
     """
     Build ping data structure for display.
@@ -249,13 +253,52 @@ def _build_ping_data(
     if 'active_node' in controller_data:
         data['Active Node'] = controller_data['active_node']
 
-    if 'capacity' in controller_data:
-        data['Controller Capacity'] = controller_data['capacity']
+    # Calculate total controller capacity from instance groups
+    if 'instance_groups' in controller_data:
+        total_capacity = sum(ig.get('capacity', 0) for ig in controller_data['instance_groups'])
+        data['Controller Capacity'] = str(total_capacity)
 
     # Detailed information (only if requested)
     if show_detail:
-        total_time_ms = gateway_time_ms + controller_time_ms
-        data['Total Response Time'] = f"{total_time_ms}ms"
+        # Install UUID
+        if 'install_uuid' in controller_data:
+            data['Install UUID'] = controller_data['install_uuid']
+
+        # Instance Details
+        if 'instances' in controller_data:
+            for i, instance in enumerate(controller_data['instances']):
+                prefix = f"Instance {i+1}"
+
+                if 'node' in instance:
+                    data[f'{prefix} Node'] = instance['node']
+
+                if 'node_type' in instance:
+                    data[f'{prefix} Type'] = instance['node_type']
+
+                if 'uuid' in instance:
+                    data[f'{prefix} UUID'] = instance['uuid']
+
+                if 'heartbeat' in instance:
+                    from aapclient.cli.output import format_datetime_rich
+                    data[f'{prefix} Heartbeat'] = format_datetime_rich(instance['heartbeat'], use_utc, output_format)
+
+                if 'capacity' in instance:
+                    data[f'{prefix} Capacity'] = str(instance['capacity'])
+
+        # Instance Group Details
+        if 'instance_groups' in controller_data:
+            for i, group in enumerate(controller_data['instance_groups']):
+                prefix = f"Instance Group {i+1}"
+
+                if 'name' in group:
+                    data[f'{prefix} Name'] = group['name']
+
+                if 'capacity' in group:
+                    data[f'{prefix} Capacity'] = str(group['capacity'])
+
+                if 'instances' in group:
+                    instances_list = ', '.join(group['instances']) if group['instances'] else 'None'
+                    data[f'{prefix} Instances'] = instances_list
 
         # Add any additional detailed fields here
         if 'redis_connected' in gateway_data:
@@ -264,12 +307,13 @@ def _build_ping_data(
     return data
 
 
-def _build_whoami_data(user_data: Dict[str, Any]) -> Dict[str, Any]:
+def _build_whoami_data(user_data: Dict[str, Any], use_utc: bool = False, output_format: str = 'table') -> Dict[str, Any]:
     """
     Build whoami data structure for display.
 
     Args:
         user_data: User data from Gateway API
+        use_utc: Whether to display timestamps in UTC
 
     Returns:
         Dictionary of user data for display
@@ -306,14 +350,14 @@ def _build_whoami_data(user_data: Dict[str, Any]) -> Dict[str, Any]:
     if 'managed' in user_data:
         data['Managed Account'] = 'Yes' if user_data['managed'] else 'No'
 
-    # Timestamps - use existing formatting function
+    # Timestamps - use existing formatting function with UTC support
     from aapclient.cli.output import format_datetime_rich
 
     if 'date_joined' in user_data:
-        data['Date Joined'] = format_datetime_rich(user_data['date_joined'])
+        data['Date Joined'] = format_datetime_rich(user_data['date_joined'], use_utc, output_format)
 
     if 'last_login' in user_data:
-        data['Last Login'] = format_datetime_rich(user_data['last_login'])
+        data['Last Login'] = format_datetime_rich(user_data['last_login'], use_utc, output_format)
 
     return data
 

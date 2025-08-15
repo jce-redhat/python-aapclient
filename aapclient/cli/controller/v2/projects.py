@@ -195,7 +195,7 @@ def show_project(console, output_format, utc, project_name, id):
     project_data = response.json()
 
     # Format the data for display
-    formatted_data = _format_project_data(project_data, use_utc=utc, client=client)
+    formatted_data = _format_project_data(project_data, use_utc=utc, client=client, output_format=output_format)
 
     if output_format == 'json':
         show_raw_json(formatted_data)
@@ -205,7 +205,7 @@ def show_project(console, output_format, utc, project_name, id):
         show_details_table(console, formatted_data)
 
 
-def _format_project_data(project: Dict[str, Any], use_utc: bool = False, client=None) -> Dict[str, Any]:
+def _format_project_data(project: Dict[str, Any], use_utc: bool = False, client=None, output_format: str = 'table') -> Dict[str, Any]:
     """Format project data for consistent display across commands."""
     summary_fields = project.get('summary_fields', {})
 
@@ -252,7 +252,7 @@ def _format_project_data(project: Dict[str, Any], use_utc: bool = False, client=
     # Job and update timing fields
     last_job = summary_fields.get('last_job', {})
     if last_job and last_job.get('finished'):
-        data['Last Job Run'] = format_datetime_rich(last_job['finished'], use_utc)
+        data['Last Job Run'] = format_datetime_rich(last_job['finished'], use_utc, output_format)
         data['Last Job Failed'] = 'Yes' if last_job.get('failed') else 'No'
     else:
         data['Last Job Run'] = 'Never'
@@ -260,19 +260,19 @@ def _format_project_data(project: Dict[str, Any], use_utc: bool = False, client=
 
     last_update = summary_fields.get('last_update', {})
     if last_update and last_update.get('finished'):
-        data['Last Updated'] = format_datetime_rich(last_update['finished'], use_utc)
+        data['Last Updated'] = format_datetime_rich(last_update['finished'], use_utc, output_format)
         data['Last Update Failed'] = 'Yes' if last_update.get('failed') else 'No'
     else:
         data['Last Updated'] = 'Never'
         data['Last Update Failed'] = 'No'
 
     next_job = summary_fields.get('next_job_run')
-    data['Next Job Run'] = format_datetime_rich(next_job, use_utc) if next_job else 'None'
+    data['Next Job Run'] = format_datetime_rich(next_job, use_utc, output_format) if next_job else 'None'
 
     # Timestamps
-    data['Created'] = format_datetime_rich(project.get('created'), use_utc)
+    data['Created'] = format_datetime_rich(project.get('created'), use_utc, output_format)
     data['Created By'] = summary_fields.get('created_by', {}).get('username', '')
-    data['Modified'] = format_datetime_rich(project.get('modified'), use_utc)
+    data['Modified'] = format_datetime_rich(project.get('modified'), use_utc, output_format)
     data['Modified By'] = summary_fields.get('modified_by', {}).get('username', '')
 
     return data
