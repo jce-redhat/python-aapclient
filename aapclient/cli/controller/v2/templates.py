@@ -9,6 +9,7 @@ import json
 from typing import Dict, Any, List, Optional
 
 import click
+from click_option_group import optgroup, MutuallyExclusiveOptionGroup
 from rich.table import Table
 
 from aapclient.common.constants import (
@@ -693,17 +694,31 @@ def delete_template(console, template_name, id):
 @click.option('--skip-tags', help='Skip tags')
 @click.option('--extra-vars', help='Extra variables as JSON')
 @click.option('--instance-group', multiple=True, help='Instance group name or ID (can be specified multiple times)')
-# Boolean flags
-@click.option('--enable-privileged-escalation', is_flag=True, help='Enable privileged escalation')
-@click.option('--disable-privileged-escalation', is_flag=True, help='Disable privileged escalation')
-@click.option('--enable-concurrent-jobs', is_flag=True, help='Enable concurrent jobs')
-@click.option('--disable-concurrent-jobs', is_flag=True, help='Disable concurrent jobs')
-@click.option('--enable-fact-storage', is_flag=True, help='Enable fact storage')
-@click.option('--disable-fact-storage', is_flag=True, help='Disable fact storage')
-@click.option('--enable-show-changes', is_flag=True, help='Show changes in diff mode')
-@click.option('--disable-show-changes', is_flag=True, help='Disable showing changes in diff mode')
-@click.option('--prevent-instance-group-fallback', is_flag=True, help='Prevent instance group fallback')
-@click.option('--allow-instance-group-fallback', is_flag=True, help='Allow instance group fallback')
+# Mutually exclusive boolean flag groups
+@optgroup.group('Privileged Escalation', cls=MutuallyExclusiveOptionGroup,
+                help='Control privileged escalation setting')
+@optgroup.option('--enable-privileged-escalation', is_flag=True, help='Enable privileged escalation')
+@optgroup.option('--disable-privileged-escalation', is_flag=True, help='Disable privileged escalation')
+
+@optgroup.group('Concurrent Jobs', cls=MutuallyExclusiveOptionGroup,
+                help='Control concurrent jobs setting')
+@optgroup.option('--enable-concurrent-jobs', is_flag=True, help='Enable concurrent jobs')
+@optgroup.option('--disable-concurrent-jobs', is_flag=True, help='Disable concurrent jobs')
+
+@optgroup.group('Fact Storage', cls=MutuallyExclusiveOptionGroup,
+                help='Control fact storage setting')
+@optgroup.option('--enable-fact-storage', is_flag=True, help='Enable fact storage')
+@optgroup.option('--disable-fact-storage', is_flag=True, help='Disable fact storage')
+
+@optgroup.group('Show Changes', cls=MutuallyExclusiveOptionGroup,
+                help='Control diff mode changes display')
+@optgroup.option('--enable-show-changes', is_flag=True, help='Show changes in diff mode')
+@optgroup.option('--disable-show-changes', is_flag=True, help='Disable showing changes in diff mode')
+
+@optgroup.group('Instance Group Fallback', cls=MutuallyExclusiveOptionGroup,
+                help='Control instance group fallback behavior')
+@optgroup.option('--prevent-instance-group-fallback', is_flag=True, help='Prevent instance group fallback')
+@optgroup.option('--allow-instance-group-fallback', is_flag=True, help='Allow instance group fallback')
 # Ask on launch flags
 @click.option('--ask-diff-mode-on-launch', is_flag=True, help='Ask for diff mode on launch')
 @click.option('--ask-variables-on-launch', is_flag=True, help='Ask for variables on launch')
@@ -720,9 +735,13 @@ def delete_template(console, template_name, id):
 @click.option('--ask-job-slices-on-launch', is_flag=True, help='Ask for job slices on launch')
 @click.option('--ask-timeout-on-launch', is_flag=True, help='Ask for timeout on launch')
 @click.option('--ask-instance-groups-on-launch', is_flag=True, help='Ask for instance groups on launch')
-# Webhook options
-@click.option('--enable-webhook', is_flag=True, help='Enable webhook')
-@click.option('--disable-webhook', is_flag=True, help='Disable webhook')
+# Webhook mutually exclusive group
+@optgroup.group('Webhook', cls=MutuallyExclusiveOptionGroup,
+                help='Control webhook setting')
+@optgroup.option('--enable-webhook', is_flag=True, help='Enable webhook')
+@optgroup.option('--disable-webhook', is_flag=True, help='Disable webhook')
+
+# Webhook configuration options
 @click.option('--webhook-service', type=click.Choice(['gitlab', 'github', 'bitbucket_dc']), help='Webhook service')
 @click.option('--webhook-credential', help='Webhook credential name or ID')
 @update_command

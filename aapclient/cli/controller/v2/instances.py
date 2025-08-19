@@ -1,6 +1,7 @@
 """Instance and Instance Group CLI commands for AAP Controller API v2."""
 
 import click
+from click_option_group import optgroup, MutuallyExclusiveOptionGroup
 import sys
 from typing import Dict, Any
 
@@ -179,11 +180,25 @@ def delete_instance(console, instance_name, id):
 @click.argument('instance_name', metavar='<instance>', required=False)
 @click.option('--id', type=int, help='Instance ID (overrides name argument)')
 @click.option('--capacity-adjustment', type=click.IntRange(0, 100), help='Capacity adjustment percentage (0-100)')
-@click.option('--enable/--disable', 'enable_flag', default=None, help='Enable or disable the instance')
-@click.option('--enable-peers-from-control-nodes/--disable-peers-from-control-nodes', 'peers_from_control_nodes', default=None, help='Enable or disable peers from control nodes')
-@click.option('--enable-manage-by-policy/--disable-manage-by-policy', 'managed_by_policy', default=None, help='Enable or disable management by policy')
+
+@optgroup.group('Instance State', cls=MutuallyExclusiveOptionGroup,
+                help='Control instance enabled/disabled state')
+@optgroup.option('--enable', is_flag=True, help='Enable the instance')
+@optgroup.option('--disable', is_flag=True, help='Disable the instance')
+
+@optgroup.group('Peers from Control Nodes', cls=MutuallyExclusiveOptionGroup,
+                help='Control peers from control nodes setting')
+@optgroup.option('--enable-peers-from-control-nodes', is_flag=True, help='Enable peers from control nodes')
+@optgroup.option('--disable-peers-from-control-nodes', is_flag=True, help='Disable peers from control nodes')
+
+@optgroup.group('Management by Policy', cls=MutuallyExclusiveOptionGroup,
+                help='Control management by policy setting')
+@optgroup.option('--enable-manage-by-policy', is_flag=True, help='Enable management by policy')
+@optgroup.option('--disable-manage-by-policy', is_flag=True, help='Disable management by policy')
 @update_command
-def set_instance(console, instance_name, id, capacity_adjustment, enable_flag, peers_from_control_nodes, managed_by_policy):
+def set_instance(console, instance_name, id, capacity_adjustment, enable, disable,
+                enable_peers_from_control_nodes, disable_peers_from_control_nodes,
+                enable_manage_by_policy, disable_manage_by_policy):
     """Update an existing instance."""
     client_manager = get_client_from_context()
     client = client_manager.controller
@@ -205,14 +220,20 @@ def set_instance(console, instance_name, id, capacity_adjustment, enable_flag, p
     if capacity_adjustment is not None:
         update_data['capacity_adjustment'] = capacity_adjustment / 100.0
 
-    if enable_flag is not None:
-        update_data['enabled'] = enable_flag
+    if enable:
+        update_data['enabled'] = True
+    elif disable:
+        update_data['enabled'] = False
 
-    if peers_from_control_nodes is not None:
-        update_data['peers_from_control_nodes'] = peers_from_control_nodes
+    if enable_peers_from_control_nodes:
+        update_data['peers_from_control_nodes'] = True
+    elif disable_peers_from_control_nodes:
+        update_data['peers_from_control_nodes'] = False
 
-    if managed_by_policy is not None:
-        update_data['managed_by_policy'] = managed_by_policy
+    if enable_manage_by_policy:
+        update_data['managed_by_policy'] = True
+    elif disable_manage_by_policy:
+        update_data['managed_by_policy'] = False
 
     if not update_data:
         show_error_message(console, "No update fields provided")

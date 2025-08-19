@@ -8,6 +8,7 @@ with beautiful rich output formatting and improved user experience.
 from typing import Dict, Any, List
 
 import click
+from click_option_group import optgroup, MutuallyExclusiveOptionGroup
 
 from aapclient.common.constants import (
     CONTROLLER_API_VERSION_ENDPOINT,
@@ -318,17 +319,17 @@ def delete_inventory(console, inventory_name, id):
 @click.option('--organization', help='Organization name or ID')
 @click.option('--description', help='Inventory description')
 @click.option('--variables', help='Inventory variables as JSON string')
-@click.option('--allow-instance-group-fallback', 'instance_group_fallback', flag_value=False,
-              help='Allow instance group fallback')
-@click.option('--prevent-instance-group-fallback', 'instance_group_fallback', flag_value=True,
-              help='Prevent instance group fallback')
+@optgroup.group('Instance Group Fallback', cls=MutuallyExclusiveOptionGroup,
+                help='Control instance group fallback behavior')
+@optgroup.option('--allow-instance-group-fallback', is_flag=True, help='Allow instance group fallback')
+@optgroup.option('--prevent-instance-group-fallback', is_flag=True, help='Prevent instance group fallback')
 @click.option('--add-instance-group', 'add_instance_groups', multiple=True,
               help='Instance group name or ID to add to inventory (can be used multiple times)')
 @click.option('--remove-instance-group', 'remove_instance_groups', multiple=True,
               help='Instance group name or ID to remove from inventory (can be used multiple times)')
 @update_command
 def set_inventory(console, inventory_name, id, set_name, organization, description, variables,
-                  instance_group_fallback, add_instance_groups, remove_instance_groups):
+                  allow_instance_group_fallback, prevent_instance_group_fallback, add_instance_groups, remove_instance_groups):
     """Update an existing inventory."""
     client_manager = get_client_from_context()
     client = client_manager.controller
@@ -359,8 +360,10 @@ def set_inventory(console, inventory_name, id, set_name, organization, descripti
     if description is not None:  # Allow empty string to clear description
         update_data['description'] = description
 
-    if instance_group_fallback is not None:
-        update_data['prevent_instance_group_fallback'] = instance_group_fallback
+    if allow_instance_group_fallback:
+        update_data['prevent_instance_group_fallback'] = False
+    elif prevent_instance_group_fallback:
+        update_data['prevent_instance_group_fallback'] = True
 
     if variables is not None:
         # Validate and set variables

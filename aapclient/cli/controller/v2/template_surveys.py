@@ -9,6 +9,7 @@ import json
 from typing import Dict, Any, List, Optional
 
 import click
+from click_option_group import optgroup, MutuallyExclusiveOptionGroup
 from rich.table import Table
 
 from aapclient.common.constants import (
@@ -295,10 +296,12 @@ def delete_survey(console, template_name, id):
 @click.option('--id', type=int, help='Job template ID (overrides template name)')
 @click.option('--name', help='Survey name')
 @click.option('--description', help='Survey description')
-@click.option('--enabled', 'enable_survey', is_flag=True, help='Enable the survey on the job template')
-@click.option('--disabled', 'disable_survey', is_flag=True, help='Disable the survey on the job template')
+@optgroup.group('Survey State', cls=MutuallyExclusiveOptionGroup,
+                help='Control survey enabled/disabled state')
+@optgroup.option('--enabled', is_flag=True, help='Enable the survey on the job template')
+@optgroup.option('--disabled', is_flag=True, help='Disable the survey on the job template')
 @update_command
-def set_survey(console, template_name, id, name, description, enable_survey, disable_survey):
+def set_survey(console, template_name, id, name, description, enabled, disabled):
     """Update survey metadata (name and description)."""
     client_manager = get_client_from_context()
     client = client_manager.controller
@@ -313,14 +316,10 @@ def set_survey(console, template_name, id, name, description, enable_survey, dis
             show_error_message(console, "Job template identifier is required")
             click.get_current_context().exit(1)
 
-        # Validate mutually exclusive options
-        if enable_survey and disable_survey:
-            show_error_message(console, "--enabled and --disabled cannot be used together")
-            import sys
-            sys.exit(1)
+        # Note: Mutually exclusive validation now handled by click-option-group
 
         # Check if any fields need to be updated
-        if name is None and description is None and not enable_survey and not disable_survey:
+        if name is None and description is None and not enabled and not disabled:
             show_error_message(console, "At least one field must be specified to update")
             import sys
             sys.exit(1)
@@ -350,9 +349,9 @@ def set_survey(console, template_name, id, name, description, enable_survey, dis
                 sys.exit(1)
 
         # Update job template survey enabled status if requested
-        if enable_survey or disable_survey:
+        if enabled or disabled:
             template_endpoint = f"{CONTROLLER_API_VERSION_ENDPOINT}job_templates/{job_template_id}/"
-            survey_enabled = enable_survey  # True for --enabled, False for --disabled
+            survey_enabled = enabled  # True for --enabled, False for --disabled
             template_response = client.patch(template_endpoint, json={"survey_enabled": survey_enabled})
             if template_response.status_code != HTTP_OK:
                 show_error_message(console, f"Failed to update survey enabled status: HTTP {template_response.status_code}")

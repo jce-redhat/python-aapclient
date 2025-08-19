@@ -26,6 +26,7 @@ classifiers = [
 dependencies = [
     "cliff>=4.4.0",        # Keep for backwards compatibility during transition
     "click>=8.0.0",        # New CLI framework
+    "click-option-group>=0.5.6",  # Mutually exclusive option groups
     "rich>=13.0.0",        # Enhanced output formatting
     "requests>=2.28.0",
     "PyYAML>=6.0",

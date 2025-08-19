@@ -6,6 +6,7 @@ providing rich output formatting and enhanced user experience.
 """
 
 import click
+from click_option_group import optgroup, MutuallyExclusiveOptionGroup
 import sys
 from typing import Dict, Any
 
@@ -393,16 +394,30 @@ def create_project(console, name, organization, scm_type, scm_url, description, 
 @click.option('--signature-validation-credential', help='Update signature validation credential name or ID')
 @click.option('--scm-update-cache-timeout', type=int, help='Update SCM cache timeout in seconds')
 @click.option('--timeout', type=int, help='Update project timeout in seconds')
-@click.option('--enable-scm-track-submodules', is_flag=True, help='Enable tracking submodules')
-@click.option('--disable-scm-track-submodules', is_flag=True, help='Disable tracking submodules')
-@click.option('--enable-scm-update-on-launch', is_flag=True, help='Enable SCM update on launch')
-@click.option('--disable-scm-update-on-launch', is_flag=True, help='Disable SCM update on launch')
-@click.option('--enable-scm-allow-branch-override', is_flag=True, help='Enable branch override')
-@click.option('--disable-scm-allow-branch-override', is_flag=True, help='Disable branch override')
-@click.option('--enable-scm-clean', is_flag=True, help='Enable SCM clean')
-@click.option('--disable-scm-clean', is_flag=True, help='Disable SCM clean')
-@click.option('--enable-scm-delete-on-update', is_flag=True, help='Enable SCM delete on update')
-@click.option('--disable-scm-delete-on-update', is_flag=True, help='Disable SCM delete on update')
+@optgroup.group('SCM Track Submodules', cls=MutuallyExclusiveOptionGroup,
+                help='Control SCM submodule tracking')
+@optgroup.option('--enable-scm-track-submodules', is_flag=True, help='Enable tracking submodules')
+@optgroup.option('--disable-scm-track-submodules', is_flag=True, help='Disable tracking submodules')
+
+@optgroup.group('SCM Update on Launch', cls=MutuallyExclusiveOptionGroup,
+                help='Control SCM update on job launch')
+@optgroup.option('--enable-scm-update-on-launch', is_flag=True, help='Enable SCM update on launch')
+@optgroup.option('--disable-scm-update-on-launch', is_flag=True, help='Disable SCM update on launch')
+
+@optgroup.group('SCM Branch Override', cls=MutuallyExclusiveOptionGroup,
+                help='Control SCM branch override capability')
+@optgroup.option('--enable-scm-allow-branch-override', is_flag=True, help='Enable branch override')
+@optgroup.option('--disable-scm-allow-branch-override', is_flag=True, help='Disable branch override')
+
+@optgroup.group('SCM Clean', cls=MutuallyExclusiveOptionGroup,
+                help='Control SCM clean on update')
+@optgroup.option('--enable-scm-clean', is_flag=True, help='Enable SCM clean')
+@optgroup.option('--disable-scm-clean', is_flag=True, help='Disable SCM clean')
+
+@optgroup.group('SCM Delete on Update', cls=MutuallyExclusiveOptionGroup,
+                help='Control SCM delete on update')
+@optgroup.option('--enable-scm-delete-on-update', is_flag=True, help='Enable SCM delete on update')
+@optgroup.option('--disable-scm-delete-on-update', is_flag=True, help='Disable SCM delete on update')
 @update_command
 def set_project(console, project_name, id, set_name, organization, scm_type, scm_url, description,
                scm_branch, scm_refspec, credential, execution_environment, signature_validation_credential,
@@ -415,22 +430,7 @@ def set_project(console, project_name, id, set_name, organization, scm_type, scm
     client = client_manager.controller
 
     try:
-        # Validate mutually exclusive options
-        if enable_scm_track_submodules and disable_scm_track_submodules:
-            show_error_message(console, "--enable-scm-track-submodules and --disable-scm-track-submodules cannot be used together")
-            sys.exit(1)
-        if enable_scm_update_on_launch and disable_scm_update_on_launch:
-            show_error_message(console, "--enable-scm-update-on-launch and --disable-scm-update-on-launch cannot be used together")
-            sys.exit(1)
-        if enable_scm_allow_branch_override and disable_scm_allow_branch_override:
-            show_error_message(console, "--enable-scm-allow-branch-override and --disable-scm-allow-branch-override cannot be used together")
-            sys.exit(1)
-        if enable_scm_clean and disable_scm_clean:
-            show_error_message(console, "--enable-scm-clean and --disable-scm-clean cannot be used together")
-            sys.exit(1)
-        if enable_scm_delete_on_update and disable_scm_delete_on_update:
-            show_error_message(console, "--enable-scm-delete-on-update and --disable-scm-delete-on-update cannot be used together")
-            sys.exit(1)
+        # Note: Mutually exclusive validation now handled by click-option-group
 
         # Resolve project ID
         if id:
