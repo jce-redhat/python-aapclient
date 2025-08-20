@@ -114,6 +114,53 @@ def list_instances(console, output_format, utc, offset, limit, sort_by, reverse,
             console.print(f"\nShowing {len(instances)} of {total_count} total instances")
 
 
+@instance.command('create')
+@click.argument('hostname', metavar='<hostname>')
+@click.option('--listener-port', type=click.IntRange(1024, 65535), help='Port for instance communication (1024-65535)')
+@click.option('--instance-type', type=click.Choice(['execution', 'hop']), required=True, help='Instance type')
+@click.option('--enabled', is_flag=True, help='Enable the instance (sets enabled=true)')
+@click.option('--managed-by-policy', is_flag=True, help='Enable management by policy (sets managed_by_policy=true)')
+@click.option('--peers-from-control-node', is_flag=True, help='Enable peers from control nodes (sets peers_from_control_nodes=true)')
+@create_command
+def create_instance(console, hostname, listener_port, instance_type, enabled, managed_by_policy, peers_from_control_node):
+    """Create a new instance."""
+    client_manager = get_client_from_context()
+    client = client_manager.controller
+
+    # Build instance data
+    instance_data = {
+        'hostname': hostname,
+        'node_type': instance_type,
+    }
+
+    # Add optional fields if specified
+    if listener_port is not None:
+        instance_data['listener_port'] = listener_port
+
+    if enabled:
+        instance_data['enabled'] = True
+
+    if managed_by_policy:
+        instance_data['managed_by_policy'] = True
+
+    if peers_from_control_node:
+        instance_data['peers_from_control_nodes'] = True
+
+    # Create instance
+    endpoint = f"{CONTROLLER_API_VERSION_ENDPOINT}instances/"
+    response = client.post(endpoint, json=instance_data)
+
+    if response.status_code == HTTP_CREATED:
+        instance_data = response.json()
+        show_success_message(console, f"Instance '{hostname}' created successfully")
+
+        formatted_data = _format_instance_data(instance_data, use_utc=False, output_format='table')
+        show_details_table(console, formatted_data)
+    else:
+        show_error_message(console, f"Instance creation failed with status {response.status_code}")
+        sys.exit(1)
+
+
 @instance.command('show')
 @click.argument('instance_name', metavar='<instance>', required=False, callback=validate_resource_identifier)
 @click.option('--id', type=int, help='Instance ID (overrides name argument)')
@@ -166,13 +213,93 @@ def delete_instance(console, instance_name, id):
         show_error_message(console, "Instance identifier is required")
         sys.exit(1)
 
+    # Delete instance by setting node_state to "deprovisioning"
     endpoint = f"{CONTROLLER_API_VERSION_ENDPOINT}instances/{instance_id}/"
-    response = client.delete(endpoint)
+    patch_data = {'node_state': 'deprovisioning'}
+    response = client.patch(endpoint, json=patch_data)
 
-    if response.status_code in [HTTP_NO_CONTENT, HTTP_ACCEPTED]:
+    if response.status_code == HTTP_OK:
         show_success_message(console, f"Instance '{instance_identifier}' deleted successfully")
     else:
         show_error_message(console, f"Failed to delete instance: {response.status_code}")
+        sys.exit(1)
+
+
+@instance.command('download')
+@click.argument('instance_name', metavar='<instance>', required=False, callback=validate_resource_identifier)
+@click.option('--id', type=int, help='Instance ID (overrides name argument)')
+@click.option('--output', '-o', help='Output filename (default: <hostname>_install_bundle.tar.gz)')
+@standard_command
+def download_instance(console, instance_name, id, output):
+    """Download instance install bundle."""
+    client_manager = get_client_from_context()
+    client = client_manager.controller
+
+    # Resolve instance ID and get instance details
+    if id:
+        instance_id = id
+        instance_identifier = str(id)
+        # Get instance details to find hostname for filename
+        response = client.get(f"{CONTROLLER_API_VERSION_ENDPOINT}instances/{instance_id}/")
+        instance_data = response.json()
+        hostname = instance_data.get('hostname', f'instance_{instance_id}')
+    elif instance_name:
+        instance_id = resolve_instance_name(client, instance_name)
+        instance_identifier = instance_name
+        hostname = instance_name
+    else:
+        show_error_message(console, "Instance identifier is required")
+        sys.exit(1)
+
+    # Download install bundle first to get the API-suggested filename
+    endpoint = f"{CONTROLLER_API_VERSION_ENDPOINT}instances/{instance_id}/install_bundle/"
+
+    try:
+        response = client.get(endpoint)
+
+        if response.status_code == HTTP_OK:
+            # Determine output filename
+            if not output:
+                # Extract filename from Content-Disposition header
+                content_disp = response.headers.get('Content-Disposition', '')
+                if 'filename=' in content_disp:
+                    # Parse the filename from the header
+                    parts = content_disp.split('filename=')
+                    if len(parts) > 1:
+                        output = parts[1].strip()
+                    else:
+                        # Fallback to constructed name if parsing fails
+                        output = f"{hostname}_install_bundle.tar.gz"
+                else:
+                    # Fallback to constructed name if no Content-Disposition
+                    output = f"{hostname}_install_bundle.tar.gz"
+
+            # Check if file already exists and prompt for overwrite
+            import os
+            if os.path.exists(output):
+                if not click.confirm(f"File '{output}' already exists. Overwrite?"):
+                    show_error_message(console, "Download cancelled")
+                    sys.exit(1)
+
+            # Write the binary content to file
+            with open(output, 'wb') as f:
+                f.write(response.content)
+
+            file_size = len(response.content)
+            show_success_message(console, f"Install bundle downloaded: {output} ({file_size:,} bytes)")
+        else:
+            # Try to get error message from response
+            try:
+                error_data = response.json()
+                error_msg = error_data.get('msg', error_data.get('detail', f'HTTP {response.status_code}'))
+            except:
+                error_msg = f"HTTP {response.status_code}"
+
+            show_error_message(console, f"Failed to download install bundle: {error_msg}")
+            sys.exit(1)
+
+    except Exception as e:
+        show_error_message(console, f"Error downloading install bundle: {str(e)}")
         sys.exit(1)
 
 
