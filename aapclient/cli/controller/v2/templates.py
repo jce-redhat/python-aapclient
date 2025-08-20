@@ -884,7 +884,7 @@ def template_variables():
 
 
 @template_variables.command('show')
-@click.argument('template_name', metavar='<template>')
+@click.argument('template_name', metavar='<template>', required=False, callback=validate_resource_identifier)
 @click.option('--id', type=int, help='Job template ID (overrides positional parameter)')
 @show_command
 def show_template_variables(console, output_format, template_name, id, utc):
@@ -898,20 +898,12 @@ def show_template_variables(console, output_format, template_name, id, utc):
         # Determine how to resolve the job template
         if id:
             job_template_id = id
-        elif template_name:
-            job_template_id = resolve_job_template_name(client, template_name)
         else:
-            show_error_message(console, "Job template identifier is required")
-            click.get_current_context().exit(1)
+            job_template_id = resolve_job_template_name(client, template_name)
 
         # Get job template data
         endpoint = f"{CONTROLLER_API_VERSION_ENDPOINT}job_templates/{job_template_id}/"
         response = client.get(endpoint)
-
-        if response.status_code != HTTP_OK:
-            show_error_message(console, f"Failed to fetch job template: HTTP {response.status_code}")
-            click.get_current_context().exit(1)
-
         template_data = response.json()
         variables = template_data.get('extra_vars', {})
 

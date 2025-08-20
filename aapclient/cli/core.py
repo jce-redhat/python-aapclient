@@ -179,12 +179,14 @@ def main(argv: Optional[List[str]] = None) -> int:
         from aapclient.cli.controller.v2.credentials import register_credential_commands
         from aapclient.cli.controller.v2.execution_environments import register_execution_environment_commands
         from aapclient.cli.controller.v2.instances import register_instance_commands
+        from aapclient.cli.controller.v2.jobs import register_job_commands
         register_template_commands(cli)
         register_inventory_commands(cli)
         register_project_commands(cli)
         register_credential_commands(cli)
         register_execution_environment_commands(cli)
         register_instance_commands(cli)
+        register_job_commands(cli)
 
         # Run the CLI
         cli(argv, standalone_mode=False)
