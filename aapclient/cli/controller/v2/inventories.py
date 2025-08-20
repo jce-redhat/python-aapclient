@@ -460,17 +460,21 @@ def show_inventory_variables(console, output_format, utc, inventory_name, id):
     response = client.get(f"{CONTROLLER_API_VERSION_ENDPOINT}inventories/{inventory_id}/")
     inventory_data = response.json()
 
-    # Extract variables and format for display
-    variables = inventory_data.get('variables', {})
+    # Extract and parse variables for display
+    variables_raw = inventory_data.get('variables', {})
+
+    # Parse variables for JSON/YAML output
+    from aapclient.common.functions import parse_variables_for_output
+    variables_parsed = parse_variables_for_output(variables_raw)
 
     if output_format == 'json':
-        show_raw_json(variables)
+        show_raw_json(variables_parsed)
     elif output_format == 'yaml':
-        show_raw_yaml(variables)
+        show_raw_yaml(variables_parsed)
     else:
         # Table format showing inventory name and variables in YAML
         from aapclient.common.functions import format_variables_yaml_display
-        variables_yaml = format_variables_yaml_display(variables)
+        variables_yaml = format_variables_yaml_display(variables_raw)
 
         # Create a simple key-value display
         data = {

@@ -578,7 +578,7 @@ def job_variables():
 def show_job_variables(console, output_format, utc, job_id):
     """Show job extra variables in YAML format."""
     from aapclient.cli.decorators import get_client_from_context
-    from aapclient.common.functions import resolve_job_name, format_variables_yaml_display
+    from aapclient.common.functions import resolve_job_name, format_variables_yaml_display, parse_variables_for_output
 
     client_manager = get_client_from_context()
     client = client_manager.controller
@@ -622,16 +622,17 @@ def show_job_variables(console, output_format, utc, job_id):
     response = client.get(specific_endpoint)
     job_data = response.json()
 
-    # Extract extra variables
-    extra_vars = job_data.get('extra_vars', {})
+    # Extract and parse extra variables
+    extra_vars_raw = job_data.get('extra_vars', {})
+    extra_vars_parsed = parse_variables_for_output(extra_vars_raw)
 
     if output_format == 'json':
-        show_raw_json(extra_vars)
+        show_raw_json(extra_vars_parsed)
     elif output_format == 'yaml':
-        show_raw_yaml(extra_vars)
+        show_raw_yaml(extra_vars_parsed)
     else:
         # Table format showing job name and variables in YAML
-        variables_yaml = format_variables_yaml_display(extra_vars)
+        variables_yaml = format_variables_yaml_display(extra_vars_raw)
 
         # Create a simple key-value display
         data = {

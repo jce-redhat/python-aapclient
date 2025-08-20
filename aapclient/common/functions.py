@@ -1377,6 +1377,57 @@ def format_variables_display(variables_data, command_name, length_limit=120):
                 return variables_str
 
 
+def parse_variables_for_output(variables_data):
+    """
+    Parse variables data consistently for JSON/YAML output across all variables show commands.
+
+    This function handles the different variable formats returned by AAP APIs:
+    - Job extra_vars: JSON string
+    - Template extra_vars: YAML string
+    - Inventory variables: String (empty or YAML/JSON)
+
+    Args:
+        variables_data: Variable data from API response (string, dict, or None)
+
+    Returns:
+        dict: Parsed variables as a dictionary, empty dict if parsing fails or data is empty
+    """
+    if not variables_data:
+        return {}
+
+    # If already a dict, return as-is
+    if isinstance(variables_data, dict):
+        return variables_data
+
+    # Convert to string and check if empty
+    variables_str = str(variables_data).strip()
+    if not variables_str:
+        return {}
+
+    # First try JSON parsing (for job variables)
+    try:
+        return json.loads(variables_str)
+    except (json.JSONDecodeError, TypeError):
+        pass
+
+    # Then try YAML parsing (for template variables and some inventory variables)
+    try:
+        parsed = yaml.safe_load(variables_str)
+        # yaml.safe_load can return None, strings, etc. for simple values
+        if isinstance(parsed, dict):
+            return parsed
+        elif parsed is None:
+            return {}
+        else:
+            # If it's a simple value, wrap it in a dict
+            return {"value": parsed}
+    except (yaml.YAMLError, TypeError):
+        pass
+
+    # If neither JSON nor YAML, return empty dict
+    return {}
+
+
 def format_variables_yaml_display(variables_data):
     """
     Format variables for consistent YAML display in variables show commands.
