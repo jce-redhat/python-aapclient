@@ -180,6 +180,8 @@ def main(argv: Optional[List[str]] = None) -> int:
         from aapclient.cli.controller.v2.execution_environments import register_execution_environment_commands
         from aapclient.cli.controller.v2.instances import register_instance_commands
         from aapclient.cli.controller.v2.jobs import register_job_commands
+        from aapclient.cli.controller.v2.groups import register_group_commands
+        from aapclient.cli.controller.v2.hosts import register_host_commands
         register_template_commands(cli)
         register_inventory_commands(cli)
         register_project_commands(cli)
@@ -187,6 +189,8 @@ def main(argv: Optional[List[str]] = None) -> int:
         register_execution_environment_commands(cli)
         register_instance_commands(cli)
         register_job_commands(cli)
+        register_group_commands(cli)
+        register_host_commands(cli)
 
         # Run the CLI
         cli(argv, standalone_mode=False)

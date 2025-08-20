@@ -194,7 +194,12 @@ def format_value_for_output(value: Any, key: str, output_format: str = 'table') 
     else:
         # Rich formatting for table output
         if isinstance(value, bool):
-            return "[green]Yes[/green]" if value else "[red]No[/red]"
+            # Special handling for 'deleted' field - Yes (True) is bad, No (False) is good
+            if key.lower() == 'deleted':
+                return "[red]Yes[/red]" if value else "[green]No[/green]"
+            else:
+                # Default: Yes (True) is good, No (False) is bad
+                return "[green]Yes[/green]" if value else "[red]No[/red]"
         elif isinstance(value, (int, float)) and key.lower() in ['timeout', 'port', 'capacity']:
             return f"[cyan]{value}[/cyan]"
         elif value in ['good', 'successful', 'ok', 'active', 'running']:
