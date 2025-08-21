@@ -82,7 +82,31 @@ def list_instances(console, output_format, utc, offset, limit, sort_by, reverse,
     data = response.json()
     instances = data.get('results', [])
 
-    # Define columns for output
+    if output_format in ['json', 'yaml']:
+        # Process data into the format that matches table columns
+        processed_data = []
+        for instance in instances:
+            # Format capacity with "forks" unit
+            capacity_value = instance.get('capacity', '')
+            capacity_display = f"{capacity_value} forks" if capacity_value else ""
+
+            processed_data.append({
+                'ID': instance.get('id'),
+                'Hostname': instance.get('hostname', ''),
+                'Node Type': instance.get('node_type', ''),
+                'Node State': instance.get('node_state', ''),
+                'Enabled': format_value_for_output(instance.get('enabled', False), 'enabled', output_format),
+                'Capacity': capacity_display,
+                'Version': instance.get('version', '')
+            })
+
+        if output_format == 'json':
+            show_raw_json(processed_data)
+        else:
+            show_raw_yaml(processed_data)
+        return
+
+    # Table format
     columns = ['ID', 'Hostname', 'Node Type', 'Node State', 'Enabled', 'Capacity', 'Version']
     rows = []
 
@@ -102,16 +126,11 @@ def list_instances(console, output_format, utc, offset, limit, sort_by, reverse,
         ]
         rows.append(row)
 
-    if output_format == 'json':
-        show_raw_json(rows)
-    elif output_format == 'yaml':
-        show_raw_yaml(rows)
-    else:
-        table = create_table(columns, rows)
-        console.print(table)
-        total_count = data.get('count', len(instances))
-        if len(instances) < total_count:
-            console.print(f"\nShowing {len(instances)} of {total_count} total instances")
+    table = create_table(columns, rows)
+    console.print(table)
+    total_count = data.get('count', len(instances))
+    if len(instances) < total_count:
+        console.print(f"\nShowing {len(instances)} of {total_count} total instances")
 
 
 @instance.command('create')
@@ -422,7 +441,42 @@ def list_instance_groups(console, output_format, utc, offset, limit, sort_by, re
     data = response.json()
     instance_groups = data.get('results', [])
 
-    # Define columns for output
+    if output_format in ['json', 'yaml']:
+        # Process data into the format that matches table columns
+        processed_data = []
+        for instance_group in instance_groups:
+            # Determine type based on is_container_group
+            is_container_group = instance_group.get('is_container_group', False)
+            group_type = "Container" if is_container_group else "Instance"
+
+            # Calculate instances count - handle both list and integer from API
+            instances_value = instance_group.get('instances', [])
+            if isinstance(instances_value, list):
+                instances_count = len(instances_value)
+            else:
+                # API returned count as integer
+                instances_count = instances_value
+
+            # Capacity remaining only applies to instance groups, not container groups
+            capacity_remaining = "" if is_container_group else f"{instance_group.get('percent_capacity_remaining', 0)}%"
+
+            processed_data.append({
+                'ID': instance_group.get('id'),
+                'Name': instance_group.get('name', ''),
+                'Type': group_type,
+                'Running Jobs': instance_group.get('jobs_running', 0),
+                'Total Jobs': instance_group.get('jobs_total', 0),
+                'Instances': instances_count,
+                'Capacity Remaining': capacity_remaining
+            })
+
+        if output_format == 'json':
+            show_raw_json(processed_data)
+        else:
+            show_raw_yaml(processed_data)
+        return
+
+    # Table format
     columns = ['ID', 'Name', 'Type', 'Running Jobs', 'Total Jobs', 'Instances', 'Capacity Remaining']
     rows = []
 
@@ -453,16 +507,11 @@ def list_instance_groups(console, output_format, utc, offset, limit, sort_by, re
         ]
         rows.append(row)
 
-    if output_format == 'json':
-        show_raw_json(rows)
-    elif output_format == 'yaml':
-        show_raw_yaml(rows)
-    else:
-        table = create_table(columns, rows)
-        console.print(table)
-        total_count = data.get('count', len(instance_groups))
-        if len(instance_groups) < total_count:
-            console.print(f"\nShowing {len(instance_groups)} of {total_count} total instance groups")
+    table = create_table(columns, rows)
+    console.print(table)
+    total_count = data.get('count', len(instance_groups))
+    if len(instance_groups) < total_count:
+        console.print(f"\nShowing {len(instance_groups)} of {total_count} total instance groups")
 
 
 @instance_group.command('show')

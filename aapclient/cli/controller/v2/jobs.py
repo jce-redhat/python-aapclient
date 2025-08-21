@@ -106,11 +106,31 @@ def list_jobs(console, output_format, utc, offset, limit, sort_by, reverse, show
         data = response.json()
         jobs = data.get('results', [])
 
-    # Prepare output
-    if output_format == 'json':
-        show_raw_json(jobs)
-    elif output_format == 'yaml':
-        show_raw_yaml(jobs)
+    if output_format in ['json', 'yaml']:
+        # Process data into the format that matches table columns
+        processed_data = []
+        for job in jobs:
+            # Format duration
+            elapsed = job.get('elapsed', 0)
+            duration_display = format_duration_rich(elapsed, output_format) if elapsed else ""
+
+            processed_data.append({
+                'ID': job.get('id'),
+                'Name': job.get('name', ''),
+                'Type': job.get('type', ''),
+                'Status': job.get('status', ''),
+                'Duration': duration_display,
+                'Started': format_datetime_rich(job.get('started', ''), utc, output_format),
+                'Finished': format_datetime_rich(job.get('finished', ''), utc, output_format)
+            })
+
+        if output_format == 'json':
+            show_raw_json(processed_data)
+        else:
+            show_raw_yaml(processed_data)
+        return
+
+    # Prepare output for table format
     else:
         # Table format
         columns = ['ID', 'Name', 'Type', 'Status', 'Duration', 'Started', 'Finished']

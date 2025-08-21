@@ -158,11 +158,24 @@ def list_hosts(console, output_format, utc, sort_by, reverse, limit, offset, inv
     data = response.json()
     hosts = data.get('results', [])
 
-    if output_format == 'json':
-        show_raw_json(hosts)
-        return
-    elif output_format == 'yaml':
-        show_raw_yaml(hosts)
+    if output_format in ['json', 'yaml']:
+        # Process data into the format that matches table columns
+        processed_data = []
+        for host in hosts:
+            inventory_name = host.get('summary_fields', {}).get('inventory', {}).get('name', '')
+            processed_data.append({
+                'ID': host.get('id'),
+                'Name': host.get('name', ''),
+                'Inventory': inventory_name,
+                'Enabled': format_value_for_output(host.get('enabled', False), 'enabled', output_format),
+                'Description': host.get('description', ''),
+                'Created': format_datetime_rich(host.get('created', ''), utc, output_format)
+            })
+
+        if output_format == 'json':
+            show_raw_json(processed_data)
+        else:
+            show_raw_yaml(processed_data)
         return
 
     # Table format
@@ -500,11 +513,25 @@ def list_host_metrics(console, output_format, utc, sort_by, reverse, limit, offs
     data = response.json()
     metrics = data.get('results', [])
 
-    if output_format == 'json':
-        show_raw_json(metrics)
-        return
-    elif output_format == 'yaml':
-        show_raw_yaml(metrics)
+    if output_format in ['json', 'yaml']:
+        # Process data into the format that matches table columns
+        processed_data = []
+        for metric in metrics:
+            hostname = metric.get('hostname', '')
+            processed_data.append({
+                'ID': metric.get('id'),
+                'Hostname': hostname,
+                'First automation': format_datetime_rich(metric.get('first_automation', ''), utc, output_format),
+                'Last automation': format_datetime_rich(metric.get('last_automation', ''), utc, output_format),
+                'Last deleted': format_datetime_rich(metric.get('last_deleted', ''), utc, output_format),
+                'Automated counter': metric.get('automated_counter', 0),
+                'Deleted': format_value_for_output(metric.get('deleted', False), 'deleted', output_format)
+            })
+
+        if output_format == 'json':
+            show_raw_json(processed_data)
+        else:
+            show_raw_yaml(processed_data)
         return
 
     # Table format

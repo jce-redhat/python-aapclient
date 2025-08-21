@@ -92,11 +92,25 @@ def list_execution_environments(console, output_format, utc, limit, offset, orga
                 console.print("[yellow]No execution environments found.[/yellow]")
             return
 
-        # Format the data according to requested output format
-        if output_format == 'json':
-            show_raw_json(execution_environments)
-        elif output_format == 'yaml':
-            show_raw_yaml(execution_environments)
+        if output_format in ['json', 'yaml']:
+            # Process data into the format that matches table columns
+            processed_data = []
+            for ee in execution_environments:
+                org_name = ee.get('summary_fields', {}).get('organization', {}).get('name', '')
+                processed_data.append({
+                    'ID': ee.get('id'),
+                    'Name': ee.get('name', ''),
+                    'Image': ee.get('image', ''),
+                    'Organization': org_name
+                })
+
+            if output_format == 'json':
+                show_raw_json(processed_data)
+            else:
+                show_raw_yaml(processed_data)
+            return
+
+        # Format the data for table output
         else:
             # Table format
             columns = ['ID', 'Name', 'Image', 'Organization']

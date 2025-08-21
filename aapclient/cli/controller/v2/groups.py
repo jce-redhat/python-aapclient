@@ -171,11 +171,23 @@ def list_groups(console, output_format, utc, sort_by, reverse, limit, offset, in
     data = response.json()
     groups = data.get('results', [])
 
-    if output_format == 'json':
-        show_raw_json(groups)
-        return
-    elif output_format == 'yaml':
-        show_raw_yaml(groups)
+    if output_format in ['json', 'yaml']:
+        # Process data into the format that matches table columns
+        processed_data = []
+        for group in groups:
+            inventory_name = group.get('summary_fields', {}).get('inventory', {}).get('name', '')
+            processed_data.append({
+                'ID': group.get('id'),
+                'Name': group.get('name', ''),
+                'Inventory': inventory_name,
+                'Description': group.get('description', ''),
+                'Created': format_datetime_rich(group.get('created', ''), use_utc=False, output_format=output_format)
+            })
+
+        if output_format == 'json':
+            show_raw_json(processed_data)
+        else:
+            show_raw_yaml(processed_data)
         return
 
     # Table format
@@ -426,11 +438,21 @@ def list_group_hosts(console, output_format, utc, sort_by, reverse, limit, offse
     data = response.json()
     hosts = data.get('results', [])
 
-    if output_format == 'json':
-        show_raw_json(hosts)
-        return
-    elif output_format == 'yaml':
-        show_raw_yaml(hosts)
+    if output_format in ['json', 'yaml']:
+        # Process data into the format that matches table columns
+        processed_data = []
+        for host in hosts:
+            processed_data.append({
+                'ID': host.get('id'),
+                'Name': host.get('name', ''),
+                'Enabled': format_value_for_output(host.get('enabled', False), 'enabled', output_format),
+                'Description': host.get('description', '')
+            })
+
+        if output_format == 'json':
+            show_raw_json(processed_data)
+        else:
+            show_raw_yaml(processed_data)
         return
 
     # Table format
@@ -603,11 +625,20 @@ def list_group_children(console, output_format, utc, sort_by, reverse, limit, of
     data = response.json()
     children = data.get('results', [])
 
-    if output_format == 'json':
-        show_raw_json(children)
-        return
-    elif output_format == 'yaml':
-        show_raw_yaml(children)
+    if output_format in ['json', 'yaml']:
+        # Process data into the format that matches table columns
+        processed_data = []
+        for child in children:
+            processed_data.append({
+                'ID': child.get('id'),
+                'Name': child.get('name', ''),
+                'Description': child.get('description', '')
+            })
+
+        if output_format == 'json':
+            show_raw_json(processed_data)
+        else:
+            show_raw_yaml(processed_data)
         return
 
     # Table format
