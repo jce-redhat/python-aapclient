@@ -23,7 +23,7 @@ from aapclient.common.functions import (
     resolve_organization_name,
     format_variables_display
 )
-from aapclient.cli.decorators import (
+from aapclient.decorators import (
     list_command,
     show_command,
     create_command,
@@ -32,7 +32,7 @@ from aapclient.cli.decorators import (
     get_client_from_context,
     validate_resource_identifier
 )
-from aapclient.cli.output import (
+from aapclient.output import (
     create_table,
     show_key_value,
     show_details_table,

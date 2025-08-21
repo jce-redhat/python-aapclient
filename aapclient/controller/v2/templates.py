@@ -29,7 +29,7 @@ from aapclient.common.functions import (
     format_datetime,
     format_variables_display
 )
-from aapclient.cli.decorators import (
+from aapclient.decorators import (
     list_command,
     show_command,
     create_command,
@@ -39,7 +39,7 @@ from aapclient.cli.decorators import (
     get_console_from_context,
     validate_resource_identifier
 )
-from aapclient.cli.output import (
+from aapclient.output import (
     create_table,
     show_key_value,
     show_details_table,
@@ -936,7 +936,7 @@ def show_template_variables(console, output_format, template_name, id, utc):
 def register_template_commands(main_group: click.Group) -> None:
     """Register template commands with the main CLI group."""
     # Register survey commands as a subgroup of template
-    from aapclient.cli.controller.v2.template_surveys import register_survey_commands
+    from aapclient.controller.v2.template_surveys import register_survey_commands
     register_survey_commands(template)
 
     main_group.add_command(template)

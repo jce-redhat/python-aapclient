@@ -22,7 +22,7 @@ from aapclient.common.functions import (
     format_variables_yaml_display,
     parse_variables_for_output
 )
-from aapclient.cli.decorators import (
+from aapclient.decorators import (
     list_command,
     show_command,
     create_command,
@@ -33,7 +33,7 @@ from aapclient.cli.decorators import (
     get_console_from_context,
     validate_resource_identifier
 )
-from aapclient.cli.output import (
+from aapclient.output import (
     show_key_value,
     show_details_table,
     show_raw_json,

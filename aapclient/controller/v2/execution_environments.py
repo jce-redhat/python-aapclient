@@ -12,11 +12,11 @@ from typing import Dict, Any
 from rich.console import Console
 from rich.table import Table
 
-from aapclient.cli.decorators import (
+from aapclient.decorators import (
     list_command, show_command, create_command, update_command, delete_command,
     standard_command, handle_api_errors, common_options, validate_resource_identifier
 )
-from aapclient.cli.output import (
+from aapclient.output import (
     create_table, show_details_table, show_error_message, show_success_message,
     format_datetime_rich, show_raw_json, show_raw_yaml
 )

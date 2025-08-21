@@ -1,5 +1,8 @@
 """Constants for AAP client."""
 
+# Version
+AAPCLI_VERSION = "0.5"
+
 # Default values
 DEFAULT_REQUEST_TIMEOUT = 30
 DEFAULT_PAGE_SIZE = 20

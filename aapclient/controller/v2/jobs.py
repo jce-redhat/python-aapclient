@@ -1,11 +1,11 @@
 """Job management commands for AAP CLI."""
 import sys
 import click
-from aapclient.cli.decorators import (
+from aapclient.decorators import (
     list_command, show_command, standard_command, handle_api_errors,
     common_options, validate_resource_identifier
 )
-from aapclient.cli.output import (
+from aapclient.output import (
     show_raw_json, show_raw_yaml, show_details_table, create_table,
     format_datetime_rich, format_duration_rich, format_value_for_output
 )
@@ -34,7 +34,7 @@ def job():
 )
 def list_jobs(console, output_format, utc, offset, limit, sort_by, reverse, show_all, job_type):
     """List jobs."""
-    from aapclient.cli.decorators import get_client_from_context
+    from aapclient.decorators import get_client_from_context
 
     client_manager = get_client_from_context()
     client = client_manager.controller
@@ -170,7 +170,7 @@ def list_jobs(console, output_format, utc, offset, limit, sort_by, reverse, show
 @standard_command
 def show_job_output(console, job_id):
     """Show job output/stdout."""
-    from aapclient.cli.decorators import get_client_from_context
+    from aapclient.decorators import get_client_from_context
 
     client_manager = get_client_from_context()
     client = client_manager.controller
@@ -336,7 +336,7 @@ def show_job_output(console, job_id):
 @show_command
 def show_job(console, output_format, utc, job_id):
     """Show details of a specific job."""
-    from aapclient.cli.decorators import get_client_from_context
+    from aapclient.decorators import get_client_from_context
 
     client_manager = get_client_from_context()
     client = client_manager.controller
@@ -583,7 +583,7 @@ def _format_job_data(job_data: dict, use_utc: bool = False, output_format: str =
 
 
 # Add import for show_error_message
-from aapclient.cli.output import show_error_message
+from aapclient.output import show_error_message
 
 
 @job.group('variables')
@@ -597,7 +597,7 @@ def job_variables():
 @show_command
 def show_job_variables(console, output_format, utc, job_id):
     """Show job extra variables in YAML format."""
-    from aapclient.cli.decorators import get_client_from_context
+    from aapclient.decorators import get_client_from_context
     from aapclient.common.functions import resolve_job_name, format_variables_yaml_display, parse_variables_for_output
 
     client_manager = get_client_from_context()

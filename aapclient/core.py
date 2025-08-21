@@ -1,8 +1,7 @@
 """
 Main Click-based CLI application for AAP client.
 
-This module provides the core click group and global configuration management
-for the enhanced AAP CLI experience.
+This module provides the core click group and global configuration management for the enhanced AAP CLI experience.
 """
 
 import sys
@@ -12,6 +11,7 @@ import click
 from rich.console import Console
 
 from aapclient.common.clientmanager import AAPClientManager
+from aapclient.common.constants import AAPCLI_VERSION
 from aapclient.common.exceptions import AAPClientError, AAPResourceNotFoundError
 
 
@@ -63,13 +63,13 @@ console = Console()
     metavar='<path>',
     help='Path to CA certificate bundle file (overrides AAP_CA_BUNDLE environment variable)'
 )
-@click.version_option(version='2.0.0', prog_name='aap')
+@click.version_option(version=AAPCLI_VERSION, prog_name='aap')
 @click.pass_context
 def cli(ctx, hostname, username, password, token, request_timeout, validate_certs, ca_bundle):
     """
     Ansible Automation Platform (AAP) Command Line Interface.
 
-    Enhanced version with rich output formatting and improved user experience.
+    Modern CLI with rich output formatting and enhanced user experience.
     """
     # Ensure context object exists
     ctx.ensure_object(dict)
@@ -156,19 +156,19 @@ def main(argv: Optional[List[str]] = None) -> int:
 
     try:
         # Import subcommands to register them with the main group
-        from aapclient.cli.common.commands import register_common_commands
+        from aapclient.common.commands import register_common_commands
         register_common_commands(cli)
 
         # Register controller commands
-        from aapclient.cli.controller.v2.templates import register_template_commands
-        from aapclient.cli.controller.v2.inventories import register_inventory_commands
-        from aapclient.cli.controller.v2.projects import register_project_commands
-        from aapclient.cli.controller.v2.credentials import register_credential_commands
-        from aapclient.cli.controller.v2.execution_environments import register_execution_environment_commands
-        from aapclient.cli.controller.v2.instances import register_instance_commands
-        from aapclient.cli.controller.v2.jobs import register_job_commands
-        from aapclient.cli.controller.v2.groups import register_group_commands
-        from aapclient.cli.controller.v2.hosts import register_host_commands
+        from aapclient.controller.v2.templates import register_template_commands
+        from aapclient.controller.v2.inventories import register_inventory_commands
+        from aapclient.controller.v2.projects import register_project_commands
+        from aapclient.controller.v2.credentials import register_credential_commands
+        from aapclient.controller.v2.execution_environments import register_execution_environment_commands
+        from aapclient.controller.v2.instances import register_instance_commands
+        from aapclient.controller.v2.jobs import register_job_commands
+        from aapclient.controller.v2.groups import register_group_commands
+        from aapclient.controller.v2.hosts import register_host_commands
         register_template_commands(cli)
         register_inventory_commands(cli)
         register_project_commands(cli)
@@ -180,11 +180,11 @@ def main(argv: Optional[List[str]] = None) -> int:
         register_host_commands(cli)
 
         # Register gateway commands
-        from aapclient.cli.gateway.v1.organizations import register_organization_commands
-        from aapclient.cli.gateway.v1.teams import register_team_commands
-        from aapclient.cli.gateway.v1.users import register_user_commands
-        from aapclient.cli.gateway.v1.applications import register_application_commands
-        from aapclient.cli.gateway.v1.tokens import register_token_commands
+        from aapclient.gateway.v1.organizations import register_organization_commands
+        from aapclient.gateway.v1.teams import register_team_commands
+        from aapclient.gateway.v1.users import register_user_commands
+        from aapclient.gateway.v1.applications import register_application_commands
+        from aapclient.gateway.v1.tokens import register_token_commands
         register_organization_commands(cli)
         register_team_commands(cli)
         register_user_commands(cli)

@@ -16,8 +16,8 @@ from aapclient.common.constants import (
     HTTP_OK
 )
 from aapclient.common.exceptions import AAPAPIError
-from aapclient.cli.decorators import show_command, standard_command
-from aapclient.cli.output import show_key_value, show_details_table, show_raw_json, show_raw_yaml, show_error_message
+from aapclient.decorators import show_command, standard_command
+from aapclient.output import show_key_value, show_details_table, show_raw_json, show_raw_yaml, show_error_message
 
 
 def register_common_commands(main_group: click.Group) -> None:
@@ -46,7 +46,7 @@ def ping(console, detail, output_format, utc):
     Checks connectivity to both Gateway and Controller APIs and displays
     response times and service status information.
     """
-    from aapclient.cli.decorators import get_client_from_context
+    from aapclient.decorators import get_client_from_context
 
     client_manager = get_client_from_context()
 
@@ -116,7 +116,7 @@ def whoami(console, output_format, utc):
     Shows details about the currently authenticated user including
     username, email, permissions, and login information.
     """
-    from aapclient.cli.decorators import get_client_from_context
+    from aapclient.decorators import get_client_from_context
 
     client_manager = get_client_from_context()
 
@@ -164,7 +164,7 @@ def status(console, output_format, utc):
 
     Shows overall system status, component health, and basic metrics.
     """
-    from aapclient.cli.decorators import get_client_from_context
+    from aapclient.decorators import get_client_from_context
 
     client_manager = get_client_from_context()
 
@@ -279,7 +279,7 @@ def _build_ping_data(
                     data[f'{prefix} UUID'] = instance['uuid']
 
                 if 'heartbeat' in instance:
-                    from aapclient.cli.output import format_datetime_rich
+                    from aapclient.output import format_datetime_rich
                     data[f'{prefix} Heartbeat'] = format_datetime_rich(instance['heartbeat'], use_utc, output_format)
 
                 if 'capacity' in instance:
@@ -351,7 +351,7 @@ def _build_whoami_data(user_data: Dict[str, Any], use_utc: bool = False, output_
         data['Managed Account'] = 'Yes' if user_data['managed'] else 'No'
 
     # Timestamps - use existing formatting function with UTC support
-    from aapclient.cli.output import format_datetime_rich
+    from aapclient.output import format_datetime_rich
 
     if 'date_joined' in user_data:
         data['Date Joined'] = format_datetime_rich(user_data['date_joined'], use_utc, output_format)

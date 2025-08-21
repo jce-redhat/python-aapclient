@@ -5,7 +5,7 @@ from click_option_group import optgroup, MutuallyExclusiveOptionGroup
 import sys
 from typing import Dict, Any
 
-from aapclient.cli.decorators import (
+from aapclient.decorators import (
     list_command,
     show_command,
     create_command,
@@ -16,7 +16,7 @@ from aapclient.cli.decorators import (
     get_client_from_context,
     get_console_from_context
 )
-from aapclient.cli.output import (
+from aapclient.output import (
     create_table,
     show_details_table,
     show_raw_json,

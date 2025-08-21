@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "python-aapclient"
-version = "0.1.0"
+version = "2.0.0"
 description = "Command-line client for Ansible Automation Platform (AAP)"
 readme = "README.md"
 requires-python = ">=3.8"
@@ -24,8 +24,7 @@ classifiers = [
     "Programming Language :: Python :: 3.13",
 ]
 dependencies = [
-    "cliff>=4.4.0",        # Keep for backwards compatibility during transition
-    "click>=8.0.0",        # New CLI framework
+    "click>=8.0.0",        # CLI framework
     "click-option-group>=0.5.6",  # Mutually exclusive option groups
     "rich>=13.0.0",        # Enhanced output formatting
     "requests>=2.28.0",
@@ -46,111 +45,10 @@ dev = [
 "Homepage" = "https://github.com/jce-redhat/python-aapclient"
 "Bug Tracker" = "https://github.com/jce-redhat/python-aapclient/issues"
 
-[project.entry-points."aap.common"]
-ping = "aapclient.common.ping:PingCommand"
-status = "aapclient.common.status:StatusCommand"
-whoami = "aapclient.common.whoami:WhoamiCommand"
 
-[project.entry-points."aap.gateway"]
-"organization list" = "aapclient.gateway.v1.organization:OrganizationListCommand"
-"organization show" = "aapclient.gateway.v1.organization:OrganizationShowCommand"
-"organization create" = "aapclient.gateway.v1.organization:OrganizationCreateCommand"
-"organization set" = "aapclient.gateway.v1.organization:OrganizationSetCommand"
-"organization delete" = "aapclient.gateway.v1.organization:OrganizationDeleteCommand"
-"user list" = "aapclient.gateway.v1.user:UserListCommand"
-"user show" = "aapclient.gateway.v1.user:UserShowCommand"
-"user create" = "aapclient.gateway.v1.user:UserCreateCommand"
-"user set" = "aapclient.gateway.v1.user:UserSetCommand"
-"user delete" = "aapclient.gateway.v1.user:UserDeleteCommand"
-"team list" = "aapclient.gateway.v1.team:TeamListCommand"
-"team show" = "aapclient.gateway.v1.team:TeamShowCommand"
-"team create" = "aapclient.gateway.v1.team:TeamCreateCommand"
-"team set" = "aapclient.gateway.v1.team:TeamSetCommand"
-"team delete" = "aapclient.gateway.v1.team:TeamDeleteCommand"
-"token list" = "aapclient.gateway.v1.token:TokenListCommand"
-"token show" = "aapclient.gateway.v1.token:TokenShowCommand"
-"token create" = "aapclient.gateway.v1.token:TokenCreateCommand"
-"token set" = "aapclient.gateway.v1.token:TokenSetCommand"
-"token delete" = "aapclient.gateway.v1.token:TokenDeleteCommand"
-"application list" = "aapclient.gateway.v1.application:ApplicationListCommand"
-"application show" = "aapclient.gateway.v1.application:ApplicationShowCommand"
-"application create" = "aapclient.gateway.v1.application:ApplicationCreateCommand"
-"application set" = "aapclient.gateway.v1.application:ApplicationSetCommand"
-"application delete" = "aapclient.gateway.v1.application:ApplicationDeleteCommand"
-
-[project.entry-points."aap.controller"]
-"project list" = "aapclient.controller.v2.project:ProjectListCommand"
-"project show" = "aapclient.controller.v2.project:ProjectShowCommand"
-"project create" = "aapclient.controller.v2.project:ProjectCreateCommand"
-"project set" = "aapclient.controller.v2.project:ProjectSetCommand"
-"project delete" = "aapclient.controller.v2.project:ProjectDeleteCommand"
-"template list" = "aapclient.controller.v2.job_template:JobTemplateListCommand"
-"template show" = "aapclient.controller.v2.job_template:JobTemplateShowCommand"
-"template create" = "aapclient.controller.v2.job_template:JobTemplateCreateCommand"
-"template set" = "aapclient.controller.v2.job_template:JobTemplateSetCommand"
-"template variables show" = "aapclient.controller.v2.job_template:JobTemplateVariablesShowCommand"
-"template survey show" = "aapclient.controller.v2.job_template:JobTemplateSurveyShowCommand"
-"template survey create" = "aapclient.controller.v2.job_template:JobTemplateSurveyCreateCommand"
-"template survey set" = "aapclient.controller.v2.job_template:JobTemplateSurveySetCommand"
-"template survey delete" = "aapclient.controller.v2.job_template:JobTemplateSurveyDeleteCommand"
-"template survey question add" = "aapclient.controller.v2.job_template:JobTemplateSurveyQuestionAddCommand"
-"template survey question delete" = "aapclient.controller.v2.job_template:JobTemplateSurveyQuestionDeleteCommand"
-"template delete" = "aapclient.controller.v2.job_template:JobTemplateDeleteCommand"
-"credential list" = "aapclient.controller.v2.credential:CredentialListCommand"
-"credential show" = "aapclient.controller.v2.credential:CredentialShowCommand"
-"credential create" = "aapclient.controller.v2.credential:CredentialCreateCommand"
-"credential set" = "aapclient.controller.v2.credential:CredentialSetCommand"
-"credential delete" = "aapclient.controller.v2.credential:CredentialDeleteCommand"
-"execution-environment list" = "aapclient.controller.v2.execution_environment:ExecutionEnvironmentListCommand"
-"execution-environment show" = "aapclient.controller.v2.execution_environment:ExecutionEnvironmentShowCommand"
-"execution-environment create" = "aapclient.controller.v2.execution_environment:ExecutionEnvironmentCreateCommand"
-"execution-environment set" = "aapclient.controller.v2.execution_environment:ExecutionEnvironmentSetCommand"
-"execution-environment delete" = "aapclient.controller.v2.execution_environment:ExecutionEnvironmentDeleteCommand"
-"inventory list" = "aapclient.controller.v2.inventory:InventoryListCommand"
-"inventory show" = "aapclient.controller.v2.inventory:InventoryShowCommand"
-"inventory create" = "aapclient.controller.v2.inventory:InventoryCreateCommand"
-"inventory set" = "aapclient.controller.v2.inventory:InventorySetCommand"
-"inventory delete" = "aapclient.controller.v2.inventory:InventoryDeleteCommand"
-"inventory variables show" = "aapclient.controller.v2.inventory:InventoryVariablesShowCommand"
-"instance list" = "aapclient.controller.v2.instance:InstanceListCommand"
-"instance show" = "aapclient.controller.v2.instance:InstanceShowCommand"
-"instance create" = "aapclient.controller.v2.instance:InstanceCreateCommand"
-"instance set" = "aapclient.controller.v2.instance:InstanceSetCommand"
-"instance-group list" = "aapclient.controller.v2.instance_group:InstanceGroupListCommand"
-"instance-group show" = "aapclient.controller.v2.instance_group:InstanceGroupShowCommand"
-"instance-group create" = "aapclient.controller.v2.instance_group:InstanceGroupCreateCommand"
-"instance-group set" = "aapclient.controller.v2.instance_group:InstanceGroupSetCommand"
-"instance-group delete" = "aapclient.controller.v2.instance_group:InstanceGroupDeleteCommand"
-"job list" = "aapclient.controller.v2.job:JobListCommand"
-"job show" = "aapclient.controller.v2.job:JobShowCommand"
-"job output show" = "aapclient.controller.v2.job:JobOutputShowCommand"
-"host list" = "aapclient.controller.v2.host:HostListCommand"
-"host show" = "aapclient.controller.v2.host:HostShowCommand"
-"host create" = "aapclient.controller.v2.host:HostCreateCommand"
-"host set" = "aapclient.controller.v2.host:HostSetCommand"
-"host delete" = "aapclient.controller.v2.host:HostDeleteCommand"
-"host groups list" = "aapclient.controller.v2.host:HostGroupsListCommand"
-"host metrics list" = "aapclient.controller.v2.host_metrics:HostMetricsListCommand"
-"host metrics show" = "aapclient.controller.v2.host_metrics:HostMetricsShowCommand"
-"host metrics delete" = "aapclient.controller.v2.host_metrics:HostMetricsDeleteCommand"
-"host variables show" = "aapclient.controller.v2.host:HostVariablesShowCommand"
-"group list" = "aapclient.controller.v2.group:GroupListCommand"
-"group show" = "aapclient.controller.v2.group:GroupShowCommand"
-"group create" = "aapclient.controller.v2.group:GroupCreateCommand"
-"group set" = "aapclient.controller.v2.group:GroupSetCommand"
-"group delete" = "aapclient.controller.v2.group:GroupDeleteCommand"
-"group hosts list" = "aapclient.controller.v2.group:GroupHostsListCommand"
-"group hosts add" = "aapclient.controller.v2.group:GroupHostsAddCommand"
-"group hosts remove" = "aapclient.controller.v2.group:GroupHostsRemoveCommand"
-"group children list" = "aapclient.controller.v2.group:GroupChildrenListCommand"
-"group children add" = "aapclient.controller.v2.group:GroupChildrenAddCommand"
-"group children remove" = "aapclient.controller.v2.group:GroupChildrenRemoveCommand"
-"group variables show" = "aapclient.controller.v2.group:GroupVariablesShowCommand"
 
 [project.scripts]
-aap = "aapclient.unified:main"           # Unified dispatcher (new default)
-aap-legacy = "aapclient.shell:main"      # Explicit cliff-based CLI
-aap-rich = "aapclient.cli.core:main"     # Explicit click+rich CLI
+aap = "aapclient.core:main"              # Rich CLI (only option)
 
 [tool.setuptools.packages.find]
 where = ["."]

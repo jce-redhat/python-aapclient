@@ -17,7 +17,7 @@ from aapclient.common.constants import (
 )
 from aapclient.common.exceptions import AAPClientError, AAPResourceNotFoundError
 from aapclient.common.functions import resolve_organization_name
-from aapclient.cli.decorators import (
+from aapclient.decorators import (
     list_command,
     show_command,
     create_command,
@@ -29,7 +29,7 @@ from aapclient.cli.decorators import (
     get_console_from_context,
     validate_resource_identifier
 )
-from aapclient.cli.output import (
+from aapclient.output import (
     show_success_message,
     show_error_message,
     show_raw_json,
