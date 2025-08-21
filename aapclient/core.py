@@ -20,51 +20,43 @@ console = Console()
 
 
 @click.group()
+@click.option("--url", envvar="AAP_URL", metavar="<url>", help="AAP URL (overrides AAP_URL environment variable)")
 @click.option(
-    '--url',
-    envvar='AAP_URL',
-    metavar='<url>',
-    help='AAP URL (overrides AAP_URL environment variable)'
+    "--username",
+    envvar="AAP_USERNAME",
+    metavar="<username>",
+    help="AAP username (overrides AAP_USERNAME environment variable)",
 )
 @click.option(
-    '--username',
-    envvar='AAP_USERNAME',
-    metavar='<username>',
-    help='AAP username (overrides AAP_USERNAME environment variable)'
+    "--password",
+    envvar="AAP_PASSWORD",
+    metavar="<password>",
+    help="AAP password (overrides AAP_PASSWORD environment variable)",
 )
 @click.option(
-    '--password',
-    envvar='AAP_PASSWORD',
-    metavar='<password>',
-    help='AAP password (overrides AAP_PASSWORD environment variable)'
+    "--token", envvar="AAP_TOKEN", metavar="<token>", help="AAP API token (overrides AAP_TOKEN environment variable)"
 )
 @click.option(
-    '--token',
-    envvar='AAP_TOKEN',
-    metavar='<token>',
-    help='AAP API token (overrides AAP_TOKEN environment variable)'
-)
-@click.option(
-    '--request-timeout',
-    envvar='AAP_REQUEST_TIMEOUT',
+    "--request-timeout",
+    envvar="AAP_REQUEST_TIMEOUT",
     type=int,
-    metavar='<seconds>',
-    help='Connection timeout in seconds (overrides AAP_REQUEST_TIMEOUT environment variable)'
+    metavar="<seconds>",
+    help="Connection timeout in seconds (overrides AAP_REQUEST_TIMEOUT environment variable)",
 )
 @click.option(
-    '--validate-certs/--no-validate-certs',
-    envvar='AAP_VALIDATE_CERTS',
+    "--validate-certs/--no-validate-certs",
+    envvar="AAP_VALIDATE_CERTS",
     default=None,
-    help='Enable or disable SSL certificate verification (overrides AAP_VALIDATE_CERTS environment variable)'
+    help="Enable or disable SSL certificate verification (overrides AAP_VALIDATE_CERTS environment variable)",
 )
 @click.option(
-    '--ca-bundle',
-    envvar='AAP_CA_BUNDLE',
-    metavar='<path>',
-    help='Path to CA certificate bundle file (overrides AAP_CA_BUNDLE environment variable)'
+    "--ca-bundle",
+    envvar="AAP_CA_BUNDLE",
+    metavar="<path>",
+    help="Path to CA certificate bundle file (overrides AAP_CA_BUNDLE environment variable)",
 )
-#@click.version_option(version=AAPCLI_VERSION, prog_name='aap')
-@click.version_option(version=AAPCLI_VERSION, prog_name='python-aapclient', message=f'%(prog)s v%(version)s')
+# @click.version_option(version=AAPCLI_VERSION, prog_name='aap')
+@click.version_option(version=AAPCLI_VERSION, prog_name="python-aapclient", message=f"%(prog)s v%(version)s")
 @click.pass_context
 def cli(ctx, url, username, password, token, request_timeout, validate_certs, ca_bundle):
     """
@@ -76,53 +68,54 @@ def cli(ctx, url, username, password, token, request_timeout, validate_certs, ca
     ctx.ensure_object(dict)
 
     # Configure console (no quiet mode)
-    ctx.obj['console'] = Console()
+    ctx.obj["console"] = Console()
 
     # Set default verbosity level
-    ctx.obj['verbose'] = 0
-    ctx.obj['quiet'] = False
+    ctx.obj["verbose"] = 0
+    ctx.obj["quiet"] = False
 
     # Build configuration overrides from command-line arguments
     config_overrides = {}
 
     if url:
-        config_overrides['url'] = url
+        config_overrides["url"] = url
     if username:
-        config_overrides['username'] = username
+        config_overrides["username"] = username
     if password:
-        config_overrides['password'] = password
+        config_overrides["password"] = password
     if token:
-        config_overrides['token'] = token
+        config_overrides["token"] = token
     if request_timeout:
-        config_overrides['request_timeout'] = request_timeout
+        config_overrides["request_timeout"] = request_timeout
     if validate_certs is not None:
-        config_overrides['validate_certs'] = validate_certs
+        config_overrides["validate_certs"] = validate_certs
     if ca_bundle:
-        config_overrides['ca_bundle'] = ca_bundle
+        config_overrides["ca_bundle"] = ca_bundle
 
     # Initialize client manager with configuration overrides
     try:
-        ctx.obj['client_manager'] = AAPClientManager(config_overrides=config_overrides)
+        ctx.obj["client_manager"] = AAPClientManager(config_overrides=config_overrides)
         # Validate configuration early to catch issues
-        ctx.obj['client_manager'].config.validate()
+        ctx.obj["client_manager"].config.validate()
     except AAPClientError as e:
-        ctx.obj['console'].print(f"[red]Error:[/red] {e}")
+        ctx.obj["console"].print(f"[red]Error:[/red] {e}")
         ctx.exit(1)
 
 
 # Utility functions for command implementations
 def get_client_manager(ctx: click.Context) -> AAPClientManager:
     """Get the client manager from click context."""
-    return ctx.obj['client_manager']
+    return ctx.obj["client_manager"]
 
 
 def get_console(ctx: click.Context) -> Console:
     """Get the rich console from click context."""
-    return ctx.obj['console']
+    return ctx.obj["console"]
 
 
 def handle_exceptions(func):
     """Decorator to handle common exceptions in click commands."""
+
     def wrapper(*args, **kwargs):
         try:
             return func(*args, **kwargs)
@@ -158,6 +151,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     try:
         # Import subcommands to register them with the main group
         from aapclient.common.commands import register_common_commands
+
         register_common_commands(cli)
 
         # Register controller commands
@@ -170,6 +164,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         from aapclient.controller.v2.jobs import register_job_commands
         from aapclient.controller.v2.groups import register_group_commands
         from aapclient.controller.v2.hosts import register_host_commands
+
         register_template_commands(cli)
         register_inventory_commands(cli)
         register_project_commands(cli)
@@ -186,6 +181,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         from aapclient.gateway.v1.users import register_user_commands
         from aapclient.gateway.v1.applications import register_application_commands
         from aapclient.gateway.v1.tokens import register_token_commands
+
         register_organization_commands(cli)
         register_team_commands(cli)
         register_user_commands(cli)
@@ -207,5 +203,5 @@ def main(argv: Optional[List[str]] = None) -> int:
         return 1
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     sys.exit(main())

@@ -3,11 +3,7 @@
 import json
 import yaml
 from datetime import datetime, timezone
-from aapclient.common.constants import (
-    GATEWAY_API_VERSION_ENDPOINT,
-    CONTROLLER_API_VERSION_ENDPOINT,
-    HTTP_OK
-)
+from aapclient.common.constants import GATEWAY_API_VERSION_ENDPOINT, CONTROLLER_API_VERSION_ENDPOINT, HTTP_OK
 from aapclient.common.exceptions import AAPClientError, AAPResourceNotFoundError, AAPAPIError
 
 
@@ -26,14 +22,11 @@ def extract_api_error_message(response):
 
     try:
         # Try JSON first for structured error messages
-        content_type = response.headers.get('content-type', '').lower()
-        if 'application/json' in content_type:
+        content_type = response.headers.get("content-type", "").lower()
+        if "application/json" in content_type:
             data = response.json()
             # Try common error message fields
-            message = (data.get('detail') or
-                      data.get('message') or
-                      data.get('error') or
-                      data.get('non_field_errors'))
+            message = data.get("detail") or data.get("message") or data.get("error") or data.get("non_field_errors")
 
             # Handle list of errors
             if isinstance(message, list) and message:
@@ -43,7 +36,7 @@ def extract_api_error_message(response):
 
         # Fall back to text, but avoid HTML responses
         text = response.text.strip()
-        if text and not text.startswith('<') and len(text) < 500:  # Reasonable length check
+        if text and not text.startswith("<") and len(text) < 500:  # Reasonable length check
             return text
 
     except Exception:
@@ -95,16 +88,16 @@ def format_datetime(iso_datetime_str, use_utc=False):
         str: Formatted datetime with timezone or original string if parsing fails
     """
     if not iso_datetime_str:
-        return ''
+        return ""
 
     try:
         # Parse ISO datetime with timezone awareness
-        if 'T' in iso_datetime_str:
+        if "T" in iso_datetime_str:
             # Handle datetime with timezone (Z indicates UTC)
-            if iso_datetime_str.endswith('Z'):
+            if iso_datetime_str.endswith("Z"):
                 # Remove 'Z' and parse as UTC
                 clean_datetime = iso_datetime_str[:-1]
-                if '.' in clean_datetime:
+                if "." in clean_datetime:
                     # Handle microseconds
                     dt = datetime.fromisoformat(clean_datetime).replace(tzinfo=timezone.utc)
                 else:
@@ -116,11 +109,11 @@ def format_datetime(iso_datetime_str, use_utc=False):
             if use_utc:
                 # Convert to UTC for display
                 utc_dt = dt.astimezone(timezone.utc)
-                return utc_dt.strftime('%Y-%m-%d %H:%M:%S UTC')
+                return utc_dt.strftime("%Y-%m-%d %H:%M:%S UTC")
             else:
                 # Convert to local time for display (Python will use system timezone)
                 local_dt = dt.astimezone()
-                return local_dt.strftime('%Y-%m-%d %H:%M:%S %Z')
+                return local_dt.strftime("%Y-%m-%d %H:%M:%S %Z")
         else:
             return iso_datetime_str
     except (ValueError, AttributeError):
@@ -155,14 +148,14 @@ def resolve_organization_name(client, identifier, api="gateway"):
     # First try as organization name lookup
     try:
         endpoint = f"{api_endpoint}organizations/"
-        params = {'name': identifier}
+        params = {"name": identifier}
         response = client.get(endpoint, params=params)
 
         if response.status_code == HTTP_OK:
             data = response.json()
-            results = data.get('results', [])
+            results = data.get("results", [])
             if results:
-                return results[0]['id']
+                return results[0]["id"]
             else:
                 # Name lookup failed, continue to ID lookup
                 pass
@@ -173,7 +166,7 @@ def resolve_organization_name(client, identifier, api="gateway"):
                 raise AAPAPIError(api_message, response.status_code)
             else:
                 raise AAPAPIError(f"Failed to search for organization '{identifier}'", response.status_code)
-    except AAPAPIError as api_error:
+    except AAPAPIError:
         # Re-raise API errors unchanged to preserve the original message
         raise
 
@@ -211,7 +204,7 @@ def resolve_organization_name(client, identifier, api="gateway"):
         except:
             pass
         raise AAPAPIError(f"No Organization matches the given query.", 404)
-    except AAPAPIError as api_error:
+    except AAPAPIError:
         # Re-raise API errors unchanged to preserve the original message
         raise
 
@@ -245,14 +238,14 @@ def resolve_team_name(client, identifier, api="gateway"):
     # First try as team name lookup
     try:
         endpoint = f"{api_endpoint}teams/"
-        params = {'name': identifier}
+        params = {"name": identifier}
         response = client.get(endpoint, params=params)
 
         if response.status_code == HTTP_OK:
             data = response.json()
-            results = data.get('results', [])
+            results = data.get("results", [])
             if results:
-                return results[0]['id']
+                return results[0]["id"]
             else:
                 # Name lookup failed, continue to ID lookup
                 pass
@@ -263,7 +256,7 @@ def resolve_team_name(client, identifier, api="gateway"):
                 raise AAPAPIError(api_message, response.status_code)
             else:
                 raise AAPAPIError(f"Failed to search for team '{identifier}'", response.status_code)
-    except AAPAPIError as api_error:
+    except AAPAPIError:
         # Re-raise API errors unchanged to preserve the original message
         raise
 
@@ -301,7 +294,7 @@ def resolve_team_name(client, identifier, api="gateway"):
         except:
             pass
         raise AAPAPIError(f"No Team matches the given query.", 404)
-    except AAPAPIError as api_error:
+    except AAPAPIError:
         # Re-raise API errors unchanged to preserve the original message
         raise
 
@@ -335,14 +328,14 @@ def resolve_user_name(client, identifier, api="gateway"):
     # First try as username lookup
     try:
         endpoint = f"{api_endpoint}users/"
-        params = {'username': identifier}
+        params = {"username": identifier}
         response = client.get(endpoint, params=params)
 
         if response.status_code == HTTP_OK:
             data = response.json()
-            results = data.get('results', [])
+            results = data.get("results", [])
             if results:
-                return results[0]['id']
+                return results[0]["id"]
             else:
                 # Username lookup failed, continue to ID lookup
                 pass
@@ -409,14 +402,14 @@ def resolve_execution_environment_name(client, identifier, api="controller"):
     # First try as execution environment name lookup
     try:
         endpoint = f"{api_endpoint}execution_environments/"
-        params = {'name': identifier}
+        params = {"name": identifier}
         response = client.get(endpoint, params=params)
 
         if response.status_code == HTTP_OK:
             data = response.json()
-            results = data.get('results', [])
+            results = data.get("results", [])
             if results:
-                return results[0]['id']
+                return results[0]["id"]
             else:
                 # Name lookup failed, continue to ID lookup
                 pass
@@ -427,7 +420,7 @@ def resolve_execution_environment_name(client, identifier, api="controller"):
                 raise AAPAPIError(api_message, response.status_code)
             else:
                 raise AAPAPIError(f"Failed to search for execution environment '{identifier}'", response.status_code)
-    except AAPAPIError as api_error:
+    except AAPAPIError:
         # Re-raise API errors unchanged to preserve the original message
         raise
 
@@ -469,7 +462,7 @@ def resolve_execution_environment_name(client, identifier, api="controller"):
         except Exception:
             # Fallback if we can't get an API error
             raise AAPAPIError(f"No Execution Environment matches the given query.", 404)
-    except AAPAPIError as api_error:
+    except AAPAPIError:
         # Re-raise API errors unchanged to preserve the original message
         raise
 
@@ -503,14 +496,14 @@ def resolve_credential_name(client, identifier, api="controller"):
     # First try as credential name lookup
     try:
         endpoint = f"{api_endpoint}credentials/"
-        params = {'name': identifier}
+        params = {"name": identifier}
         response = client.get(endpoint, params=params)
 
         if response.status_code == HTTP_OK:
             data = response.json()
-            results = data.get('results', [])
+            results = data.get("results", [])
             if results:
-                return results[0]['id']
+                return results[0]["id"]
             else:
                 # Name lookup failed, continue to ID lookup
                 pass
@@ -521,7 +514,7 @@ def resolve_credential_name(client, identifier, api="controller"):
                 raise AAPAPIError(api_message, response.status_code)
             else:
                 raise AAPAPIError(f"Failed to search for credential '{identifier}'", response.status_code)
-    except AAPAPIError as api_error:
+    except AAPAPIError:
         # Re-raise API errors unchanged to preserve the original message
         raise
 
@@ -556,7 +549,7 @@ def resolve_credential_name(client, identifier, api="controller"):
         except Exception:
             # Fallback if we can't get an API error
             raise AAPAPIError(f"No Credential matches the given query.", 404)
-    except AAPAPIError as api_error:
+    except AAPAPIError:
         # Re-raise API errors unchanged to preserve the original message
         raise
 
@@ -590,14 +583,14 @@ def resolve_inventory_name(client, identifier, api="controller"):
     # First try as inventory name lookup
     try:
         endpoint = f"{api_endpoint}inventories/"
-        params = {'name': identifier}
+        params = {"name": identifier}
         response = client.get(endpoint, params=params)
 
         if response.status_code == HTTP_OK:
             data = response.json()
-            results = data.get('results', [])
+            results = data.get("results", [])
             if results:
-                return results[0]['id']
+                return results[0]["id"]
             else:
                 # Name lookup failed, continue to ID lookup
                 pass
@@ -608,7 +601,7 @@ def resolve_inventory_name(client, identifier, api="controller"):
                 raise AAPAPIError(api_message, response.status_code)
             else:
                 raise AAPAPIError(f"Failed to search for inventory '{identifier}'", response.status_code)
-    except AAPAPIError as api_error:
+    except AAPAPIError:
         # Re-raise API errors unchanged to preserve the original message
         raise
 
@@ -643,7 +636,7 @@ def resolve_inventory_name(client, identifier, api="controller"):
         except Exception:
             # Fallback if we can't get an API error
             raise AAPAPIError(f"No Inventory matches the given query.", 404)
-    except AAPAPIError as api_error:
+    except AAPAPIError:
         # Re-raise API errors unchanged to preserve the original message
         raise
 
@@ -672,15 +665,15 @@ def resolve_instance_group_name(client, identifier, api="controller"):
 
     # Try name-based lookup first
     endpoint = f"{api_endpoint}instance_groups/"
-    params = {'name': identifier}
+    params = {"name": identifier}
 
     try:
         response = client.get(endpoint, params=params)
         if response.status_code == HTTP_OK:
             data = response.json()
-            if data['count'] == 1:
-                return data['results'][0]['id']
-            elif data['count'] == 0:
+            if data["count"] == 1:
+                return data["results"][0]["id"]
+            elif data["count"] == 0:
                 # Name not found, try ID lookup if it's numeric
                 pass
             else:
@@ -692,7 +685,7 @@ def resolve_instance_group_name(client, identifier, api="controller"):
                 raise AAPAPIError(api_message, response.status_code)
             else:
                 raise AAPAPIError("Failed to search instance groups", response.status_code)
-    except AAPAPIError as api_error:
+    except AAPAPIError:
         # Re-raise API errors unchanged to preserve the original message
         raise
 
@@ -723,7 +716,7 @@ def resolve_instance_group_name(client, identifier, api="controller"):
                 raise AAPAPIError(f"No Instance Group matches the given query.", response.status_code)
         except AAPAPIError:
             raise
-    except AAPAPIError as api_error:
+    except AAPAPIError:
         # Re-raise API errors unchanged to preserve the original message
         raise
 
@@ -757,14 +750,14 @@ def resolve_host_name(client, identifier, api="controller"):
     # First try as host name lookup
     try:
         endpoint = f"{api_endpoint}hosts/"
-        params = {'name': identifier}
+        params = {"name": identifier}
         response = client.get(endpoint, params=params)
 
         if response.status_code == HTTP_OK:
             data = response.json()
-            results = data.get('results', [])
+            results = data.get("results", [])
             if results:
-                return results[0]['id']
+                return results[0]["id"]
             else:
                 # Name lookup failed, continue to ID lookup
                 pass
@@ -831,14 +824,14 @@ def resolve_instance_name(client, identifier, api="controller"):
     # First try as instance hostname lookup
     try:
         endpoint = f"{api_endpoint}instances/"
-        params = {'hostname': identifier}
+        params = {"hostname": identifier}
         response = client.get(endpoint, params=params)
 
         if response.status_code == HTTP_OK:
             data = response.json()
-            results = data.get('results', [])
+            results = data.get("results", [])
             if results:
-                return results[0]['id']
+                return results[0]["id"]
             else:
                 # Hostname lookup failed, continue to ID lookup
                 pass
@@ -849,7 +842,7 @@ def resolve_instance_name(client, identifier, api="controller"):
                 raise AAPAPIError(api_message, response.status_code)
             else:
                 raise AAPAPIError(f"Failed to search for instance '{identifier}'", response.status_code)
-    except AAPAPIError as api_error:
+    except AAPAPIError:
         # Re-raise API errors unchanged to preserve the original message
         raise
 
@@ -881,7 +874,7 @@ def resolve_instance_name(client, identifier, api="controller"):
                 raise AAPAPIError(f"No Instance matches the given query.", response.status_code)
         except AAPAPIError:
             raise
-    except AAPAPIError as api_error:
+    except AAPAPIError:
         # Re-raise API errors unchanged to preserve the original message
         raise
 
@@ -915,14 +908,14 @@ def resolve_project_name(client, identifier, api="controller"):
     # First try as project name lookup
     try:
         endpoint = f"{api_endpoint}projects/"
-        params = {'name': identifier}
+        params = {"name": identifier}
         response = client.get(endpoint, params=params)
 
         if response.status_code == HTTP_OK:
             data = response.json()
-            results = data.get('results', [])
+            results = data.get("results", [])
             if results:
-                return results[0]['id']
+                return results[0]["id"]
             else:
                 # Name lookup failed, continue to ID lookup
                 pass
@@ -933,7 +926,7 @@ def resolve_project_name(client, identifier, api="controller"):
                 raise AAPAPIError(api_message, response.status_code)
             else:
                 raise AAPAPIError(f"Failed to search for project '{identifier}'", response.status_code)
-    except AAPAPIError as api_error:
+    except AAPAPIError:
         # Re-raise API errors unchanged to preserve the original message
         raise
 
@@ -968,7 +961,7 @@ def resolve_project_name(client, identifier, api="controller"):
         except Exception:
             # Fallback if we can't get an API error
             raise AAPAPIError(f"No Project matches the given query.", 404)
-    except AAPAPIError as api_error:
+    except AAPAPIError:
         # Re-raise API errors unchanged to preserve the original message
         raise
 
@@ -1002,14 +995,14 @@ def resolve_group_name(client, identifier, api="controller"):
     # First try as group name lookup
     try:
         endpoint = f"{api_endpoint}groups/"
-        params = {'name': identifier}
+        params = {"name": identifier}
         response = client.get(endpoint, params=params)
 
         if response.status_code == HTTP_OK:
             data = response.json()
-            results = data.get('results', [])
+            results = data.get("results", [])
             if results:
-                return results[0]['id']
+                return results[0]["id"]
             else:
                 # Name lookup failed, continue to ID lookup
                 pass
@@ -1073,14 +1066,14 @@ def resolve_job_name(client, identifier, api="controller"):
     # First try as job name lookup using unified_jobs endpoint
     try:
         endpoint = f"{api_endpoint}unified_jobs/"
-        params = {'name': identifier}
+        params = {"name": identifier}
         response = client.get(endpoint, params=params)
 
         if response.status_code == HTTP_OK:
             data = response.json()
-            results = data.get('results', [])
+            results = data.get("results", [])
             if results:
-                return results[0]['id']
+                return results[0]["id"]
             else:
                 # Name lookup failed, continue to ID lookup
                 pass
@@ -1153,14 +1146,14 @@ def resolve_application_name(client, identifier, api="gateway"):
     # Search by name
     try:
         endpoint = f"{GATEWAY_API_VERSION_ENDPOINT}applications/"
-        params = {'name': identifier}
+        params = {"name": identifier}
         response = client.get(endpoint, params=params)
 
         if response.status_code == HTTP_OK:
             data = response.json()
-            results = data.get('results', [])
+            results = data.get("results", [])
             if results:
-                return results[0]['id']
+                return results[0]["id"]
             else:
                 raise AAPResourceNotFoundError("Application", identifier)
         else:
@@ -1209,14 +1202,14 @@ def resolve_host_metric_name(client, identifier, api="controller"):
     # First try as hostname lookup
     try:
         endpoint = f"{api_endpoint}host_metrics/"
-        params = {'hostname': identifier}
+        params = {"hostname": identifier}
         response = client.get(endpoint, params=params)
 
         if response.status_code == HTTP_OK:
             data = response.json()
-            results = data.get('results', [])
+            results = data.get("results", [])
             if results:
-                return results[0]['id']
+                return results[0]["id"]
             else:
                 # Hostname lookup failed, continue to ID lookup
                 pass
@@ -1283,14 +1276,14 @@ def resolve_job_template_name(client, identifier, api="controller"):
     # First try as job template name lookup
     try:
         endpoint = f"{api_endpoint}job_templates/"
-        params = {'name': identifier}
+        params = {"name": identifier}
         response = client.get(endpoint, params=params)
 
         if response.status_code == HTTP_OK:
             data = response.json()
-            results = data.get('results', [])
+            results = data.get("results", [])
             if results:
-                return results[0]['id']
+                return results[0]["id"]
             else:
                 # Name lookup failed, continue to ID lookup
                 pass
@@ -1301,7 +1294,7 @@ def resolve_job_template_name(client, identifier, api="controller"):
                 raise AAPAPIError(api_message, response.status_code)
             else:
                 raise AAPAPIError(f"Failed to search for job template '{identifier}'", response.status_code)
-    except AAPAPIError as api_error:
+    except AAPAPIError:
         # Re-raise API errors unchanged to preserve the original message
         raise
 
@@ -1336,7 +1329,7 @@ def resolve_job_template_name(client, identifier, api="controller"):
         except Exception:
             # Fallback if we can't get an API error
             raise AAPAPIError(f"No JobTemplate matches the given query.", 404)
-    except AAPAPIError as api_error:
+    except AAPAPIError:
         # Re-raise API errors unchanged to preserve the original message
         raise
 
@@ -1364,12 +1357,12 @@ def format_variables_display(variables_data, command_name, length_limit=120):
         - Length > limit: Returns fallback message pointing to variables show command
     """
     if not variables_data:
-        return ''
+        return ""
 
     # Convert to string if needed
     variables_str = str(variables_data).strip()
     if not variables_str:
-        return ''
+        return ""
 
     try:
         # First, try to parse as JSON
@@ -1381,7 +1374,7 @@ def format_variables_display(variables_data, command_name, length_limit=120):
             parsed_vars = json.loads(variables_str)
 
         # Format as compact JSON for length check
-        formatted_json = json.dumps(parsed_vars, separators=(',', ':'))
+        formatted_json = json.dumps(parsed_vars, separators=(",", ":"))
 
         if len(formatted_json) > length_limit:
             return f"(Display with `{command_name} variables show` command)"
@@ -1394,13 +1387,13 @@ def format_variables_display(variables_data, command_name, length_limit=120):
             parsed_vars = yaml.safe_load(variables_str)
             if parsed_vars:  # Only process if not empty
                 # Format as compact JSON
-                formatted_json = json.dumps(parsed_vars, separators=(',', ':'))
+                formatted_json = json.dumps(parsed_vars, separators=(",", ":"))
                 if len(formatted_json) > length_limit:
                     return f"(Display with `{command_name} variables show` command)"
                 else:
                     return formatted_json
             else:
-                return ''
+                return ""
         except (yaml.YAMLError, TypeError):
             # If neither JSON nor YAML, check length of raw string
             if len(variables_str) > length_limit:

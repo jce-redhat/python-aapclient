@@ -12,9 +12,7 @@ from aapclient.common.constants import (
     HTTP_OK,
     HTTP_CREATED,
     HTTP_NO_CONTENT,
-    HTTP_NOT_FOUND
 )
-from aapclient.common.exceptions import AAPClientError, AAPResourceNotFoundError
 from aapclient.common.functions import resolve_application_name
 from aapclient.decorators import (
     list_command,
@@ -22,11 +20,8 @@ from aapclient.decorators import (
     create_command,
     update_command,
     delete_command,
-    standard_command,
     common_options,
     get_client_from_context,
-    get_console_from_context,
-    validate_resource_identifier
 )
 from aapclient.output import (
     show_success_message,
@@ -34,66 +29,66 @@ from aapclient.output import (
     show_raw_json,
     show_raw_yaml,
     format_datetime_rich,
-    format_value_for_output
 )
 
 
 @click.group()
 def token():
     """Manage AAP personal access tokens."""
-    pass
 
 
-def _format_token_data(token_data: Dict[str, Any], output_format: str = 'table', use_utc: bool = False) -> Dict[str, Any]:
+def _format_token_data(
+    token_data: Dict[str, Any], output_format: str = "table", use_utc: bool = False
+) -> Dict[str, Any]:
     """Format token data for display."""
     # Use OrderedDict to maintain field order
     data = OrderedDict()
 
     # Basic information
-    data['ID'] = str(token_data.get('id', ''))
+    data["ID"] = str(token_data.get("id", ""))
 
     # User
-    user_info = token_data.get('summary_fields', {}).get('user', {})
-    data['User'] = user_info.get('username', '') if user_info else ''
+    user_info = token_data.get("summary_fields", {}).get("user", {})
+    data["User"] = user_info.get("username", "") if user_info else ""
 
     # Token value
-    data['Token'] = token_data.get('token', '')
+    data["Token"] = token_data.get("token", "")
 
     # Scope and description
-    data['Scope'] = token_data.get('scope', '')
-    data['Description'] = token_data.get('description', '')
+    data["Scope"] = token_data.get("scope", "")
+    data["Description"] = token_data.get("description", "")
 
     # OAuth application
-    app_info = token_data.get('summary_fields', {}).get('application', {})
-    data['OAuth Application'] = app_info.get('name', 'Personal access token') if app_info else 'Personal access token'
+    app_info = token_data.get("summary_fields", {}).get("application", {})
+    data["OAuth Application"] = app_info.get("name", "Personal access token") if app_info else "Personal access token"
 
     # Timestamps
-    data['Expires'] = format_datetime_rich(token_data.get('expires', ''), use_utc, output_format)
-    data['Created'] = format_datetime_rich(token_data.get('created', ''), use_utc, output_format)
-    data['Modified'] = format_datetime_rich(token_data.get('modified', ''), use_utc, output_format)
-    data['Last Used'] = format_datetime_rich(token_data.get('last_used', ''), use_utc, output_format)
+    data["Expires"] = format_datetime_rich(token_data.get("expires", ""), use_utc, output_format)
+    data["Created"] = format_datetime_rich(token_data.get("created", ""), use_utc, output_format)
+    data["Modified"] = format_datetime_rich(token_data.get("modified", ""), use_utc, output_format)
+    data["Last Used"] = format_datetime_rich(token_data.get("last_used", ""), use_utc, output_format)
 
     # Created/Modified by
-    summary_fields = token_data.get('summary_fields', {})
-    created_by = summary_fields.get('created_by', {})
-    data['Created By'] = created_by.get('username', '') if created_by else ''
+    summary_fields = token_data.get("summary_fields", {})
+    created_by = summary_fields.get("created_by", {})
+    data["Created By"] = created_by.get("username", "") if created_by else ""
 
-    modified_by = summary_fields.get('modified_by', {})
-    data['Modified By'] = modified_by.get('username', '') if modified_by else ''
+    modified_by = summary_fields.get("modified_by", {})
+    data["Modified By"] = modified_by.get("username", "") if modified_by else ""
 
     # Remove empty fields for cleaner display, but keep certain fields always visible
-    always_show = ['ID', 'User', 'Token', 'Scope', 'Description', 'OAuth Application']
-    data = {k: v for k, v in data.items() if v not in ['', None, 'N/A'] or k in always_show}
+    always_show = ["ID", "User", "Token", "Scope", "Description", "OAuth Application"]
+    data = {k: v for k, v in data.items() if v not in ["", None, "N/A"] or k in always_show}
 
     return data
 
 
-@token.command('list')
-@click.option('--all', 'show_all', is_flag=True, help='Show all results (no pagination)')
+@token.command("list")
+@click.option("--all", "show_all", is_flag=True, help="Show all results (no pagination)")
 @list_command(
     default_limit=20,
-    sort_fields=['id', 'user', 'scope', 'description', 'expires', 'created', 'modified'],
-    default_sort='id'
+    sort_fields=["id", "user", "scope", "description", "expires", "created", "modified"],
+    default_sort="id",
 )
 def list_tokens(console, output_format, utc, sort_by, reverse, limit, offset, show_all):
     """List tokens for the currently authenticated user."""
@@ -105,42 +100,44 @@ def list_tokens(console, output_format, utc, sort_by, reverse, limit, offset, sh
 
     # Pagination
     if not show_all:
-        params['page_size'] = limit
-        params['page'] = (offset // limit) + 1
+        params["page_size"] = limit
+        params["page"] = (offset // limit) + 1
 
     # Sorting
-    sort_field = sort_by if sort_by else 'id'
+    sort_field = sort_by if sort_by else "id"
     if reverse:
-        params['order_by'] = f'-{sort_field}'
+        params["order_by"] = f"-{sort_field}"
     else:
-        params['order_by'] = sort_field
+        params["order_by"] = sort_field
 
     # Fetch data
     endpoint = f"{GATEWAY_API_VERSION_ENDPOINT}tokens/"
     response = client.get(endpoint, params=params)
     data = response.json()
-    tokens = data.get('results', [])
+    tokens = data.get("results", [])
 
-    if output_format in ['json', 'yaml']:
+    if output_format in ["json", "yaml"]:
         # Process data into the format that matches table columns
         processed_data = []
         for token in tokens:
-            user_info = token.get('summary_fields', {}).get('user', {})
-            username = user_info.get('username', '') if user_info else ''
+            user_info = token.get("summary_fields", {}).get("user", {})
+            username = user_info.get("username", "") if user_info else ""
 
-            app_info = token.get('summary_fields', {}).get('application', {})
-            oauth_app_name = app_info.get('name', 'Personal access token') if app_info else 'Personal access token'
+            app_info = token.get("summary_fields", {}).get("application", {})
+            oauth_app_name = app_info.get("name", "Personal access token") if app_info else "Personal access token"
 
-            processed_data.append({
-                'ID': token.get('id'),
-                'User': username,
-                'OAuth Application': oauth_app_name,
-                'Scope': token.get('scope', ''),
-                'Description': token.get('description', ''),
-                'Expiration': format_datetime_rich(token.get('expires', ''), utc, output_format)
-            })
+            processed_data.append(
+                {
+                    "ID": token.get("id"),
+                    "User": username,
+                    "OAuth Application": oauth_app_name,
+                    "Scope": token.get("scope", ""),
+                    "Description": token.get("description", ""),
+                    "Expiration": format_datetime_rich(token.get("expires", ""), utc, output_format),
+                }
+            )
 
-        if output_format == 'json':
+        if output_format == "json":
             show_raw_json(processed_data)
         else:
             show_raw_yaml(processed_data)
@@ -156,35 +153,35 @@ def list_tokens(console, output_format, utc, sort_by, reverse, limit, offset, sh
     table.add_column("Expiration", style="magenta")
 
     for token in tokens:
-        user_info = token.get('summary_fields', {}).get('user', {})
-        username = user_info.get('username', '') if user_info else ''
+        user_info = token.get("summary_fields", {}).get("user", {})
+        username = user_info.get("username", "") if user_info else ""
 
-        app_info = token.get('summary_fields', {}).get('application', {})
-        oauth_app_name = app_info.get('name', 'Personal access token') if app_info else 'Personal access token'
+        app_info = token.get("summary_fields", {}).get("application", {})
+        oauth_app_name = app_info.get("name", "Personal access token") if app_info else "Personal access token"
 
         # Truncate description for table display
-        description = token.get('description', '')
-        description_display = description[:30] + ('...' if len(description) > 30 else '')
+        description = token.get("description", "")
+        description_display = description[:30] + ("..." if len(description) > 30 else "")
 
         table.add_row(
-            str(token.get('id', '')),
+            str(token.get("id", "")),
             username,
             oauth_app_name,
-            token.get('scope', ''),
+            token.get("scope", ""),
             description_display,
-            format_datetime_rich(token.get('expires', ''), utc, output_format)
+            format_datetime_rich(token.get("expires", ""), utc, output_format),
         )
 
     console.print(table)
 
     # Show pagination info
-    total_count = data.get('count', len(tokens))
+    total_count = data.get("count", len(tokens))
     if not show_all and len(tokens) < total_count:
         console.print(f"\nShowing {len(tokens)} of {total_count} total tokens")
 
 
-@token.command('show')
-@click.argument('token_id', type=int, metavar='<token_id>')
+@token.command("show")
+@click.argument("token_id", type=int, metavar="<token_id>")
 @show_command
 def show_token(console, output_format, utc, token_id):
     """Show details of a specific token."""
@@ -199,9 +196,9 @@ def show_token(console, output_format, utc, token_id):
     # Format data for display
     formatted_data = _format_token_data(token_data, output_format, utc)
 
-    if output_format == 'json':
+    if output_format == "json":
         show_raw_json(formatted_data)
-    elif output_format == 'yaml':
+    elif output_format == "yaml":
         show_raw_yaml(formatted_data)
     else:
         # Create table
@@ -215,10 +212,13 @@ def show_token(console, output_format, utc, token_id):
         console.print(table)
 
 
-@token.command('create')
-@click.option('--scope', type=click.Choice(['read', 'write']), required=True, help='Token scope')
-@click.option('--description', help='Token description')
-@click.option('--oauth-application', help='OAuth application name or ID (creates application token instead of personal access token)')
+@token.command("create")
+@click.option("--scope", type=click.Choice(["read", "write"]), required=True, help="Token scope")
+@click.option("--description", help="Token description")
+@click.option(
+    "--oauth-application",
+    help="OAuth application name or ID (creates application token instead of personal access token)",
+)
 @common_options
 @create_command
 def create_token(console, output_format, utc, scope, description, oauth_application):
@@ -227,17 +227,15 @@ def create_token(console, output_format, utc, scope, description, oauth_applicat
     client = client_manager.gateway
 
     # Build token data
-    token_data = {
-        'scope': scope
-    }
+    token_data = {"scope": scope}
 
     if description:
-        token_data['description'] = description
+        token_data["description"] = description
 
     if oauth_application:
         try:
             app_id = resolve_application_name(client, oauth_application)
-            token_data['application'] = app_id
+            token_data["application"] = app_id
         except Exception as e:
             show_error_message(console, f"Error resolving OAuth application '{oauth_application}': {e}")
             sys.exit(1)
@@ -251,7 +249,7 @@ def create_token(console, output_format, utc, scope, description, oauth_applicat
         show_success_message(console, f"Token created successfully")
 
         # Show the created token value prominently
-        token_value = token_response.get('token', '')
+        token_value = token_response.get("token", "")
         if token_value:
             console.print(f"\n[bold red]Token value:[/bold red] {token_value}")
             console.print("[dim]Save this token value - it will not be shown again![/dim]\n")
@@ -259,9 +257,9 @@ def create_token(console, output_format, utc, scope, description, oauth_applicat
         # Format and display the token details using the same format as show command
         formatted_data = _format_token_data(token_response, output_format, utc)
 
-        if output_format == 'json':
+        if output_format == "json":
             show_raw_json(formatted_data)
-        elif output_format == 'yaml':
+        elif output_format == "yaml":
             show_raw_yaml(formatted_data)
         else:
             table = Table(show_header=True, header_style="bold cyan")
@@ -277,10 +275,10 @@ def create_token(console, output_format, utc, scope, description, oauth_applicat
         sys.exit(1)
 
 
-@token.command('set')
-@click.argument('token_id', type=int, metavar='<token_id>')
-@click.option('--description', help='New token description')
-@click.option('--scope', type=click.Choice(['read', 'write']), help='New token scope')
+@token.command("set")
+@click.argument("token_id", type=int, metavar="<token_id>")
+@click.option("--description", help="New token description")
+@click.option("--scope", type=click.Choice(["read", "write"]), help="New token scope")
 @common_options
 @update_command
 def set_token(console, output_format, utc, token_id, description, scope):
@@ -292,9 +290,9 @@ def set_token(console, output_format, utc, token_id, description, scope):
     update_data = {}
 
     if description is not None:  # Allow empty string
-        update_data['description'] = description
+        update_data["description"] = description
     if scope:
-        update_data['scope'] = scope
+        update_data["scope"] = scope
 
     if not update_data:
         show_error_message(console, "No updates specified")
@@ -311,9 +309,9 @@ def set_token(console, output_format, utc, token_id, description, scope):
         updated_token = response.json()
         formatted_data = _format_token_data(updated_token, output_format, utc)
 
-        if output_format == 'json':
+        if output_format == "json":
             show_raw_json(formatted_data)
-        elif output_format == 'yaml':
+        elif output_format == "yaml":
             show_raw_yaml(formatted_data)
         else:
             table = Table()
@@ -327,8 +325,8 @@ def set_token(console, output_format, utc, token_id, description, scope):
         sys.exit(1)
 
 
-@token.command('delete')
-@click.argument('token_id', type=int, metavar='<token_id>')
+@token.command("delete")
+@click.argument("token_id", type=int, metavar="<token_id>")
 @delete_command("Are you sure you want to delete this token?")
 def delete_token(console, token_id):
     """Delete a token."""

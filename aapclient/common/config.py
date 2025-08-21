@@ -1,4 +1,5 @@
 """Configuration management for AAP client."""
+
 import os
 from dotenv import load_dotenv
 from aapclient.common.constants import DEFAULT_REQUEST_TIMEOUT, DEFAULT_VALIDATE_CERTS
@@ -23,19 +24,19 @@ class AAPConfig:
         overrides = config_overrides or {}
 
         # Apply overrides with precedence: command-line > environment variables
-        self.url = overrides.get('url') or os.getenv('AAP_URL')
-        self.username = overrides.get('username') or os.getenv('AAP_USERNAME')
-        self.password = overrides.get('password') or os.getenv('AAP_PASSWORD')
-        self.token = overrides.get('token') or os.getenv('AAP_TOKEN')
-        self._request_timeout = overrides.get('request_timeout') or os.getenv('AAP_REQUEST_TIMEOUT')
+        self.url = overrides.get("url") or os.getenv("AAP_URL")
+        self.username = overrides.get("username") or os.getenv("AAP_USERNAME")
+        self.password = overrides.get("password") or os.getenv("AAP_PASSWORD")
+        self.token = overrides.get("token") or os.getenv("AAP_TOKEN")
+        self._request_timeout = overrides.get("request_timeout") or os.getenv("AAP_REQUEST_TIMEOUT")
 
         # Handle validate_certs carefully to preserve False values
-        if 'validate_certs' in overrides:
-            self._validate_certs = overrides['validate_certs']
+        if "validate_certs" in overrides:
+            self._validate_certs = overrides["validate_certs"]
         else:
-            self._validate_certs = os.getenv('AAP_VALIDATE_CERTS')
+            self._validate_certs = os.getenv("AAP_VALIDATE_CERTS")
 
-        self.ca_bundle = overrides.get('ca_bundle') or os.getenv('AAP_CA_BUNDLE')
+        self.ca_bundle = overrides.get("ca_bundle") or os.getenv("AAP_CA_BUNDLE")
 
     def validate(self):
         """Validate configuration."""
@@ -54,13 +55,10 @@ class AAPConfig:
             return None
 
         # AAP_URL must be a full URL with scheme
-        if not self.url.startswith(('http://', 'https://')):
-            raise AAPClientError(
-                f"AAP_URL must be a full URL with scheme (http:// or https://), "
-                f"got: {self.url}"
-            )
+        if not self.url.startswith(("http://", "https://")):
+            raise AAPClientError(f"AAP_URL must be a full URL with scheme (http:// or https://), " f"got: {self.url}")
 
-        return self.url.rstrip('/')
+        return self.url.rstrip("/")
 
     @property
     def auth_headers(self):
@@ -92,7 +90,7 @@ class AAPConfig:
         if self._validate_certs is not None:
             # Handle string values from environment variables
             if isinstance(self._validate_certs, str):
-                return self._validate_certs.lower() in ('true', '1', 'yes', 'on')
+                return self._validate_certs.lower() in ("true", "1", "yes", "on")
             # Handle boolean values from command-line overrides
             return bool(self._validate_certs)
         # Default to DEFAULT_VALIDATE_CERTS (verify SSL certificates)

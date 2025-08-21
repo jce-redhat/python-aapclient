@@ -38,7 +38,11 @@ dev = [
     "pytest-cov>=4.0.0",
     "black>=23.0.0",
     "flake8>=6.0.0",
+    "flake8-pyproject>=1.2.0",  # Allows flake8 to read pyproject.toml
     "mypy>=1.0.0",
+    "types-PyYAML>=6.0.0",      # Type stubs for PyYAML
+    "types-requests>=2.32.0",   # Type stubs for requests
+    "autoflake>=2.0.0",         # Remove unused imports and variables
 ]
 
 [project.urls]
@@ -57,6 +61,11 @@ include = ["aapclient*"]
 [tool.black]
 line-length = 120
 target-version = ['py39']
+
+[tool.flake8]
+max-line-length = 120
+extend-ignore = ["E203", "W503"]  # Black compatibility
+exclude = [".git", "__pycache__", ".venv", "build", "dist"]
 
 [tool.mypy]
 python_version = "3.9"

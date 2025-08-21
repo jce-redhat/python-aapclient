@@ -8,16 +8,12 @@ output formatting.
 
 import sys
 from functools import wraps
-from typing import Callable, Any
+from typing import Callable
 
 import click
 from rich.console import Console
 
-from aapclient.common.exceptions import (
-    AAPClientError,
-    AAPResourceNotFoundError,
-    AAPAPIError
-)
+from aapclient.common.exceptions import AAPClientError, AAPResourceNotFoundError, AAPAPIError
 from aapclient.common.clientmanager import AAPClientManager
 
 
@@ -28,6 +24,7 @@ def handle_api_errors(func: Callable) -> Callable:
     Catches and formats AAPClientError, AAPResourceNotFoundError, and other
     common exceptions with appropriate styling and exit codes.
     """
+
     @wraps(func)
     def wrapper(*args, **kwargs):
         try:
@@ -62,8 +59,10 @@ def handle_api_errors(func: Callable) -> Callable:
             console.print(f"[red]Unexpected error:[/red] {e}")
             # In development, show traceback
             import os
-            if os.getenv('AAP_DEBUG'):
+
+            if os.getenv("AAP_DEBUG"):
                 import traceback
+
                 console.print(traceback.format_exc())
             sys.exit(1)
 
@@ -77,16 +76,17 @@ def require_client(func: Callable) -> Callable:
     Validates that the client manager exists in the click context and
     that it's properly configured before executing the command.
     """
+
     @wraps(func)
     def wrapper(*args, **kwargs):
         ctx = click.get_current_context()
 
-        if 'client_manager' not in ctx.obj:
+        if "client_manager" not in ctx.obj:
             console = Console()
             console.print("[red]Error:[/red] Client manager not configured")
             sys.exit(1)
 
-        client_manager = ctx.obj['client_manager']
+        client_manager = ctx.obj["client_manager"]
 
         try:
             # Validate configuration
@@ -108,10 +108,11 @@ def with_console(func: Callable) -> Callable:
     Adds the console as the first argument to the decorated function,
     making it easy to access rich formatting capabilities.
     """
+
     @wraps(func)
     def wrapper(*args, **kwargs):
         ctx = click.get_current_context()
-        console = ctx.obj.get('console', Console())
+        console = ctx.obj.get("console", Console())
 
         # Insert console as first argument
         return func(console, *args, **kwargs)
@@ -126,10 +127,11 @@ def with_client_manager(func: Callable) -> Callable:
     Adds the client manager as the first argument to the decorated function.
     Should be used with @require_client for safety.
     """
+
     @wraps(func)
     def wrapper(*args, **kwargs):
         ctx = click.get_current_context()
-        client_manager = ctx.obj['client_manager']
+        client_manager = ctx.obj["client_manager"]
 
         # Insert client_manager as first argument
         return func(client_manager, *args, **kwargs)
@@ -144,18 +146,16 @@ def common_options(func: Callable) -> Callable:
     Adds frequently used options like --format, --verbose, etc.
     to commands that need them.
     """
+
     @click.option(
-        '--format', '-f',
-        'output_format',
-        type=click.Choice(['table', 'json', 'yaml']),
-        default='table',
-        help='Output format'
+        "--format",
+        "-f",
+        "output_format",
+        type=click.Choice(["table", "json", "yaml"]),
+        default="table",
+        help="Output format",
     )
-    @click.option(
-        '--utc',
-        is_flag=True,
-        help='Display timestamps in UTC'
-    )
+    @click.option("--utc", is_flag=True, help="Display timestamps in UTC")
     @wraps(func)
     def wrapper(*args, **kwargs):
         return func(*args, **kwargs)
@@ -173,19 +173,15 @@ def paginated(default_limit: int = 20):
     Returns:
         Decorator that adds pagination options
     """
+
     def decorator(func: Callable) -> Callable:
+        @click.option("--offset", type=int, default=0, help="Skip this many results")
         @click.option(
-            '--offset',
-            type=int,
-            default=0,
-            help='Skip this many results'
-        )
-        @click.option(
-            '--limit',
+            "--limit",
             type=int,
             default=default_limit,
-            metavar='N',
-            help=f'Limit the number of results returned (default: {default_limit})'
+            metavar="N",
+            help=f"Limit the number of results returned (default: {default_limit})",
         )
         @wraps(func)
         def wrapper(*args, **kwargs):
@@ -196,7 +192,7 @@ def paginated(default_limit: int = 20):
     return decorator
 
 
-def sortable(default_fields: list = None, default_sort: str = 'id'):
+def sortable(default_fields: list = None, default_sort: str = "id"):
     """
     Decorator factory to add sorting options to list commands.
 
@@ -208,20 +204,16 @@ def sortable(default_fields: list = None, default_sort: str = 'id'):
         Decorator that adds sorting options
     """
     if default_fields is None:
-        default_fields = ['id', 'name', 'created', 'modified']
+        default_fields = ["id", "name", "created", "modified"]
 
     def decorator(func: Callable) -> Callable:
         @click.option(
-            '--sort-by',
+            "--sort-by",
             type=click.Choice(default_fields),
             default=default_sort,
-            help=f'Sort results by field (default: {default_sort})'
+            help=f"Sort results by field (default: {default_sort})",
         )
-        @click.option(
-            '--reverse',
-            is_flag=True,
-            help='Reverse sort order (descending)'
-        )
+        @click.option("--reverse", is_flag=True, help="Reverse sort order (descending)")
         @wraps(func)
         def wrapper(*args, **kwargs):
             return func(*args, **kwargs)
@@ -241,16 +233,13 @@ def confirm_destructive(message: str = "Are you sure?"):
     Returns:
         Decorator that adds confirmation prompt
     """
+
     def decorator(func: Callable) -> Callable:
-        @click.option(
-            '--yes', '-y',
-            is_flag=True,
-            help='Skip confirmation prompt'
-        )
+        @click.option("--yes", "-y", is_flag=True, help="Skip confirmation prompt")
         @wraps(func)
         def wrapper(*args, **kwargs):
             # Extract --yes flag from kwargs
-            skip_confirm = kwargs.pop('yes', False)
+            skip_confirm = kwargs.pop("yes", False)
 
             if not skip_confirm:
                 if not click.confirm(message):
@@ -274,15 +263,14 @@ def with_progress(description: str = "Processing..."):
     Returns:
         Decorator that shows progress during operation
     """
+
     def decorator(func: Callable) -> Callable:
         @wraps(func)
         def wrapper(*args, **kwargs):
             from rich.progress import Progress, SpinnerColumn, TextColumn
 
             with Progress(
-                SpinnerColumn(),
-                TextColumn("[progress.description]{task.description}"),
-                console=Console()
+                SpinnerColumn(), TextColumn("[progress.description]{task.description}"), console=Console()
             ) as progress:
                 task = progress.add_task(description, total=None)
 
@@ -290,7 +278,7 @@ def with_progress(description: str = "Processing..."):
                     result = func(*args, **kwargs)
                     progress.update(task, description="[green]Complete![/green]")
                     return result
-                except Exception as e:
+                except Exception:
                     progress.update(task, description="[red]Failed![/red]")
                     raise
 
@@ -301,6 +289,7 @@ def with_progress(description: str = "Processing..."):
 
 # Composite decorators for common command patterns
 
+
 def standard_command(func: Callable) -> Callable:
     """
     Composite decorator for standard commands.
@@ -310,7 +299,7 @@ def standard_command(func: Callable) -> Callable:
     return handle_api_errors(require_client(with_console(func)))
 
 
-def list_command(default_limit: int = 20, sort_fields: list = None, default_sort: str = 'id'):
+def list_command(default_limit: int = 20, sort_fields: list = None, default_sort: str = "id"):
     """
     Composite decorator factory for list commands.
 
@@ -321,14 +310,9 @@ def list_command(default_limit: int = 20, sort_fields: list = None, default_sort
         sort_fields: Available sort fields (defaults to common ones)
         default_sort: Default sort field
     """
+
     def decorator(func: Callable) -> Callable:
-        return standard_command(
-            sortable(sort_fields, default_sort)(
-                paginated(default_limit)(
-                    common_options(func)
-                )
-            )
-        )
+        return standard_command(sortable(sort_fields, default_sort)(paginated(default_limit)(common_options(func))))
 
     return decorator
 
@@ -366,6 +350,7 @@ def delete_command(confirm_message: str = "Are you sure you want to delete this 
 
     Combines standard command setup with confirmation prompt.
     """
+
     def decorator(func: Callable) -> Callable:
         return standard_command(confirm_destructive(confirm_message)(func))
 
@@ -374,28 +359,29 @@ def delete_command(confirm_message: str = "Are you sure you want to delete this 
 
 # Context helpers that can be used within decorated functions
 
+
 def get_client_from_context() -> AAPClientManager:
     """Get client manager from current click context."""
     ctx = click.get_current_context()
-    return ctx.obj['client_manager']
+    return ctx.obj["client_manager"]
 
 
 def get_console_from_context() -> Console:
     """Get rich console from current click context."""
     ctx = click.get_current_context()
-    return ctx.obj.get('console', Console())
+    return ctx.obj.get("console", Console())
 
 
 def is_verbose() -> bool:
     """Check if verbose mode is enabled."""
     ctx = click.get_current_context()
-    return ctx.obj.get('verbose', 0) > 0
+    return ctx.obj.get("verbose", 0) > 0
 
 
 def is_quiet() -> bool:
     """Check if quiet mode is enabled."""
     ctx = click.get_current_context()
-    return ctx.obj.get('quiet', False)
+    return ctx.obj.get("quiet", False)
 
 
 def validate_resource_identifier(ctx, param, value):
@@ -417,11 +403,11 @@ def validate_resource_identifier(ctx, param, value):
         click.UsageError: If neither positional argument nor --id is provided
     """
     # Get the --id parameter value from the context
-    id_value = ctx.params.get('id')
+    id_value = ctx.params.get("id")
 
     # If neither positional argument nor --id is provided, raise an error
     if not value and not id_value:
-        resource_name = param.metavar.strip('<>') if param.metavar else 'resource'
+        resource_name = param.metavar.strip("<>") if param.metavar else "resource"
         raise click.UsageError(f"Either {resource_name} name or --id must be provided.")
 
     return value

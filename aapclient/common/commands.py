@@ -11,14 +11,10 @@ from typing import Dict, Any
 import click
 from rich.console import Console
 
-from aapclient.common.constants import (
-    GATEWAY_API_VERSION_ENDPOINT,
-    CONTROLLER_API_VERSION_ENDPOINT,
-    HTTP_OK
-)
+from aapclient.common.constants import GATEWAY_API_VERSION_ENDPOINT, CONTROLLER_API_VERSION_ENDPOINT, HTTP_OK
 from aapclient.common.exceptions import AAPAPIError
-from aapclient.decorators import show_command, standard_command
-from aapclient.output import show_key_value, show_details_table, show_raw_json, show_raw_yaml, show_error_message
+from aapclient.decorators import show_command
+from aapclient.output import show_details_table, show_raw_json, show_raw_yaml, show_error_message
 
 
 def register_common_commands(main_group: click.Group) -> None:
@@ -34,11 +30,7 @@ def register_common_commands(main_group: click.Group) -> None:
 
 
 @click.command()
-@click.option(
-    '--detail',
-    is_flag=True,
-    help='Show detailed connectivity information'
-)
+@click.option("--detail", is_flag=True, help="Show detailed connectivity information")
 @show_command
 def ping(console: Console, detail: bool, output_format: str, utc: bool) -> None:
     """
@@ -88,20 +80,23 @@ def ping(console: Console, detail: bool, output_format: str, utc: bool) -> None:
                 controller_time_ms,
                 detail,
                 output_format,
-                utc
+                utc,
             )
 
             # Format output according to user preference
-            if output_format == 'json':
+            if output_format == "json":
                 show_raw_json(data)
-            elif output_format == 'yaml':
+            elif output_format == "yaml":
                 show_raw_yaml(data)
             else:
                 # Table format
                 show_details_table(console, data)
 
         else:
-            show_error_message(console, f"API ping failed - Gateway: {gateway_response.status_code}, Controller: {controller_response.status_code}")
+            show_error_message(
+                console,
+                f"API ping failed - Gateway: {gateway_response.status_code}, Controller: {controller_response.status_code}",
+            )
 
     except AAPAPIError as e:
         show_error_message(console, f"API Error: {e}")
@@ -130,19 +125,19 @@ def whoami(console: Console, output_format: str, utc: bool) -> None:
             data = response.json()
 
             # Gateway API returns paginated response with results array
-            if 'results' not in data or not data['results']:
+            if "results" not in data or not data["results"]:
                 show_error_message(console, "No user data returned from API")
                 click.get_current_context().exit(1)
 
-            user_data = data['results'][0]  # Get first (and only) user result
+            user_data = data["results"][0]  # Get first (and only) user result
 
             # Build display data
             display_data = _build_whoami_data(user_data, utc, output_format)
 
             # Format output according to user preference
-            if output_format == 'json':
+            if output_format == "json":
                 show_raw_json(display_data)
-            elif output_format == 'yaml':
+            elif output_format == "yaml":
                 show_raw_yaml(display_data)
             else:
                 # Table format
@@ -181,9 +176,9 @@ def status(console: Console, output_format: str, utc: bool) -> None:
             status_data = _build_status_data(data)
 
             # Format output according to user preference
-            if output_format == 'json':
+            if output_format == "json":
                 show_raw_json(status_data)
-            elif output_format == 'yaml':
+            elif output_format == "yaml":
                 show_raw_yaml(status_data)
             else:
                 # Table format
@@ -205,8 +200,8 @@ def _build_ping_data(
     gateway_time_ms: int,
     controller_time_ms: int,
     show_detail: bool,
-    output_format: str = 'table',
-    use_utc: bool = False
+    output_format: str = "table",
+    use_utc: bool = False,
 ) -> Dict[str, Any]:
     """
     Build ping data structure for display.
@@ -225,90 +220,93 @@ def _build_ping_data(
     data = {}
 
     # Host information
-    data['Host'] = client_manager.config.url
+    data["Host"] = client_manager.config.url
 
     # Gateway API Data
-    if 'status' in gateway_data:
-        data['Service Status'] = gateway_data['status']
+    if "status" in gateway_data:
+        data["Service Status"] = gateway_data["status"]
 
-    if 'version' in gateway_data:
-        data['AAP Version'] = gateway_data['version']
+    if "version" in gateway_data:
+        data["AAP Version"] = gateway_data["version"]
 
-    data['Gateway Response Time'] = f"{gateway_time_ms}ms"
+    data["Gateway Response Time"] = f"{gateway_time_ms}ms"
 
-    if 'db_connected' in gateway_data:
-        data['Database Connected'] = 'Yes' if gateway_data['db_connected'] else 'No'
+    if "db_connected" in gateway_data:
+        data["Database Connected"] = "Yes" if gateway_data["db_connected"] else "No"
 
-    if 'proxy_connected' in gateway_data:
-        data['Proxy Connected'] = 'Yes' if gateway_data['proxy_connected'] else 'No'
+    if "proxy_connected" in gateway_data:
+        data["Proxy Connected"] = "Yes" if gateway_data["proxy_connected"] else "No"
 
     # Controller API Data
-    if 'version' in controller_data:
-        data['Controller Version'] = controller_data['version']
+    if "version" in controller_data:
+        data["Controller Version"] = controller_data["version"]
 
-    data['Controller Response Time'] = f"{controller_time_ms}ms"
+    data["Controller Response Time"] = f"{controller_time_ms}ms"
 
-    if 'ha' in controller_data:
-        data['High Availability'] = 'Yes' if controller_data['ha'] else 'No'
+    if "ha" in controller_data:
+        data["High Availability"] = "Yes" if controller_data["ha"] else "No"
 
-    if 'active_node' in controller_data:
-        data['Active Node'] = controller_data['active_node']
+    if "active_node" in controller_data:
+        data["Active Node"] = controller_data["active_node"]
 
     # Calculate total controller capacity from instance groups
-    if 'instance_groups' in controller_data:
-        total_capacity = sum(ig.get('capacity', 0) for ig in controller_data['instance_groups'])
-        data['Controller Capacity'] = str(total_capacity)
+    if "instance_groups" in controller_data:
+        total_capacity = sum(ig.get("capacity", 0) for ig in controller_data["instance_groups"])
+        data["Controller Capacity"] = str(total_capacity)
 
     # Detailed information (only if requested)
     if show_detail:
         # Install UUID
-        if 'install_uuid' in controller_data:
-            data['Install UUID'] = controller_data['install_uuid']
+        if "install_uuid" in controller_data:
+            data["Install UUID"] = controller_data["install_uuid"]
 
         # Instance Details
-        if 'instances' in controller_data:
-            for i, instance in enumerate(controller_data['instances']):
+        if "instances" in controller_data:
+            for i, instance in enumerate(controller_data["instances"]):
                 prefix = f"Instance {i+1}"
 
-                if 'node' in instance:
-                    data[f'{prefix} Node'] = instance['node']
+                if "node" in instance:
+                    data[f"{prefix} Node"] = instance["node"]
 
-                if 'node_type' in instance:
-                    data[f'{prefix} Type'] = instance['node_type']
+                if "node_type" in instance:
+                    data[f"{prefix} Type"] = instance["node_type"]
 
-                if 'uuid' in instance:
-                    data[f'{prefix} UUID'] = instance['uuid']
+                if "uuid" in instance:
+                    data[f"{prefix} UUID"] = instance["uuid"]
 
-                if 'heartbeat' in instance:
+                if "heartbeat" in instance:
                     from aapclient.output import format_datetime_rich
-                    data[f'{prefix} Heartbeat'] = format_datetime_rich(instance['heartbeat'], use_utc, output_format)
 
-                if 'capacity' in instance:
-                    data[f'{prefix} Capacity'] = str(instance['capacity'])
+                    data[f"{prefix} Heartbeat"] = format_datetime_rich(instance["heartbeat"], use_utc, output_format)
+
+                if "capacity" in instance:
+                    data[f"{prefix} Capacity"] = str(instance["capacity"])
 
         # Instance Group Details
-        if 'instance_groups' in controller_data:
-            for i, group in enumerate(controller_data['instance_groups']):
+        if "instance_groups" in controller_data:
+            for i, group in enumerate(controller_data["instance_groups"]):
                 prefix = f"Instance Group {i+1}"
 
-                if 'name' in group:
-                    data[f'{prefix} Name'] = group['name']
+                if "name" in group:
+                    data[f"{prefix} Name"] = group["name"]
 
-                if 'capacity' in group:
-                    data[f'{prefix} Capacity'] = str(group['capacity'])
+                if "capacity" in group:
+                    data[f"{prefix} Capacity"] = str(group["capacity"])
 
-                if 'instances' in group:
-                    instances_list = ', '.join(group['instances']) if group['instances'] else 'None'
-                    data[f'{prefix} Instances'] = instances_list
+                if "instances" in group:
+                    instances_list = ", ".join(group["instances"]) if group["instances"] else "None"
+                    data[f"{prefix} Instances"] = instances_list
 
         # Add any additional detailed fields here
-        if 'redis_connected' in gateway_data:
-            data['Redis Connected'] = 'Yes' if gateway_data['redis_connected'] else 'No'
+        if "redis_connected" in gateway_data:
+            data["Redis Connected"] = "Yes" if gateway_data["redis_connected"] else "No"
 
     return data
 
 
-def _build_whoami_data(user_data: Dict[str, Any], use_utc: bool = False, output_format: str = 'table') -> Dict[str, Any]:
+def _build_whoami_data(
+    user_data: Dict[str, Any], use_utc: bool = False, output_format: str = "table"
+) -> Dict[str, Any]:
     """
     Build whoami data structure for display.
 
@@ -322,43 +320,43 @@ def _build_whoami_data(user_data: Dict[str, Any], use_utc: bool = False, output_
     data = {}
 
     # Basic user information
-    if 'id' in user_data:
-        data['ID'] = str(user_data['id'])
+    if "id" in user_data:
+        data["ID"] = str(user_data["id"])
 
-    if 'username' in user_data:
-        data['Username'] = user_data['username']
+    if "username" in user_data:
+        data["Username"] = user_data["username"]
 
-    if 'email' in user_data:
-        data['Email'] = user_data['email']
+    if "email" in user_data:
+        data["Email"] = user_data["email"]
 
     # Name fields (only show if not empty)
-    first_name = user_data.get('first_name', '').strip()
-    last_name = user_data.get('last_name', '').strip()
+    first_name = user_data.get("first_name", "").strip()
+    last_name = user_data.get("last_name", "").strip()
 
     if first_name:
-        data['First Name'] = first_name
+        data["First Name"] = first_name
 
     if last_name:
-        data['Last Name'] = last_name
+        data["Last Name"] = last_name
 
     # Permission flags
-    if 'is_superuser' in user_data:
-        data['Superuser'] = 'Yes' if user_data['is_superuser'] else 'No'
+    if "is_superuser" in user_data:
+        data["Superuser"] = "Yes" if user_data["is_superuser"] else "No"
 
-    if 'is_platform_auditor' in user_data:
-        data['Platform Auditor'] = 'Yes' if user_data['is_platform_auditor'] else 'No'
+    if "is_platform_auditor" in user_data:
+        data["Platform Auditor"] = "Yes" if user_data["is_platform_auditor"] else "No"
 
-    if 'managed' in user_data:
-        data['Managed Account'] = 'Yes' if user_data['managed'] else 'No'
+    if "managed" in user_data:
+        data["Managed Account"] = "Yes" if user_data["managed"] else "No"
 
     # Timestamps - use existing formatting function with UTC support
     from aapclient.output import format_datetime_rich
 
-    if 'date_joined' in user_data:
-        data['Date Joined'] = format_datetime_rich(user_data['date_joined'], use_utc, output_format)
+    if "date_joined" in user_data:
+        data["Date Joined"] = format_datetime_rich(user_data["date_joined"], use_utc, output_format)
 
-    if 'last_login' in user_data:
-        data['Last Login'] = format_datetime_rich(user_data['last_login'], use_utc, output_format)
+    if "last_login" in user_data:
+        data["Last Login"] = format_datetime_rich(user_data["last_login"], use_utc, output_format)
 
     return data
 
@@ -376,18 +374,18 @@ def _build_status_data(ping_data: Dict[str, Any]) -> Dict[str, Any]:
     data = {}
 
     # Overall status
-    if 'status' in ping_data:
-        data['Overall Status'] = ping_data['status']
+    if "status" in ping_data:
+        data["Overall Status"] = ping_data["status"]
 
-    if 'version' in ping_data:
-        data['Platform Version'] = ping_data['version']
+    if "version" in ping_data:
+        data["Platform Version"] = ping_data["version"]
 
     # Component health
-    if 'db_connected' in ping_data:
-        data['Database Health'] = 'Healthy' if ping_data['db_connected'] else 'Unhealthy'
+    if "db_connected" in ping_data:
+        data["Database Health"] = "Healthy" if ping_data["db_connected"] else "Unhealthy"
 
-    if 'proxy_connected' in ping_data:
-        data['Proxy Health'] = 'Healthy' if ping_data['proxy_connected'] else 'Unhealthy'
+    if "proxy_connected" in ping_data:
+        data["Proxy Health"] = "Healthy" if ping_data["proxy_connected"] else "Unhealthy"
 
     # Add more status fields as available from the API
 

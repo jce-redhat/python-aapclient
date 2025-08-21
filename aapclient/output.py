@@ -6,12 +6,10 @@ beautiful, consistent output across all AAP CLI commands.
 """
 
 from typing import Dict, List, Any, Optional, Union
-from datetime import datetime
 
 from rich.console import Console
 from rich.table import Table
 from rich.panel import Panel
-from rich.text import Text
 from rich.progress import Progress, SpinnerColumn, TextColumn
 from rich.tree import Tree
 from rich import box
@@ -23,7 +21,7 @@ def create_table(
     title: Optional[str] = None,
     show_header: bool = True,
     show_lines: bool = False,
-    box_style: Optional[box.Box] = None
+    box_style: Optional[box.Box] = None,
 ) -> Table:
     """
     Create a rich table from columns and rows.
@@ -44,18 +42,18 @@ def create_table(
         show_header=show_header,
         show_lines=show_lines,
         box=box_style or box.ROUNDED,
-        header_style="bold magenta"
+        header_style="bold magenta",
     )
 
     # Add columns with appropriate styling
     for i, column in enumerate(columns):
-        if column.lower() in ['id', 'count', 'port', 'timeout']:
+        if column.lower() in ["id", "count", "port", "timeout"]:
             # Numeric columns - right align
             table.add_column(column, justify="right", style="cyan")
-        elif column.lower() in ['status', 'state', 'enabled']:
+        elif column.lower() in ["status", "state", "enabled"]:
             # Status columns - center align with conditional coloring
             table.add_column(column, justify="center")
-        elif column.lower() in ['name', 'username', 'hostname']:
+        elif column.lower() in ["name", "username", "hostname"]:
             # Important identifier columns - bold
             table.add_column(column, style="bold white")
         else:
@@ -69,9 +67,9 @@ def create_table(
             cell_str = str(cell) if cell is not None else ""
 
             # Apply conditional styling based on content
-            if columns[i].lower() in ['status', 'state', 'enabled']:
+            if columns[i].lower() in ["status", "state", "enabled"]:
                 styled_row.append(_style_status_cell(cell_str))
-            elif columns[i].lower() == 'id' and cell_str.isdigit():
+            elif columns[i].lower() == "id" and cell_str.isdigit():
                 styled_row.append(f"[dim]{cell_str}[/dim]")
             else:
                 styled_row.append(cell_str)
@@ -81,12 +79,7 @@ def create_table(
     return table
 
 
-def show_key_value(
-    console: Console,
-    data: Dict[str, Any],
-    title: Optional[str] = None,
-    panel: bool = True
-) -> None:
+def show_key_value(console: Console, data: Dict[str, Any], title: Optional[str] = None, panel: bool = True) -> None:
     """
     Display key-value pairs in a formatted table.
 
@@ -96,12 +89,7 @@ def show_key_value(
         title: Optional title for the display
         panel: Whether to wrap in a panel
     """
-    table = Table(
-        show_header=True,
-        header_style="bold magenta",
-        box=box.ROUNDED,
-        padding=(0, 1)
-    )
+    table = Table(show_header=True, header_style="bold magenta", box=box.ROUNDED, padding=(0, 1))
     table.add_column("Field", style="cyan", width=30)
     table.add_column("Value", style="white")
 
@@ -109,13 +97,13 @@ def show_key_value(
         # Format value based on type and content
         if isinstance(value, bool):
             formatted_value = "[green]Yes[/green]" if value else "[red]No[/red]"
-        elif isinstance(value, (int, float)) and key.lower() in ['timeout', 'port', 'capacity']:
+        elif isinstance(value, (int, float)) and key.lower() in ["timeout", "port", "capacity"]:
             formatted_value = f"[cyan]{value}[/cyan]"
-        elif value in ['good', 'successful', 'ok', 'active', 'running']:
+        elif value in ["good", "successful", "ok", "active", "running"]:
             formatted_value = f"[green]{value}[/green]"
-        elif value in ['failed', 'error', 'inactive', 'stopped']:
+        elif value in ["failed", "error", "inactive", "stopped"]:
             formatted_value = f"[red]{value}[/red]"
-        elif value in ['pending', 'waiting', 'unknown']:
+        elif value in ["pending", "waiting", "unknown"]:
             formatted_value = f"[yellow]{value}[/yellow]"
         else:
             formatted_value = str(value) if value is not None else "[dim]None[/dim]"
@@ -142,12 +130,7 @@ def show_details_table(console: Console, data: Dict[str, Any]) -> None:
         console: Rich console for output
         data: Dictionary of key-value pairs to display
     """
-    table = Table(
-        show_header=True,
-        header_style="bold magenta",
-        box=box.ROUNDED,
-        padding=(0, 1)
-    )
+    table = Table(show_header=True, header_style="bold magenta", box=box.ROUNDED, padding=(0, 1))
     table.add_column("Field", style="cyan", no_wrap=True)
     table.add_column("Value", style="white")
 
@@ -155,13 +138,13 @@ def show_details_table(console: Console, data: Dict[str, Any]) -> None:
         # Format value based on type and content
         if isinstance(value, bool):
             formatted_value = "[green]Yes[/green]" if value else "[red]No[/red]"
-        elif isinstance(value, (int, float)) and key.lower() in ['timeout', 'port', 'capacity']:
+        elif isinstance(value, (int, float)) and key.lower() in ["timeout", "port", "capacity"]:
             formatted_value = f"[cyan]{value}[/cyan]"
-        elif value in ['good', 'successful', 'ok', 'active', 'running']:
+        elif value in ["good", "successful", "ok", "active", "running"]:
             formatted_value = f"[green]{value}[/green]"
-        elif value in ['failed', 'error', 'inactive', 'stopped']:
+        elif value in ["failed", "error", "inactive", "stopped"]:
             formatted_value = f"[red]{value}[/red]"
-        elif value in ['pending', 'waiting', 'unknown']:
+        elif value in ["pending", "waiting", "unknown"]:
             formatted_value = f"[yellow]{value}[/yellow]"
         else:
             formatted_value = str(value) if value is not None else "[dim]None[/dim]"
@@ -171,7 +154,7 @@ def show_details_table(console: Console, data: Dict[str, Any]) -> None:
     console.print(table)
 
 
-def format_value_for_output(value: Any, key: str, output_format: str = 'table') -> str:
+def format_value_for_output(value: Any, key: str, output_format: str = "table") -> str:
     """
     Format a value for display with or without rich markup based on output format.
 
@@ -183,11 +166,24 @@ def format_value_for_output(value: Any, key: str, output_format: str = 'table') 
     Returns:
         Formatted value string
     """
-    if output_format in ['json', 'yaml']:
+    if output_format in ["json", "yaml"]:
         # Plain formatting for JSON/YAML
         if isinstance(value, bool):
             return "Yes" if value else "No"
-        elif value in ['good', 'successful', 'ok', 'active', 'running', 'failed', 'error', 'inactive', 'stopped', 'pending', 'waiting', 'unknown']:
+        elif value in [
+            "good",
+            "successful",
+            "ok",
+            "active",
+            "running",
+            "failed",
+            "error",
+            "inactive",
+            "stopped",
+            "pending",
+            "waiting",
+            "unknown",
+        ]:
             return str(value)
         else:
             return str(value) if value is not None else "None"
@@ -195,22 +191,21 @@ def format_value_for_output(value: Any, key: str, output_format: str = 'table') 
         # Rich formatting for table output
         if isinstance(value, bool):
             # Special handling for 'deleted' field - Yes (True) is bad, No (False) is good
-            if key.lower() == 'deleted':
+            if key.lower() == "deleted":
                 return "[red]Yes[/red]" if value else "[green]No[/green]"
             else:
                 # Default: Yes (True) is good, No (False) is bad
                 return "[green]Yes[/green]" if value else "[red]No[/red]"
-        elif isinstance(value, (int, float)) and key.lower() in ['timeout', 'port', 'capacity']:
+        elif isinstance(value, (int, float)) and key.lower() in ["timeout", "port", "capacity"]:
             return f"[cyan]{value}[/cyan]"
-        elif value in ['good', 'successful', 'ok', 'active', 'running']:
+        elif value in ["good", "successful", "ok", "active", "running"]:
             return f"[green]{value}[/green]"
-        elif value in ['failed', 'error', 'inactive', 'stopped']:
+        elif value in ["failed", "error", "inactive", "stopped"]:
             return f"[red]{value}[/red]"
-        elif value in ['pending', 'waiting', 'unknown']:
+        elif value in ["pending", "waiting", "unknown"]:
             return f"[yellow]{value}[/yellow]"
         else:
             return str(value) if value is not None else "[dim]None[/dim]"
-
 
 
 def show_raw_json(data: Any) -> None:
@@ -238,10 +233,12 @@ def show_raw_yaml(data: Any) -> None:
 
     try:
         import yaml
+
         yaml_str = yaml.dump(data, default_flow_style=False, indent=2)
     except ImportError:
         # Fallback to JSON if PyYAML not available
         import json
+
         yaml_str = json.dumps(data, indent=2, default=str)
 
     print(yaml_str, file=sys.stdout)
@@ -277,11 +274,7 @@ def create_progress_bar(description: str = "Processing...") -> Progress:
     Returns:
         Rich Progress object
     """
-    return Progress(
-        SpinnerColumn(),
-        TextColumn("[progress.description]{task.description}"),
-        console=Console()
-    )
+    return Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}"), console=Console())
 
 
 def create_tree_view(root_name: str) -> Tree:
@@ -297,7 +290,7 @@ def create_tree_view(root_name: str) -> Tree:
     return Tree(f"[bold blue]{root_name}[/bold blue]")
 
 
-def format_datetime_rich(dt_str: str, use_utc: bool = False, output_format: str = 'table') -> str:
+def format_datetime_rich(dt_str: str, use_utc: bool = False, output_format: str = "table") -> str:
     """
     Format datetime string with rich styling for table output or plain text for JSON/YAML.
 
@@ -310,18 +303,19 @@ def format_datetime_rich(dt_str: str, use_utc: bool = False, output_format: str 
         Formatted datetime string with or without rich styling based on output format
     """
     if not dt_str:
-        return "Never" if output_format in ['json', 'yaml'] else "[dim]Never[/dim]"
+        return "Never" if output_format in ["json", "yaml"] else "[dim]Never[/dim]"
 
     try:
         # This would use the existing format_datetime function from common.functions
         from aapclient.common.functions import format_datetime
+
         formatted = format_datetime(dt_str, use_utc)
-        return formatted if output_format in ['json', 'yaml'] else f"[dim]{formatted}[/dim]"
+        return formatted if output_format in ["json", "yaml"] else f"[dim]{formatted}[/dim]"
     except Exception:
-        return dt_str if output_format in ['json', 'yaml'] else f"[dim]{dt_str}[/dim]"
+        return dt_str if output_format in ["json", "yaml"] else f"[dim]{dt_str}[/dim]"
 
 
-def format_duration_rich(seconds: Union[int, float], output_format: str = 'table') -> str:
+def format_duration_rich(seconds: Union[int, float], output_format: str = "table") -> str:
     """
     Format duration in seconds to human-readable format with styling for table or plain for JSON/YAML.
 
@@ -333,7 +327,7 @@ def format_duration_rich(seconds: Union[int, float], output_format: str = 'table
         Formatted duration string with or without rich styling based on output format
     """
     if not seconds or seconds <= 0:
-        return "N/A" if output_format in ['json', 'yaml'] else "[dim]N/A[/dim]"
+        return "N/A" if output_format in ["json", "yaml"] else "[dim]N/A[/dim]"
 
     hours, remainder = divmod(int(seconds), 3600)
     minutes, secs = divmod(remainder, 60)
@@ -345,7 +339,7 @@ def format_duration_rich(seconds: Union[int, float], output_format: str = 'table
     else:
         duration_str = f"{secs}s"
 
-    return duration_str if output_format in ['json', 'yaml'] else f"[cyan]{duration_str}[/cyan]"
+    return duration_str if output_format in ["json", "yaml"] else f"[cyan]{duration_str}[/cyan]"
 
 
 def _style_status_cell(value: str) -> str:
@@ -361,15 +355,15 @@ def _style_status_cell(value: str) -> str:
     value_lower = value.lower()
 
     # Success states
-    if value_lower in ['yes', 'true', 'success', 'successful', 'ok', 'good', 'active', 'running', 'enabled']:
+    if value_lower in ["yes", "true", "success", "successful", "ok", "good", "active", "running", "enabled"]:
         return f"[green]{value}[/green]"
 
     # Error states
-    elif value_lower in ['no', 'false', 'failed', 'error', 'bad', 'inactive', 'stopped', 'disabled']:
+    elif value_lower in ["no", "false", "failed", "error", "bad", "inactive", "stopped", "disabled"]:
         return f"[red]{value}[/red]"
 
     # Warning states
-    elif value_lower in ['pending', 'waiting', 'unknown', 'warning']:
+    elif value_lower in ["pending", "waiting", "unknown", "warning"]:
         return f"[yellow]{value}[/yellow]"
 
     # Default
@@ -393,13 +387,13 @@ def paginate_output(console: Console, content: Any, page_size: int = 20) -> None
 
 # Predefined color schemes for different resource types
 RESOURCE_COLORS = {
-    'template': 'blue',
-    'project': 'green',
-    'inventory': 'yellow',
-    'credential': 'red',
-    'user': 'cyan',
-    'team': 'magenta',
-    'organization': 'white',
-    'host': 'bright_blue',
-    'group': 'bright_green'
+    "template": "blue",
+    "project": "green",
+    "inventory": "yellow",
+    "credential": "red",
+    "user": "cyan",
+    "team": "magenta",
+    "organization": "white",
+    "host": "bright_blue",
+    "group": "bright_green",
 }

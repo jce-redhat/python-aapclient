@@ -1,4 +1,5 @@
 """Client manager for AAP HTTP clients."""
+
 from aapclient.common.client import AAPHTTPClient
 from aapclient.common.config import AAPConfig
 
