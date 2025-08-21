@@ -182,8 +182,14 @@ def main(argv: Optional[List[str]] = None) -> int:
         # Register gateway commands
         from aapclient.cli.gateway.v1.organizations import register_organization_commands
         from aapclient.cli.gateway.v1.teams import register_team_commands
+        from aapclient.cli.gateway.v1.users import register_user_commands
+        from aapclient.cli.gateway.v1.applications import register_application_commands
+        from aapclient.cli.gateway.v1.tokens import register_token_commands
         register_organization_commands(cli)
         register_team_commands(cli)
+        register_user_commands(cli)
+        register_application_commands(cli)
+        register_token_commands(cli)
 
         # Run the CLI
         cli(argv, standalone_mode=False)
