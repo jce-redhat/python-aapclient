@@ -167,15 +167,15 @@ def resolve_organization_name(client, identifier, api="gateway"):
                 # Name lookup failed, continue to ID lookup
                 pass
         else:
-            # Try to extract API error message
+            # Extract and re-throw the API error message
             api_message = extract_api_error_message(response)
             if api_message:
-                raise AAPClientError(api_message)
+                raise AAPAPIError(api_message, response.status_code)
             else:
-                raise AAPClientError(f"Failed to search for organization '{identifier}'")
+                raise AAPAPIError(f"Failed to search for organization '{identifier}'", response.status_code)
     except AAPAPIError as api_error:
-        # Use the API error message directly - it already contains the API's message
-        raise AAPClientError(str(api_error))
+        # Re-raise API errors unchanged to preserve the original message
+        raise
 
     # Name lookup failed, try as ID if it's numeric
     try:
@@ -186,18 +186,34 @@ def resolve_organization_name(client, identifier, api="gateway"):
         if response.status_code == HTTP_OK:
             return org_id
         else:
-            # Try to extract API error message for ID lookup
+            # Extract and re-throw the API error message
             api_message = extract_api_error_message(response)
             if api_message:
-                raise AAPClientError(api_message)
+                raise AAPAPIError(api_message, response.status_code)
             else:
-                raise AAPResourceNotFoundError("Organization", identifier)
+                # Fallback: try to get a proper API 404 message by attempting lookup with invalid ID
+                try:
+                    fallback_response = client.get(f"{api_endpoint}organizations/999999999/")
+                    fallback_message = extract_api_error_message(fallback_response)
+                    if fallback_message:
+                        raise AAPAPIError(fallback_message, fallback_response.status_code)
+                except:
+                    pass
+                raise AAPAPIError(f"No Organization matches the given query.", response.status_code)
     except ValueError:
         # Not a valid integer, and name lookup already failed
-        raise AAPResourceNotFoundError("Organization", identifier)
+        # Try to get a proper API 404 message by attempting lookup with invalid ID
+        try:
+            fallback_response = client.get(f"{api_endpoint}organizations/999999999/")
+            fallback_message = extract_api_error_message(fallback_response)
+            if fallback_message:
+                raise AAPAPIError(fallback_message, fallback_response.status_code)
+        except:
+            pass
+        raise AAPAPIError(f"No Organization matches the given query.", 404)
     except AAPAPIError as api_error:
-        # Use the API error message directly - it already contains the API's message
-        raise AAPClientError(str(api_error))
+        # Re-raise API errors unchanged to preserve the original message
+        raise
 
 
 def resolve_team_name(client, identifier, api="gateway"):
@@ -241,15 +257,15 @@ def resolve_team_name(client, identifier, api="gateway"):
                 # Name lookup failed, continue to ID lookup
                 pass
         else:
-            # Try to extract API error message
+            # Extract and re-throw the API error message
             api_message = extract_api_error_message(response)
             if api_message:
-                raise AAPClientError(api_message)
+                raise AAPAPIError(api_message, response.status_code)
             else:
-                raise AAPClientError(f"Failed to search for team '{identifier}'")
+                raise AAPAPIError(f"Failed to search for team '{identifier}'", response.status_code)
     except AAPAPIError as api_error:
-        # Use the API error message directly - it already contains the API's message
-        raise AAPClientError(str(api_error))
+        # Re-raise API errors unchanged to preserve the original message
+        raise
 
     # Name lookup failed, try as ID if it's numeric
     try:
@@ -260,18 +276,34 @@ def resolve_team_name(client, identifier, api="gateway"):
         if response.status_code == HTTP_OK:
             return team_id
         else:
-            # Try to extract API error message for ID lookup
+            # Extract and re-throw the API error message
             api_message = extract_api_error_message(response)
             if api_message:
-                raise AAPClientError(api_message)
+                raise AAPAPIError(api_message, response.status_code)
             else:
-                raise AAPResourceNotFoundError("Team", identifier)
+                # Fallback: try to get a proper API 404 message by attempting lookup with invalid ID
+                try:
+                    fallback_response = client.get(f"{api_endpoint}teams/999999999/")
+                    fallback_message = extract_api_error_message(fallback_response)
+                    if fallback_message:
+                        raise AAPAPIError(fallback_message, fallback_response.status_code)
+                except:
+                    pass
+                raise AAPAPIError(f"No Team matches the given query.", response.status_code)
     except ValueError:
         # Not a valid integer, and name lookup already failed
-        raise AAPResourceNotFoundError("Team", identifier)
+        # Try to get a proper API 404 message by attempting lookup with invalid ID
+        try:
+            fallback_response = client.get(f"{api_endpoint}teams/999999999/")
+            fallback_message = extract_api_error_message(fallback_response)
+            if fallback_message:
+                raise AAPAPIError(fallback_message, fallback_response.status_code)
+        except:
+            pass
+        raise AAPAPIError(f"No Team matches the given query.", 404)
     except AAPAPIError as api_error:
-        # Use the API error message directly - it already contains the API's message
-        raise AAPClientError(str(api_error))
+        # Re-raise API errors unchanged to preserve the original message
+        raise
 
 
 def resolve_user_name(client, identifier, api="gateway"):

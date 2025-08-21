@@ -111,22 +111,6 @@ def show_migration_notice(format_used: str, command_args: List[str]) -> None:
     if not command_args or command_args[0] in ['--help', '-h', 'help']:
         return
 
-    # During transition period, only show notice for rich format usage
-    # when user hasn't explicitly chosen it (i.e., using environment variable default)
-    if format_used == 'rich':
-        # Only show notice if rich format was auto-selected via environment variable
-        # Don't show when user explicitly requests --rich (that would be redundant)
-        explicit_rich_request = any(arg in ['--rich', '--output-format=rich'] or
-                                   arg.startswith('--output-format') and 'rich' in arg
-                                   for arg in sys.argv)
-
-        if not explicit_rich_request:
-            command_name = ' '.join(command_args[:2]) if len(command_args) >= 2 else command_args[0]
-            print(f"ℹ️  Using enhanced output for '{command_name}'", file=sys.stderr)
-            print(f"   For legacy format: {' '.join(sys.argv)} --legacy", file=sys.stderr)
-            print(f"   To disable: export AAP_OUTPUT_FORMAT=legacy", file=sys.stderr)
-            print("", file=sys.stderr)  # Blank line separator
-
 
 def main(argv: Optional[List[str]] = None) -> int:
     """

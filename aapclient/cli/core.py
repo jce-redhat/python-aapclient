@@ -63,19 +63,9 @@ console = Console()
     metavar='<path>',
     help='Path to CA certificate bundle file (overrides AAP_CA_BUNDLE environment variable)'
 )
-@click.option(
-    '--verbose', '-v',
-    count=True,
-    help='Increase verbosity (use -v, -vv, or -vvv)'
-)
-@click.option(
-    '--quiet', '-q',
-    is_flag=True,
-    help='Suppress output (except errors)'
-)
 @click.version_option(version='2.0.0', prog_name='aap')
 @click.pass_context
-def cli(ctx, hostname, username, password, token, request_timeout, validate_certs, ca_bundle, verbose, quiet):
+def cli(ctx, hostname, username, password, token, request_timeout, validate_certs, ca_bundle):
     """
     Ansible Automation Platform (AAP) Command Line Interface.
 
@@ -84,15 +74,12 @@ def cli(ctx, hostname, username, password, token, request_timeout, validate_cert
     # Ensure context object exists
     ctx.ensure_object(dict)
 
-    # Configure console based on quiet flag
-    if quiet:
-        ctx.obj['console'] = Console(file=sys.stderr, quiet=True)
-    else:
-        ctx.obj['console'] = Console()
+    # Configure console (no quiet mode)
+    ctx.obj['console'] = Console()
 
-    # Set verbosity level
-    ctx.obj['verbose'] = verbose
-    ctx.obj['quiet'] = quiet
+    # Set default verbosity level
+    ctx.obj['verbose'] = 0
+    ctx.obj['quiet'] = False
 
     # Build configuration overrides from command-line arguments
     config_overrides = {}
@@ -191,6 +178,12 @@ def main(argv: Optional[List[str]] = None) -> int:
         register_job_commands(cli)
         register_group_commands(cli)
         register_host_commands(cli)
+
+        # Register gateway commands
+        from aapclient.cli.gateway.v1.organizations import register_organization_commands
+        from aapclient.cli.gateway.v1.teams import register_team_commands
+        register_organization_commands(cli)
+        register_team_commands(cli)
 
         # Run the CLI
         cli(argv, standalone_mode=False)
