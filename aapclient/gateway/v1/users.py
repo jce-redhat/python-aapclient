@@ -1,10 +1,11 @@
 """User commands for AAP CLI using Click and Rich."""
 
 import sys
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 from collections import OrderedDict
 
 import click
+from rich.console import Console
 from rich.table import Table
 from click_option_group import optgroup, MutuallyExclusiveOptionGroup
 
@@ -16,7 +17,7 @@ from aapclient.common.constants import (
     HTTP_NOT_FOUND
 )
 from aapclient.common.exceptions import AAPClientError, AAPResourceNotFoundError
-from aapclient.common.functions import resolve_organization_name
+from aapclient.common.functions import resolve_organization_name, resolve_user_name
 from aapclient.decorators import (
     list_command,
     show_command,
@@ -87,7 +88,7 @@ def _format_user_data(user_data: Dict[str, Any], use_utc: bool = False, output_f
     sort_fields=['id', 'username', 'user_type', 'email', 'first_name', 'last_name', 'last_login', 'created', 'modified'],
     default_sort='id'
 )
-def list_users(console, output_format, utc, sort_by, reverse, limit, offset, show_all):
+def list_users(console: Console, output_format: str, utc: bool, sort_by: str, reverse: bool, limit: int, offset: int, show_all: bool) -> None:
     """List users."""
     client_manager = get_client_from_context()
     client = client_manager.gateway
@@ -166,7 +167,7 @@ def list_users(console, output_format, utc, sort_by, reverse, limit, offset, sho
 @click.argument('username', metavar='<username>', required=False, callback=validate_resource_identifier)
 @click.option('--id', type=int, help='User ID (overrides name argument)')
 @show_command
-def show_user(console, output_format, utc, username, id):
+def show_user(console: Console, output_format: str, utc: bool, username: Optional[str], id: Optional[int]) -> None:
     """Show details of a specific user."""
     client_manager = get_client_from_context()
     client = client_manager.gateway

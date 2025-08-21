@@ -1,10 +1,11 @@
 """Team commands for AAP CLI using Click and Rich."""
 
 import sys
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 from collections import OrderedDict
 
 import click
+from rich.console import Console
 from rich.table import Table
 
 from aapclient.common.constants import (
@@ -89,7 +90,7 @@ def _format_team_data(team_data: Dict[str, Any], use_utc: bool = False, output_f
     sort_fields=['id', 'name', 'organization', 'created', 'modified'],
     default_sort='id'
 )
-def list_teams(console, output_format, utc, sort_by, reverse, limit, offset, show_all):
+def list_teams(console: Console, output_format: str, utc: bool, sort_by: str, reverse: bool, limit: int, offset: int, show_all: bool) -> None:
     """List teams."""
     client_manager = get_client_from_context()
     client = client_manager.gateway
@@ -163,7 +164,7 @@ def list_teams(console, output_format, utc, sort_by, reverse, limit, offset, sho
 @click.argument('team_name', metavar='<team>', required=False, callback=validate_resource_identifier)
 @click.option('--id', type=int, help='Team ID (overrides name argument)')
 @show_command
-def show_team(console, output_format, utc, team_name, id):
+def show_team(console: Console, output_format: str, utc: bool, team_name: Optional[str], id: Optional[int]) -> None:
     """Show details of a specific team."""
     client_manager = get_client_from_context()
     client = client_manager.gateway
@@ -198,7 +199,7 @@ def show_team(console, output_format, utc, team_name, id):
 @click.option('--organization', required=True, help='Organization name or ID')
 @click.option('--description', help='Team description')
 @create_command
-def create_team(console, name, organization, description):
+def create_team(console: Console, name: str, organization: str, description: Optional[str]) -> None:
     """Create a new team."""
     client_manager = get_client_from_context()
     client = client_manager.gateway
@@ -242,7 +243,7 @@ def create_team(console, name, organization, description):
 @click.option('--organization', help='Organization name or ID')
 @click.option('--description', help='Team description')
 @update_command
-def set_team(console, team_name, id, new_name, organization, description):
+def set_team(console: Console, team_name: Optional[str], id: Optional[int], new_name: Optional[str], organization: Optional[str], description: Optional[str]) -> None:
     """Update team settings."""
     client_manager = get_client_from_context()
     client = client_manager.gateway
@@ -297,7 +298,7 @@ def set_team(console, team_name, id, new_name, organization, description):
 @click.argument('team_name', metavar='<team>', required=False, callback=validate_resource_identifier)
 @click.option('--id', type=int, help='Team ID (overrides name argument)')
 @delete_command("Are you sure you want to delete this team?")
-def delete_team(console, team_name, id):
+def delete_team(console: Console, team_name: Optional[str], id: Optional[int]) -> None:
     """Delete a team."""
     client_manager = get_client_from_context()
     client = client_manager.gateway

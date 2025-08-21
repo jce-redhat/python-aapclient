@@ -2,10 +2,11 @@
 
 import sys
 import time
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 
 import click
 from click_option_group import optgroup, MutuallyExclusiveOptionGroup
+from rich.console import Console
 from rich.table import Table
 
 from aapclient.common.constants import (
@@ -148,7 +149,7 @@ def _format_organization_data(organization_data: Dict[str, Any], use_utc: bool =
     sort_fields=['id', 'name', 'created', 'modified'],
     default_sort='id'
 )
-def list_organizations(console, output_format, utc, sort_by, reverse, limit, offset, show_all):
+def list_organizations(console: Console, output_format: str, utc: bool, sort_by: str, reverse: bool, limit: int, offset: int, show_all: bool) -> None:
     """List organizations."""
     client_manager = get_client_from_context()
     client = client_manager.gateway
@@ -224,7 +225,7 @@ def list_organizations(console, output_format, utc, sort_by, reverse, limit, off
 @click.argument('organization_name', metavar='<organization>', required=False, callback=validate_resource_identifier)
 @click.option('--id', type=int, help='Organization ID (overrides name argument)')
 @show_command
-def show_organization(console, output_format, utc, organization_name, id):
+def show_organization(console: Console, output_format: str, utc: bool, organization_name: Optional[str], id: Optional[int]) -> None:
     """Show details of a specific organization."""
     client_manager = get_client_from_context()
     client = client_manager.gateway
@@ -262,7 +263,7 @@ def show_organization(console, output_format, utc, organization_name, id):
 @click.option('--galaxy-credential', multiple=True, help='Galaxy credential name or ID (can be used multiple times)')
 @click.option('--instance-group', multiple=True, help='Instance group name or ID (can be used multiple times)')
 @create_command
-def create_organization(console, name, description, max_hosts, execution_environment, galaxy_credential, instance_group):
+def create_organization(console: Console, name: str, description: Optional[str], max_hosts: Optional[int], execution_environment: Optional[str], galaxy_credential: tuple, instance_group: tuple) -> None:
     """Create a new organization."""
     client_manager = get_client_from_context()
     gateway_client = client_manager.gateway
@@ -369,8 +370,8 @@ def create_organization(console, name, description, max_hosts, execution_environ
 @optgroup.option('--add-instance-group', multiple=True, help='Add instance group name or ID (can be used multiple times)')
 @optgroup.option('--remove-instance-group', multiple=True, help='Remove instance group name or ID (can be used multiple times)')
 @update_command
-def set_organization(console, organization_name, id, name, description, max_hosts, execution_environment,
-                    add_galaxy_credential, remove_galaxy_credential, add_instance_group, remove_instance_group):
+def set_organization(console: Console, organization_name: Optional[str], id: Optional[int], name: Optional[str], description: Optional[str], max_hosts: Optional[int], execution_environment: Optional[str],
+                    add_galaxy_credential: tuple, remove_galaxy_credential: tuple, add_instance_group: tuple, remove_instance_group: tuple) -> None:
     """Update organization settings."""
     client_manager = get_client_from_context()
     gateway_client = client_manager.gateway
@@ -488,7 +489,7 @@ def set_organization(console, organization_name, id, name, description, max_host
 @click.argument('organization_name', metavar='<organization>', required=False, callback=validate_resource_identifier)
 @click.option('--id', type=int, help='Organization ID (overrides name argument)')
 @delete_command("Are you sure you want to delete this organization?")
-def delete_organization(console, organization_name, id):
+def delete_organization(console: Console, organization_name: Optional[str], id: Optional[int]) -> None:
     """Delete an organization."""
     client_manager = get_client_from_context()
     client = client_manager.gateway

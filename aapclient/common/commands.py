@@ -9,6 +9,7 @@ import time
 from typing import Dict, Any
 
 import click
+from rich.console import Console
 
 from aapclient.common.constants import (
     GATEWAY_API_VERSION_ENDPOINT,
@@ -39,7 +40,7 @@ def register_common_commands(main_group: click.Group) -> None:
     help='Show detailed connectivity information'
 )
 @show_command
-def ping(console, detail, output_format, utc):
+def ping(console: Console, detail: bool, output_format: str, utc: bool) -> None:
     """
     Test connectivity to AAP API endpoints.
 
@@ -109,7 +110,7 @@ def ping(console, detail, output_format, utc):
 
 @click.command()
 @show_command
-def whoami(console, output_format, utc):
+def whoami(console: Console, output_format: str, utc: bool) -> None:
     """
     Display current user information.
 
@@ -158,7 +159,7 @@ def whoami(console, output_format, utc):
 
 @click.command()
 @show_command
-def status(console, output_format, utc):
+def status(console: Console, output_format: str, utc: bool) -> None:
     """
     Display AAP system status and health information.
 

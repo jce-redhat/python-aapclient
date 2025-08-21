@@ -10,6 +10,7 @@ from typing import Dict, Any, List, Optional
 
 import click
 from click_option_group import optgroup, MutuallyExclusiveOptionGroup
+from rich.console import Console
 from rich.table import Table
 
 from aapclient.common.constants import (
@@ -67,7 +68,7 @@ def template():
     sort_fields=['id', 'name', 'organization', 'created', 'modified', 'last_job_run'],
     default_sort='id'
 )
-def list_templates(console, output_format, utc, limit, offset, organization, project, inventory, show_all, sort_by, reverse):
+def list_templates(console: Console, output_format: str, utc: bool, limit: int, offset: int, organization: Optional[str], project: Optional[str], inventory: Optional[str], show_all: bool, sort_by: str, reverse: bool) -> None:
     """List job templates."""
     client_manager = get_client_from_context()
     client = client_manager.controller
@@ -194,7 +195,7 @@ def list_templates(console, output_format, utc, limit, offset, organization, pro
 @click.argument('template_name', metavar='<template>', required=False, callback=validate_resource_identifier)
 @click.option('--id', type=int, help='Template ID (overrides name argument)')
 @show_command
-def show_template(console, output_format, utc, template_name, id):
+def show_template(console: Console, output_format: str, utc: bool, template_name: Optional[str], id: Optional[int]) -> None:
     """Show details of a specific job template."""
     client_manager = get_client_from_context()
     client = client_manager.controller
@@ -265,7 +266,7 @@ def show_template(console, output_format, utc, template_name, id):
 @click.option('--webhook-service', type=click.Choice(['gitlab', 'github', 'bitbucket_dc']), help='Webhook service (required if --enable-webhook)')
 @click.option('--webhook-credential', help='Webhook credential name or ID')
 @create_command
-def create_template(console, name, **kwargs):
+def create_template(console: Console, name: str, **kwargs) -> None:
     """Create a new job template."""
     client_manager = get_client_from_context()
     client = client_manager.controller
