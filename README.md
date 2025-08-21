@@ -79,8 +79,16 @@ export AAP_TOKEN=your-api-token
 ```
 
 2. **Enable command completion**:
+For bash:
 ```bash
-source <(aap complete)
+_AAP_COMPLETE=bash_source aap > bash_completion_aap.sh
+source bash_completion_aap.sh
+```
+
+For zsh:
+```zsh
+_AAP_COMPLETE=zsh_source aap > zsh_completion_aap.sh
+source zsh_completion_aap.sh
 ```
 
 3. **Test connectivity**:

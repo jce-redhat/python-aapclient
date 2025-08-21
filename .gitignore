@@ -45,3 +45,7 @@ pip-delete-this-directory.txt
 
 # tmp directory in project
 tmp/
+
+# command completion files
+bash_completion_aap.sh
+zsh_completion_aap.sh
