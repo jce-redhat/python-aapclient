@@ -26,11 +26,11 @@ This project uses a focused cursor rules structure that emphasizes general devel
 - **Historical context and current state**
 
 #### `development-standards.mdc` (Always Applied)
-- **Core DRY principles and patterns**
-- **Base class usage guidelines**
-- **Code quality standards**
-- **Testing principles and patterns**
-- **Architecture decision guidelines**
+- **Modern CLI patterns with Click + Rich**
+- **Decorator usage and DRY principles**
+- **Output formatting and error handling standards**
+- **Testing principles and API exploration**
+- **Type safety and modern Python practices**
 
 ### Component-Specific Rules
 
@@ -51,10 +51,10 @@ This project uses a focused cursor rules structure that emphasizes general devel
 ## When to Add New Rule Content
 
 ### Add to `development-standards.mdc` when:
-- Establishing new project-wide patterns
-- Documenting architectural decisions
-- Setting code quality standards
-- Defining testing approaches
+- Establishing new Click decorator patterns
+- Documenting Rich output formatting decisions
+- Setting modern Python code quality standards
+- Defining API exploration and testing approaches
 
 ### Add to `project.mdc` when:
 - Updating project context or goals
@@ -101,7 +101,7 @@ This project uses a focused cursor rules structure that emphasizes general devel
 
 ## Finding Relevant Rules
 
-1. **Start with `development-standards.mdc`** for DRY principles and base class patterns
+1. **Start with `development-standards.mdc`** for Click decorator patterns and Rich formatting standards
 2. **Check `project.mdc`** for project context and general conventions
 3. **Look at component rules** for specific pattern guidance
 4. **Use rule descriptions** to quickly identify relevant context

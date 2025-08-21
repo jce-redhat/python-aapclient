@@ -1,12 +1,12 @@
 ```mdc
 ---
-description: Development Standards & DRY Principles
+description: Development Standards & Modern CLI Patterns
 globs:
 alwaysApply: true
 ---
 ```
 
-# Development Standards & DRY Principles
+# Development Standards & Modern CLI Patterns
 
 ## 🔥 MANDATORY Pre-Development Checklist
 
@@ -17,366 +17,497 @@ alwaysApply: true
 - [ ] All python commands or `aap` commands are prefixed with `source .venv/bin/activate &&`
 - [ ] Environment file exists: `.env` with AAP credentials copied from `env.example`
 
-## Core DRY Philosophy
+## Core Architecture Philosophy
 
-**Don't Repeat Yourself (DRY)** is a fundamental principle in this codebase. All code must follow these patterns:
+**Click + Rich Framework**: This project is built on modern Python CLI best practices with enhanced user experience.
 
-### 1. Use Base Classes for Common Patterns
-- **API Clients**: Inherit from `BaseAPIClient` for CRUD operations
-- **Commands**: Use `BaseResourceShowCommand`, `BaseResourceDeleteCommand`, `BaseResourceListCommand`
-- **Never duplicate**: Argument parsing, resource lookup, error handling
+### 1. Click Framework Foundation
+- **Decorators**: Command definition using Click decorators
+- **Group Organization**: Hierarchical command structure with Click groups
+- **Type Safety**: Click's built-in type validation and conversion
+- **Context Management**: Rich console and client manager via Click context
 
-### 2. Constants Over Magic Numbers
-- **Always import**: Constants from `aapclient.common.constants`
-- **Never hardcode**: Page sizes, timeouts, status codes, API versions
-- **Centralize**: All configurable values in constants file
+### 2. Rich Output Excellence
+- **Beautiful Tables**: Styled headers, borders, and intelligent column widths
+- **Context-Aware Formatting**: Rich markup for tables, plain text for JSON/YAML
+- **Consistent Styling**: Blue headers, appropriate colors for status
+- **Progress Indication**: Rich progress bars and status indicators
 
-### 3. Extract Common Utilities
-- **Reuse functions**: From `aapclient.common.utils` for formatting, lookup, validation
-- **Don't duplicate**: Error handling, resource resolution, display formatting
-- **Create utilities**: When patterns appear in 2+ places
+### 3. Decorator-Driven DRY Principles
+- **Reusable Patterns**: Common decorators eliminate code duplication
+- **Consistent Behavior**: Standard error handling, validation, and output
+- **Modular Design**: Mix and match decorators for different command types
 
-## AWXKit-Inspired Patterns
+## Modern Command Patterns
 
-**Drawing from the upstream AWX CLI (awxkit)**, incorporate these established patterns:
+### Standard Command Decorators
 
-### 1. Page-Based API Architecture
-- **Page Objects**: Represent API endpoints as page objects with standard methods
-- **Connection Management**: Use centralized connection handling with retry logic
-- **Resource Registry**: Map URLs to resource classes using registry pattern
-- **TentativePage**: Lazy-loaded page objects for related resources
-
-### 2. Configuration Management
-- **PseudoNamespace**: Support both dict and attribute access for configuration
-- **Environment Variables**: Load from `AAP_*` prefixes
-- **Credential Files**: Support YAML credential files for authentication
-- **Session Management**: Handle both basic auth and session-based auth
-
-### 3. Resource Identification Patterns
-- **pk_or_name**: Flexible resource lookup by ID or name with validation
-- **Uniqueness Rules**: Define identity fields per resource type
-- **Cross-validation**: Verify ID/name consistency when both provided
-- **Natural Keys**: Support resource identification by natural attributes
-
-### 4. CLI Argument Patterns
-- **OPTIONS-based**: Build arguments dynamically from HTTP OPTIONS requests
-- **Subparsers**: Nested command structure with resource-specific actions
-- **Custom Actions**: Registry-based system for specialized commands
-- **Formatting Arguments**: Consistent output formatting across commands
-
-## OpenStack Client Patterns (Implemented Natively)
-
-**Drawing from the mature python-openstackclient**, adopt these proven CLI patterns but implement them natively within aapclient:
-
-### 1. Cliff Framework Integration
-- **Command Base Classes**: Inherit from `command.ShowOne`, `command.Lister`, `command.Command`
-- **App Integration**: Access clients via `self.app.client_manager`
-- **Argument Parsing**: Use `get_parser(self, prog_name)` for argument definition
-- **Action Execution**: Implement `take_action(self, parsed_args)` for command logic
-
-### 2. Modern Python Packaging (pyproject.toml)
-- **Entry Points**: Use `project.entry-points` for command registration
-- **PBR Integration**: Use `pbr` for build system and version management
-- **Hierarchical Organization**: Group commands by API version and resource type
-- **Plugin Architecture**: Support extensible command registration
-
-### 3. Native AAP Client Patterns (Inspired by OSC-lib)
-- **Common Utilities**: Implement `aapclient.common.utils` for formatting and data manipulation
-- **Exception Handling**: Implement `aapclient.common.exceptions` for consistent error handling
-- **Parser Actions**: Implement `aapclient.common.cli.parseractions` for argument validation
-- **Client Management**: Implement `aapclient.common.clientmanager` for session management
-
-### 4. Pagination and Progress (Native Implementation)
-- **Marker-based Pagination**: Implement `add_marker_pagination_option_to_parser` in `aapclient.common.pagination`
-- **Offset-based Pagination**: Implement `add_offset_pagination_option_to_parser` in `aapclient.common.pagination`
-- **Non-blocking UI**: Show progress for file operations and API calls
-
-## Command Development Patterns
-
-### Standard Resource Commands
-All resource commands should follow these patterns:
-
-#### Show Commands (OpenStack/Cliff Pattern)
+**Core Command Types**:
 ```python
-class ShowResource(command.ShowOne):
-    _description = _("Display resource details")
+@list_command(default_limit=20, sort_fields=['name', 'id'], default_sort='id')
+def list_resources(console, output_format, utc, sort_by, reverse, limit, offset, show_all):
+    """List resources with pagination and sorting"""
 
-    def get_parser(self, prog_name):
-        parser = super().get_parser(prog_name)
-        parser.add_argument('resource', help=_('Resource to display'))
-        return parser
+@show_command
+def show_resource(console, output_format, utc, resource_name, resource_id):
+    """Show resource details with multiple formats"""
 
-    def take_action(self, parsed_args):
-        client = self.app.client_manager.controller
-        resource = client.get_resource(parsed_args.resource)
-        columns, data = _get_resource_columns(resource)
-        return (columns, data)
+@create_command
+def create_resource(console):
+    """Create resource with validation"""
+
+@update_command
+def update_resource(console, output_format, utc):
+    """Update resource with confirmation"""
+
+@delete_command
+def delete_resource(console):
+    """Delete resource with confirmation prompt"""
 ```
 
-#### List Commands (OpenStack/Cliff Pattern)
+**Utility Decorators**:
 ```python
-class ListResource(command.Lister):
-    _description = _("List resources")
-
-    def get_parser(self, prog_name):
-        parser = super().get_parser(prog_name)
-        pagination.add_marker_pagination_option_to_parser(parser)
-        return parser
-
-    def take_action(self, parsed_args):
-        client = self.app.client_manager.controller
-        resources = client.list_resources(**parsed_args.__dict__)
-        columns = ('ID', 'Name', 'Status')
-        return (columns, (aapclient.common.utils.get_item_properties(r, columns) for r in resources))
+@handle_api_errors        # Consistent error handling and API error propagation
+@get_client_from_context  # Access to AAPClientManager
+@get_console_from_context # Access to Rich console
+@common_options          # Standard -f/--format and --utc options
+@confirm_destructive     # Confirmation prompts for delete operations
+@paginated              # Pagination support with --limit, --all
+@sortable               # Sorting support with --sort-by, --reverse
 ```
 
-#### Delete Commands (OpenStack/Cliff Pattern)
+### Click Group Registration
+
+**Resource Group Pattern**:
 ```python
-class DeleteResource(command.Command):
-    _description = _("Delete resource(s)")
+@click.group()
+def template():
+    """Manage job templates."""
+    pass
 
-    def get_parser(self, prog_name):
-        parser = super().get_parser(prog_name)
-        parser.add_argument('resource', nargs='+', help=_('Resource(s) to delete'))
-        return parser
+# Add commands to group
+template.add_command(list_templates)
+template.add_command(show_template)
+template.add_command(create_template)
 
-    def take_action(self, parsed_args):
-        client = self.app.client_manager.controller
-        for resource in parsed_args.resource:
-            client.delete_resource(resource)
+# Register with main CLI
+def register_template_commands(main_group: click.Group) -> None:
+    main_group.add_command(template)
 ```
 
-### Argument Patterns
-- **Pagination**: Include `--limit` parameter with `DEFAULT_PAGE_SIZE` default
-- **Sorting**: Sort by ID by default for consistency
-- **Filtering**: Add logical filters based on resource relationships
+### Resource Identification Pattern
 
-## API Client Patterns
-
-### Generic Operations
-All API clients should use base methods:
-
+**Standard Validation**:
 ```python
-class Client(BaseAPIClient):
-    def list_resources(self, **params):
-        return self.list_resource('resources', **params)
-
-    def get_resource(self, resource_id):
-        return self.get_resource('resources', resource_id)
+@click.argument('resource_name', required=False, callback=validate_resource_identifier)
+@click.option('--id', 'resource_id', type=int, help='Resource ID')
+def show_resource(console, output_format, utc, resource_name, resource_id):
+    """Show resource using name or --id flag"""
+    identifier = resource_id if resource_id else resource_name
+    resource = resolve_resource_name(client, identifier)
 ```
 
-### AWXKit-Inspired Client Architecture
-- **Connection Class**: Centralized session management with retry logic
-- **Page Methods**: Standard CRUD operations (get, post, put, patch, delete)
-- **Related Resources**: Lazy-loaded access to related endpoints
-- **Bulk Operations**: Support for batch operations where available
+## Rich Output Standards
 
-### Error Handling
-- **Status Code Mapping**: Convert HTTP status codes to specific exceptions
-- **License Validation**: Handle license-specific error patterns
-- **Duplicate Detection**: Recognize and handle duplicate resource errors
-- **Resource Context**: Include resource type and identifier in errors
+### Context-Aware Formatting
 
-### Authentication & Configuration
-- **Session Cookie Support**: Handle both sessionid and custom session cookies
-- **CSRF Protection**: Automatic CSRF token handling for state-changing operations
-- **Connection Retry**: Configurable retry attempts for network failures
-- **SSL Verification**: Respect insecure connection settings
+**Output Format Handling**:
+```python
+def _format_resource_data(resource_data: Dict, output_format: str = 'table', use_utc: bool = False):
+    """Format resource data for display"""
+    data = OrderedDict()
 
-### Monitoring & Job Control
-- **Job Monitoring**: Built-in support for monitoring long-running jobs
-- **Progress Tracking**: Real-time status updates with configurable intervals
-- **Job Cancellation**: Graceful job termination capabilities
-- **Timeout Handling**: Configurable timeouts for job completion
+    # Basic fields
+    data['ID'] = str(resource_data.get('id', ''))
+    data['Name'] = resource_data.get('name', '')
 
-## Code Quality Standards
+    # Timestamps - context aware
+    data['Created'] = format_datetime_rich(
+        resource_data.get('created'),
+        use_utc,
+        output_format  # Returns plain text for json/yaml
+    )
+
+    return data
+```
+
+### Multiple Output Formats
+
+**Standard Format Support**:
+```python
+# Rich table (default)
+if output_format == 'json':
+    show_raw_json(formatted_data)
+elif output_format == 'yaml':
+    show_raw_yaml(formatted_data)
+else:
+    # Rich table output
+    table = Table(show_header=True, header_style="bold cyan")
+    table.add_column("Field", style="white")
+    table.add_column("Value", style="white")
+
+    for field, value in formatted_data.items():
+        table.add_row(field, str(value))
+
+    console.print(table)
+```
+
+### Consistent Formatting Functions
+
+**Shared Output Utilities**:
+```python
+# Context-aware datetime formatting
+format_datetime_rich(timestamp, use_utc=False, output_format='table')
+
+# Context-aware boolean formatting
+format_value_for_output(value, field_name=None, output_format='table')
+
+# Duration formatting
+format_duration_rich(seconds, output_format='table')
+```
+
+## API Client Integration
+
+### Client Manager Pattern
+
+**Centralized Client Access**:
+```python
+@get_client_from_context
+def command_function(client_manager: AAPClientManager):
+    controller_client = client_manager.controller
+    gateway_client = client_manager.gateway
+
+    # Use clients for API calls
+    response = controller_client.get(endpoint)
+```
+
+### Resource Resolution Pattern
+
+**Name/ID Resolution**:
+```python
+def resolve_resource_name(client, identifier, api="controller"):
+    """Resolve resource name or ID to internal ID"""
+    try:
+        # Try as numeric ID first
+        if str(identifier).isdigit():
+            resource_id = int(identifier)
+            endpoint = f"{API_ENDPOINT}{resource_id}/"
+            response = client.get(endpoint)
+            if response.status_code == HTTP_OK:
+                return resource_id
+
+        # Try name lookup
+        params = {'name': identifier}
+        response = client.get(API_ENDPOINT, params=params)
+        if response.status_code == HTTP_OK:
+            results = response.json().get('results', [])
+            if len(results) == 1:
+                return results[0]['id']
+
+    except Exception:
+        pass
+
+    # Let API error propagate with raw message
+    raise AAPAPIError(f"No Resource matches the given query.")
+```
+
+## Error Handling Philosophy
+
+### API Error Propagation
+
+**Raw API Error Messages**:
+```python
+@handle_api_errors
+def api_operation():
+    """Decorator handles AAPAPIError and displays raw API messages"""
+    try:
+        response = client.get(endpoint)
+        # API operations
+    except requests.RequestException as e:
+        raise AAPAPIError(str(e))  # Will be caught by decorator
+```
+
+### Validation Patterns
+
+**Argument Validation**:
+```python
+def validate_resource_identifier(ctx, param, value):
+    """Ensure either positional argument or --id is provided"""
+    id_option = ctx.params.get('resource_id')
+    if not value and not id_option:
+        raise click.UsageError(f"{param.human_readable_name} identifier is required")
+    return value
+```
+
+## Modern Python Standards
+
+### Type Safety
+
+**Full Type Hints**:
+```python
+from typing import Dict, List, Optional, Any
+from rich.console import Console
+from aapclient.common.clientmanager import AAPClientManager
+
+def format_data(resource: Dict[str, Any], console: Console) -> Dict[str, str]:
+    """Format resource data with full type safety"""
+    pass
+```
+
+### Modern Dependencies
+
+**Current Tech Stack**:
+```toml
+[project]
+dependencies = [
+    "click>=8.0.0",              # Modern CLI framework
+    "click-option-group>=0.5.6", # Mutually exclusive option groups
+    "rich>=13.0.0",              # Beautiful terminal output
+    "requests>=2.28.0",          # HTTP client
+    "PyYAML>=6.0",               # YAML support
+    "python-dotenv>=1.0.0",      # Environment management
+]
+```
 
 ### Python Version Requirements
-- **Minimum Python Version**: Support Python 3.6 or greater
-- **Modern Features**: Use features available in Python 3.6+ (f-strings, type hints, etc.)
-- **Compatibility**: Ensure code runs on Python 3.6 through latest stable version
-- **Testing**: Test on multiple Python versions (3.6, 3.9, 3.11, latest)
+- **Minimum**: Python 3.8 or greater
+- **Recommended**: Python 3.9+ for best performance
+- **Type Hints**: Use modern typing features (Union syntax, etc.)
+- **F-strings**: Use f-string formatting throughout
 
-### DRY Violations to Avoid
-1. **Identical method implementations** across classes
-2. **Repeated argument parsing** in commands
-3. **Duplicate error handling** patterns
-4. **Magic numbers** instead of constants
-5. **Similar HTTP patterns** in API clients
+## Code Organization Principles
 
-### When to Extract Code
-- **2+ identical patterns**: Extract to utility function
-- **3+ similar classes**: Create base class
-- **Hardcoded values**: Move to constants
-- **Complex logic**: Centralize in common module
+### API-Centric Structure
 
-### Code Organization Principles
-- **Single responsibility**: Each class/function has one clear purpose
-- **Dependency injection**: Pass clients and config rather than importing globally
-- **Consistent imports**: Group and order imports logically
-- **Clear naming**: Use descriptive names that explain intent
+**Directory Organization**:
+```
+aapclient/
+├── core.py                 # Main Click CLI entry point
+├── decorators.py           # Reusable Click decorators
+├── output.py               # Rich formatting utilities
+├── common/                 # Shared utilities + common commands
+├── controller/v2/          # Controller API commands
+│   ├── templates.py        # Job template management
+│   ├── inventories.py      # Inventory management
+│   └── ...
+├── gateway/v1/             # Gateway API commands
+│   ├── organizations.py    # Organization management
+│   ├── users.py            # User management
+│   └── ...
+└── eda/                    # Future EDA commands
+```
 
-## Utility Patterns from AWXKit
+### Import Patterns
 
-### Common Utilities
-- **PseudoNamespace**: Dict-like objects with attribute access
-- **Date/Time Handling**: Consistent timestamp formatting and timezone handling
-- **Resource Cleanup**: Silent cleanup methods for test teardown
-- **Random Data Generation**: Utilities for generating test data
-- **Configuration Loading**: YAML-based credential and project loading
+**Clean Import Structure**:
+```python
+# Standard library
+from typing import Dict, List, Optional
+from collections import OrderedDict
 
-### Output Formatting
-- **Multiple Formats**: Support JSON, YAML, and human-readable table formats
-- **Filtering**: JQ-style filtering for JSON/YAML output
-- **Colorization**: Configurable colored output for better UX
-- **Pagination**: Consistent pagination with "X of Y" indicators
-- **Column Alignment**: Dynamic column width calculation for tables
+# Third-party
+import click
+from rich.table import Table
+from click_option_group import optgroup, MutuallyExclusiveOptionGroup
 
-### Resource Management
-- **get_or_create**: Idempotent resource creation patterns
-- **create_or_replace**: Replace existing resources by name/identifier
-- **Object Roles**: Built-in support for AWX role-based access control
-- **Related Resources**: Automatic handling of resource relationships
+# Local
+from aapclient.decorators import list_command, show_command
+from aapclient.output import show_raw_json, format_datetime_rich
+from aapclient.common.functions import resolve_resource_name
+```
 
-## Testing Principles
+## Command Development Workflow
 
-### API Endpoint Exploration
-**REQUIRED**: Before implementing any new command, write test scripts to explore API endpoints and understand data structures.
+### Standard Development Process
 
-### Standard Test Scenarios
-For any resource command, test:
-1. **Name lookup**: `aap resource show "MyResource"`
-2. **ID lookup**: `aap resource show --id 123`
-3. **Cross-validation**: `aap resource show --id 123 "MyResource"`
-4. **Error cases**: Not found, invalid arguments, API failures
+1. **Explore API**: Write test scripts to understand endpoints
+2. **Choose Decorators**: Select appropriate decorators for command type
+3. **Implement Function**: Focus on business logic, let decorators handle common patterns
+4. **Format Output**: Use `_format_*_data` functions for consistent display
+5. **Test Thoroughly**: Verify table, JSON, and YAML output modes
 
-### Virtual Environment
-**ALWAYS** use `.venv` for development and testing:
+### Example Implementation
+
+**Complete Command Example**:
+```python
+@organization.command('list')
+@click.option('--all', 'show_all', is_flag=True, help='Show all results (no pagination)')
+@list_command(
+    default_limit=20,
+    sort_fields=['id', 'name', 'created'],
+    default_sort='id'
+)
+def list_organizations(console, output_format, utc, sort_by, reverse, limit, offset, show_all):
+    """List organizations."""
+    client_manager = get_client_from_context()
+    client = client_manager.gateway
+
+    # Build API parameters
+    params = {}
+    if not show_all:
+        params['page_size'] = limit
+        params['page'] = (offset // limit) + 1
+
+    # Sorting
+    sort_field = sort_by if sort_by else 'id'
+    params['order_by'] = f'-{sort_field}' if reverse else sort_field
+
+    # API call
+    endpoint = f"{GATEWAY_API_VERSION_ENDPOINT}organizations/"
+    response = client.get(endpoint, params=params)
+
+    # Process results
+    data = response.json()
+    organizations = data.get('results', [])
+
+    # Format for output
+    if output_format in ['json', 'yaml']:
+        processed_data = []
+        for org in organizations:
+            formatted = _format_organization_data(org, output_format, utc)
+            # Convert ID to int for JSON/YAML consistency
+            if 'ID' in formatted:
+                formatted['ID'] = int(formatted['ID'])
+            processed_data.append(formatted)
+
+        if output_format == 'json':
+            show_raw_json(processed_data)
+        else:
+            show_raw_yaml(processed_data)
+    else:
+        # Rich table output
+        table = Table(show_header=True, header_style="bold cyan")
+        table.add_column("ID", style="white", width=4)
+        table.add_column("Name", style="white")
+        table.add_column("Description", style="white")
+        table.add_column("Max Hosts", style="white")
+        table.add_column("Created", style="white")
+
+        for org in organizations:
+            formatted = _format_organization_data(org, output_format, utc)
+            table.add_row(
+                formatted['ID'],
+                formatted['Name'],
+                formatted['Description'],
+                formatted['Max Hosts'],
+                formatted['Created']
+            )
+
+        console.print(table)
+
+        # Pagination info
+        if not show_all:
+            total = data.get('count', len(organizations))
+            console.print(f"\nShowing {len(organizations)} of {total} total organizations")
+```
+
+## Testing Standards
+
+### Virtual Environment Requirements
+
+**ALWAYS use virtual environment**:
 ```bash
+# Before ANY development command
 source .venv/bin/activate && aap command test
 source .venv/bin/activate && python test_script.py
 ```
 
-**🚨 CRITICAL REMINDER**: Never run python or `aap` commands without activating the virtual environment first. This is a major source of development issues.
+### API Exploration Pattern
 
-## Architecture Decision Guidelines
+**Required before implementation**:
+```python
+# explore_api.py - Always write these first
+import requests
+from dotenv import load_dotenv
+import os
 
-### API Selection
-- **Controller API**: For automation resources (projects, templates, inventories, hosts, credentials, jobs)
-- **Gateway API**: For identity resources (organizations, users, teams)
-- **Consistent patterns**: Use same base classes regardless of API
+load_dotenv()
 
-### Command Structure
-- **Follow OpenStack model**: Similar command patterns and organization
-- **Resource-centric**: Group commands by resource type, not operation
-- **Consistent naming**: `aap resource verb` pattern throughout
+# Test API endpoint behavior
+response = requests.get(
+    f"{os.getenv('AAP_URL')}/api/v2/organizations/",
+    auth=(os.getenv('AAP_USERNAME'), os.getenv('AAP_PASSWORD')),
+    verify=False
+)
 
-### AWXKit-Inspired Architecture Decisions
-- **Page-based Design**: Model API endpoints as page objects with standard methods
-- **Registry Pattern**: Use URL-to-class mapping for extensible resource handling
-- **Lazy Loading**: Implement TentativePage pattern for related resources
-- **OPTIONS-driven**: Build CLI arguments dynamically from API OPTIONS requests
+print("Status:", response.status_code)
+print("Response:", response.json())
+```
 
-### Output Formatting
-- **GUI alignment**: Match AAP web interface column layouts when possible
-- **Consistent formatting**: Use utility functions for dates, durations, names
-- **Clear distinction**: Visual formatting for numeric names vs IDs
-- **Multiple formats**: Support JSON, YAML, and human-readable outputs
-- **Filtering support**: Enable JQ-style filtering for programmatic use
+### Standard Test Scenarios
 
-### Configuration Management
-- **Environment Variables**: Use `AAP_*` prefix for unified configuration
-- **Credential Files**: YAML-based credential storage with multiple profiles
-- **Session Persistence**: Handle both basic auth and session-based authentication
-- **SSL Configuration**: Respect insecure connection settings from environment
+**For every command, test**:
+1. **Name lookup**: `aap resource show "MyResource"`
+2. **ID lookup**: `aap resource show --id 123`
+3. **Output formats**: Test `-f json`, `-f yaml`, table output
+4. **Error cases**: Not found, invalid arguments, API failures
+5. **Pagination**: Test `--limit`, `--all`, `--sort-by`, `--reverse`
 
-### AAP Environment Variables
-- **Primary Variables**: Use `AAP_HOST`, `AAP_USERNAME`, `AAP_PASSWORD`, `AAP_TOKEN`
-- **Unified Configuration**: All APIs (Controller, Gateway, EDA, Galaxy) use same credentials
-- **SSL Control**: Use `AAP_VERIFY_SSL` for certificate verification and `AAP_CA_BUNDLE` to use an alternate CA certificate source
-- **Connection Timeout Control**: Use `AAP_TIMEOUT` for overriding default connection timeout in units of seconds
+## Advanced Patterns
+
+### Mutually Exclusive Options
+
+**Option Groups**:
+```python
+from click_option_group import optgroup, MutuallyExclusiveOptionGroup
+
+@optgroup.group('Authentication', cls=MutuallyExclusiveOptionGroup)
+@optgroup.option('--password', help='User password')
+@optgroup.option('--password-prompt', is_flag=True, help='Prompt for password')
+def create_user(password, password_prompt):
+    """Handle mutually exclusive password options"""
+    if password_prompt:
+        password = click.prompt('Password', hide_input=True, confirmation_prompt=True)
+```
+
+### Complex Data Formatting
+
+**JSON/YAML Variables Display**:
+```python
+def parse_variables_for_output(variables_text: str, output_format: str = 'table') -> Any:
+    """Parse and format variables for consistent output"""
+    if not variables_text:
+        return {} if output_format in ['json', 'yaml'] else '{}'
+
+    try:
+        parsed = yaml.safe_load(variables_text)
+        if output_format in ['json', 'yaml']:
+            return parsed
+        else:
+            # Rich table display - format as YAML string
+            return yaml.dump(parsed, default_flow_style=False).strip()
+    except yaml.YAMLError:
+        return variables_text  # Return as-is if not valid YAML
+```
 
 ## Future Development Guidelines
 
 ### Adding New Commands
-1. **Inherit from base classes** to avoid duplication
-2. **Use established patterns** from existing commands
-3. **Follow naming conventions** and argument patterns
-4. **Test thoroughly** with real AAP instance
-5. **Update constants** if adding new configurable values
 
-### Extending Base Classes
-- **Add methods carefully**: Ensure they're truly generic
-- **Maintain backwards compatibility**: Don't break existing commands
-- **Document patterns**: Update rules when adding new capabilities
-- **Consider alternatives**: Sometimes utility functions are better than base class methods
+1. **Study existing patterns**: Look at similar commands for reference
+2. **Choose appropriate decorators**: Select based on command type
+3. **Implement formatting function**: Create `_format_*_data` function
+4. **Test all output modes**: Table, JSON, YAML
+5. **Update registration**: Add to appropriate group registration function
 
-### Maintaining DRY Compliance
-- **Regular reviews**: Look for emerging duplication patterns
-- **Refactor proactively**: Address duplication before it spreads
-- **Update constants**: Centralize new magic numbers immediately
-- **Extract patterns**: Create base classes when 3+ similar implementations exist
+### Extending Decorators
 
-## AWXKit and OpenStackClient Integration Guidelines (Native Implementation)
+**When to create new decorators**:
+- **3+ commands** need the same pattern
+- **Complex validation** logic is repeated
+- **Specialized output** formatting is needed
 
-### Adopting Proven Patterns
-When implementing new functionality, reference the upstream AWX CLI (awxkit) patterns but implement them natively:
+**Decorator design principles**:
+- **Composable**: Work well with other decorators
+- **Configurable**: Accept parameters for customization
+- **Type-safe**: Maintain type hints through decoration
 
-1. **Study awxkit modules**: Examine `awx/awxkit/awxkit/` for established patterns
-2. **Implement natively**: Recreate proven approaches in `aapclient` modules instead of importing
-3. **Maintain compatibility**: Ensure AAP-specific changes preserve established pattern benefits
-4. **Extend thoughtfully**: Add AAP-specific features while preserving awxkit's design philosophy
+### Maintaining Standards
 
-### Key Files to Reference (for pattern inspiration)
-- `awx/awxkit/awxkit/api/client.py`: Connection and session management → implement in `aapclient.common.client`
-- `awx/awxkit/awxkit/api/pages/base.py`: Base page functionality → implement in `aapclient.common.pages`
-- `awx/awxkit/awxkit/cli/custom.py`: Custom action patterns → implement in `aapclient.common.cli`
-- `awx/awxkit/awxkit/cli/format.py`: Output formatting utilities → implement in `aapclient.common.format`
-- `awx/awxkit/awxkit/utils/`: Common utility functions → implement in `aapclient.common.utils`
-- `python-openstackclient/openstackclient/shell.py`: Cliff application setup → implement in `aapclient.shell`
-- `python-openstackclient/openstackclient/common/`: OpenStack common utilities → implement in `aapclient.common`
-- `python-openstackclient/pyproject.toml`: Modern Python packaging patterns
+**Regular maintenance tasks**:
+- **Review for duplication**: Look for emerging patterns
+- **Update decorators**: Enhance based on new requirements
+- **Refactor patterns**: Extract common code when patterns emerge
+- **Update documentation**: Keep rules current with implementation
 
-## Packaging and Deployment Patterns
-
-### Modern Python Packaging (PBR + pyproject.toml)
-- **PBR Integration**: Use `pbr` for automatic version management from git tags
-- **Build Backend**: Use `pbr.build` as the build backend in pyproject.toml
-- **Dynamic Metadata**: Let PBR handle version, dependencies, and metadata
-- **Entry Points**: Define commands using modern `project.entry-points` syntax
-
-### Package Structure
-```
-python-aapclient/
-├── pyproject.toml          # Modern packaging configuration
-├── setup.cfg               # PBR configuration (minimal)
-├── setup.py                # Build system integration
-├── requirements.txt        # Runtime dependencies
-├── test-requirements.txt   # Testing dependencies
-└── aapclient/
-    ├── __init__.py         # Package metadata
-    ├── shell.py            # Main CLI application
-    └── common/
-        ├── clientmanager.py # Client management
-        └── pagination.py    # Pagination utilities
-```
-
-### Client Manager Pattern
-- **Lazy Loading**: Clients are loaded on-demand when accessed
-- **Plugin Architecture**: Support for extending with additional API clients
-- **Configuration Management**: Centralized configuration and authentication
-- **Service Discovery**: Automatic detection of available API endpoints
-
-### Upstream Compatibility
-- **Monitor awxkit changes**: Track upstream updates for relevant pattern improvements
-- **Contribute upstream**: Consider contributing generic improvements back to awxkit
-- **Document differences**: Clearly document AAP-specific deviations from awxkit patterns
-- **Maintain alignment**: Keep core patterns aligned with awxkit for long-term maintainability
-
-This development standards file provides the foundation for maintaining clean, DRY code throughout the AAPClient project. All new development should reference these patterns and principles, incorporating proven approaches from:
-
-- **AWXKit**: Page-based API architecture, authentication, and resource management (implemented natively in `aapclient`)
-- **OpenStack Client**: Cliff framework, modern packaging, and output formatting (patterns adopted natively)
-- **Native Implementation**: Common utilities, pagination, and CLI patterns implemented in `aapclient.common`
-
-The combination of these mature design patterns provides a solid foundation for building a professional-grade CLI for the Ansible Automation Platform.
+This development standards file reflects the modern Click + Rich architecture. For project overview and context, see `.cursor/rules/project.mdc`.

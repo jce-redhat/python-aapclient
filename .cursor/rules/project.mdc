@@ -8,83 +8,94 @@ alwaysApply: true
 
 # AAPClient Project Overview
 
-> **🚨 CRITICAL**: Before ANY development work, see `.cursor/rules/CRITICAL-development-environment.mdc` for mandatory virtual environment setup.
+> **🚨 CRITICAL**: Before ANY development work, see the Development Environment section below for mandatory virtual environment setup.
 
 > **Note**: This project uses distributed cursor rules. Core development standards are in `.cursor/rules/development-standards.mdc`. Component-specific rules are in `.cursor/rules/` directories throughout the codebase.
 
 ## Project Architecture
 
-**python-aapclient** is a command-line client for Ansible Automation Platform (AAP) that provides a unified interface for managing AAP resources. It follows OpenStack client patterns for consistency and reliability, while incorporating proven patterns from the upstream AWX CLI (awxkit).
+**python-aapclient** is a modern command-line client for Ansible Automation Platform (AAP) that provides a unified interface for managing AAP resources. Built with Click and Rich, it delivers an enhanced CLI experience with beautiful output formatting.
 
 ### Core Design Principles
 
 - **Multi-API Integration**: Gateway API (identity) and Controller API (automation) through unified CLI
-- **Cliff Framework**: Leverages OpenStack's proven CLI framework for consistent patterns
-- **DRY Architecture**: Base classes and utilities eliminate code duplication
+- **Click + Rich Framework**: Modern CLI with enhanced output formatting and user experience
+- **DRY Architecture**: Decorators and utilities eliminate code duplication
 - **Resource-Centric**: Commands organized by resource type following `aap resource verb` pattern
-- **AWXKit Integration**: Incorporates proven patterns from the upstream AWX CLI for Controller API interactions
+- **API-Centric Structure**: Code organized by AAP API (gateway/, controller/, eda/) rather than CLI framework
 
-### Relationship with AWXKit
+### Modern CLI Architecture
 
-**AWXKit Context**: The upstream AWX project includes awxkit (`awx/awxkit/`), a mature CLI for the AWX Controller API. Our AAPClient builds upon these established patterns:
+**Framework Foundation**: Built on modern Python CLI best practices:
 
-- **Pattern Reuse**: Adopt successful architectural patterns from awxkit
-- **API Compatibility**: Maintain compatibility with Controller API patterns
-- **Proven Approaches**: Leverage awxkit's connection management, authentication, and resource handling
-- **Multi-API Extension**: Extend awxkit patterns to support Gateway, EDA, and Galaxy APIs
+- **Click Framework**: Powerful command-line interface creation with decorators
+- **Rich Output**: Beautiful tables, colors, and formatting for enhanced readability
+- **Decorator Pattern**: Reusable decorators for common CLI patterns (list, show, create, etc.)
+- **Type Safety**: Full type hints and validation throughout
+- **Modern Python**: Python 3.8+ with modern packaging (pyproject.toml)
 
 ### Directory Structure
 
 ```
 python-aapclient/
 ├── aapclient/
-│   ├── common/           # Shared utilities, base classes, constants
-│   ├── controller/v2/    # Controller API commands (automation)
-│   ├── gateway/v1/       # Gateway API commands (identity)
-│   ├── eda/             # Event-Driven Ansible integration
-│   └── galaxy/          # Private Automation Hub content
-├── pyproject.toml        # Modern Python packaging with entry points
-├── setup.cfg             # PBR configuration
-└── setup.py              # Build system integration
+│   ├── core.py              # Main Click CLI entry point
+│   ├── decorators.py        # Reusable Click decorators
+│   ├── output.py            # Rich formatting utilities
+│   ├── common/              # Shared utilities and common commands
+│   │   ├── commands.py      # Common commands (ping, whoami, status)
+│   │   ├── client.py        # HTTP client
+│   │   ├── config.py        # Configuration management
+│   │   └── functions.py     # Resolver functions
+│   ├── controller/v2/       # Controller API commands (automation)
+│   │   ├── templates.py     # Job template management
+│   │   ├── inventories.py   # Inventory management
+│   │   ├── projects.py      # Project management
+│   │   └── ...              # Other controller resources
+│   ├── gateway/v1/          # Gateway API commands (identity)
+│   │   ├── organizations.py # Organization management
+│   │   ├── users.py         # User management
+│   │   ├── teams.py         # Team management
+│   │   └── ...              # Other gateway resources
+│   └── eda/                 # Event-Driven Ansible integration (future)
+├── pyproject.toml           # Modern Python packaging
+└── README.md
 ```
 
-### Native AAPClient Architecture (OpenStack-Inspired)
+### Command Registration Architecture
 
-**Framework Foundation**: The AAPClient adopts OpenStack client patterns but implements them natively:
+**Click Group Structure**: Commands are organized using Click groups and registered dynamically:
 
-- **Cliff Framework**: Command-line interface framework for consistent structure
-- **Native AAP Utilities**: Common utilities implemented in `aapclient.common` (OpenStack-style patterns)
-- **PBR**: Python Build Reasonableness for packaging and versioning
-- **Entry Points**: Modern Python packaging for command registration
+```python
+# Core CLI with main group
+@click.group()
+def cli():
+    """Main AAP CLI group"""
 
-**Entry Points Structure** (pyproject.toml):
-```toml
-[project.entry-points."aap.cli"]
-# Common commands across APIs
-command_list = "aapclient.common.module:ListCommand"
-ping = "aapclient.common.ping:Ping"
+# Resource-specific groups
+@cli.group()
+def template():
+    """Job template commands"""
 
-[project.entry-points."aap.controller.v2"]
-# Controller API commands
-job_template_list = "aapclient.controller.v2.job_template:ListJobTemplate"
-job_template_show = "aapclient.controller.v2.job_template:ShowJobTemplate"
-job_template_create = "aapclient.controller.v2.job_template:CreateJobTemplate"
+@template.command()
+@list_command(default_limit=20, sort_fields=['name', 'id'])
+def list():
+    """List job templates"""
 
-[project.entry-points."aap.gateway.v1"]
-# Gateway API commands
-user_list = "aapclient.gateway.v1.user:ListUser"
-organization_list = "aapclient.gateway.v1.organization:ListOrganization"
+# Registration pattern
+def register_template_commands(main_group):
+    main_group.add_command(template)
 ```
 
 ### Unified AAP Environment Variables
 
 **Primary Configuration**:
-- `AAP_HOST`: Single hostname for all AAP APIs
+- `AAP_URL`: AAP server URL
 - `AAP_USERNAME` / `AAP_PASSWORD`: Unified authentication
 - `AAP_TOKEN`: Token-based authentication (preferred)
-- `AAP_VERIFY_SSL`: SSL certificate verification
+- `AAP_VALIDATE_CERTS`: SSL certificate verification
 - `AAP_CA_BUNDLE`: Custom CA certificate bundle
-- `AAP_TIMEOUT`: Connection timeout in seconds
+- `AAP_REQUEST_TIMEOUT`: Connection timeout in seconds
 
 ## Development Environment
 
@@ -114,44 +125,44 @@ source .venv/bin/activate && python test_script.py
 - **Real testing**: Always test against actual AAP instance
 - **API exploration**: Write test scripts before implementing commands
 
-### Native AAPClient Dependencies
+### Modern Dependencies
 
 **Core Dependencies**:
 ```toml
 [project]
 dependencies = [
-    "cliff>=4.0.0",
-    "pbr>=6.0.0",
-    "requests>=2.25.0",
-    "PyYAML>=5.4.0",
-    "python-dotenv>=0.19.0",
+    "click>=8.0.0",              # CLI framework
+    "click-option-group>=0.5.6", # Mutually exclusive option groups
+    "rich>=13.0.0",              # Enhanced output formatting
+    "requests>=2.28.0",          # HTTP client
+    "PyYAML>=6.0",               # YAML support
+    "python-dotenv>=1.0.0",      # Environment variable management
 ]
 ```
 
 **Python Version Support**:
-- **Minimum**: Python 3.6 or greater
+- **Minimum**: Python 3.8 or greater
 - **Recommended**: Python 3.9+ for best performance
-- **Testing**: Verify compatibility across Python 3.6 through latest
+- **Testing**: Verify compatibility across Python 3.8 through latest
 
 **Development Setup**:
 ```bash
-# Install in development mode with native AAP client patterns
-pip install -e .[test,dev]
-pbr develop   # For PBR version management
+# Install in development mode
+pip install -e .[dev]
 ```
 
 ## Command Categories & Patterns
 
 ### Standard Resource Operations
 
-All resources follow consistent CRUD patterns:
+All resources follow consistent CRUD patterns using decorators:
 
 ```bash
 # List operations with pagination
-aap <resource> list [--long] [--limit <number>] [--filters...]
+aap <resource> list [--limit <number>] [--sort-by <field>] [--reverse]
 
 # Show operations with flexible identification
-aap <resource> show <identifier> [--id <id>]
+aap <resource> show <identifier> [--id <id>] [-f json|yaml|table]
 
 # Create operations with required parameters
 aap <resource> create <name> [--options...]
@@ -159,116 +170,191 @@ aap <resource> create <name> [--options...]
 # Update operations with selective changes
 aap <resource> set <identifier> [--id <id>] [--updates...]
 
-# Delete operations with multiple resource support
-aap <resource> delete <identifier>... [--id <id>]
+# Delete operations with confirmation
+aap <resource> delete <identifier> [--id <id>]
+```
+
+### Click Decorator Patterns
+
+**Standard Command Decorators**:
+```python
+@list_command(default_limit=20, sort_fields=['name', 'id'])
+def list_resources():
+    """List resources with pagination and sorting"""
+
+@show_command
+def show_resource():
+    """Show resource details with multiple formats"""
+
+@create_command
+def create_resource():
+    """Create resource with validation"""
+
+@update_command
+def update_resource():
+    """Update resource with confirmation"""
+
+@delete_command
+def delete_resource():
+    """Delete resource with confirmation prompt"""
 ```
 
 ### Resource Identification Patterns
 
-- **Positional arguments**: Only one positional parameter will be supported for each CRUD command except "list". Default to name lookup with ID fallback.
-- **Explicit flags**: `--id` for numeric ID must be supported for "show", "set", and "delete" commands.  When the `--id` argument is used the positional parameter will be ignored.
-- **Cross-validation**: When both provided, verify they reference same resource
+- **Positional arguments**: Primary identifier (name or ID)
+- **Explicit flags**: `--id` for numeric ID override
+- **Validation**: `validate_resource_identifier` callback ensures one identifier provided
+- **Resolution**: `resolve_*_name` functions handle name/ID lookup
 
 ### API Endpoint Distribution
 
-- **Controller API**: Projects, templates, inventories, hosts, credentials, jobs
-- **Gateway API**: Organizations, users, teams, authentication
-- **Special commands**: `ping` (both APIs), `resource list` (unified view)
+- **Controller API**: Projects, templates, inventories, hosts, credentials, jobs, groups, instances
+- **Gateway API**: Organizations, users, teams, applications, tokens
+- **Common commands**: `ping`, `whoami`, `status` (both APIs)
 
 ## Output Standards
+
+### Rich Formatting
+
+**Table Output**:
+- **Rich tables**: Styled headers, borders, and colors
+- **Pagination info**: "Showing X of Y total items"
+- **Consistent styling**: Blue headers, white content
+- **Responsive layout**: Automatic column width adjustment
+
+**Multiple Formats**:
+```bash
+aap resource list                    # Rich table (default)
+aap resource list -f json            # JSON output
+aap resource list -f yaml            # YAML output
+aap resource show resource-1 -f json # JSON format for show commands
+```
 
 ### List Command Formatting
 
 - **Consistent pagination**: 20 items default with `--limit` override
-- **ID-based sorting**: Predictable ordering across all list commands
-- **Long format**: `--long` flag for additional columns
+- **Sorting support**: `--sort-by` and `--reverse` flags
+- **ID-based default sort**: Predictable ordering across all list commands
+- **All results option**: `--all` flag to disable pagination
 
 ### Display Formatting
 
-- **Numeric names**: Quoted to distinguish from IDs (`"123"` vs `123`)
-- **Timestamps**: Consistent format using utility functions
-- **Durations**: Human-readable format ("1h 2m 5s" not "01:02:05")
-- **Success messages**: Use resource names not IDs when possible
-- **Error messages**: Use resource names not IDs when possible
+- **Timestamps**: Consistent format with timezone support (`--utc` flag)
+- **Durations**: Human-readable format ("1h 2m 5s")
+- **Success messages**: Rich formatting with checkmarks and colors
+- **Error messages**: Clear red-colored error output with context
+- **Boolean values**: "Yes"/"No" with appropriate colors
 
-### Native AAPClient Output Standards
+### Context-Aware Output
 
-**Column Formatting**:
-- **SDK Column Mapping**: Implement `aapclient.common.utils.get_aap_show_columns_for_resource`
-- **Hidden Columns**: Hide internal fields like `links`, `location`, `original_name`
-- **Cliff Columns**: Use `cliff.columns` for complex data formatting
-- **Format Columns**: Implement `aapclient.common.format_columns.DictColumn` for key-value pairs
+**Rich Markup Handling**:
+- **Table format**: Full rich formatting with colors and styles
+- **JSON/YAML format**: Plain text output without rich markup
+- **Consistent data**: Same data structure across all output formats
 
-**Lister Output**:
-- **Generator Pattern**: Return generator for memory efficiency
-- **Item Properties**: Use `aapclient.common.utils.get_item_properties` for consistent field extraction
-- **Column Headers**: Map API field names to user-friendly column headers
-- **Pagination**: Support both marker-based and offset-based pagination
+## Decorator Architecture
+
+### Core Decorators
+
+**Command Decorators**:
+```python
+@list_command(default_limit=20, sort_fields=['name', 'id'], default_sort='id')
+@show_command
+@create_command
+@update_command
+@delete_command
+@standard_command  # For custom commands
+```
+
+**Utility Decorators**:
+```python
+@handle_api_errors        # Consistent error handling
+@get_client_from_context  # Client manager access
+@get_console_from_context # Rich console access
+@paginated               # Pagination support
+@sortable                # Sorting support
+@confirm_destructive     # Confirmation prompts
+```
+
+### Common Options
+
+**Standard Options** (via `@common_options`):
+```python
+@click.option('-f', '--format', 'output_format', type=click.Choice(['table', 'json', 'yaml']))
+@click.option('--utc', is_flag=True, help='Display times in UTC')
+```
 
 ## Error Handling Philosophy
 
 ### User-Friendly Messaging
 
-- **Convert API errors**: Transform technical errors to clear CLI messages
-- **Include context**: Resource type and identifier in error messages
-- **Consistent format**: `Resource 'identifier' not found` pattern
-- **Actionable guidance**: Suggest corrections when appropriate
+- **API error propagation**: Display raw API error messages for accuracy
+- **Consistent validation**: `validate_resource_identifier` for missing arguments
+- **Rich error display**: Red-colored error messages with clear context
+- **Graceful degradation**: Handle API unavailability with clear messages
 
-### Graceful Degradation
+### Resource Resolution
 
-- **Partial failures**: Handle mixed success/failure in batch operations
-- **API unavailability**: Clear messages when services are down
-- **Permission issues**: Distinguish between not found and access denied
+**Name/ID Resolution Pattern**:
+```python
+def resolve_resource_name(client, identifier):
+    """Resolve resource name or ID to internal ID"""
+    # Try as ID first, then name lookup
+    # Raise AAPAPIError with raw API message if not found
+```
 
 ## Historical Context
 
-### Upstream Foundation
+### Architecture Evolution
 
-**AWXKit Legacy**: The project adopts patterns from the mature awxkit codebase, implemented natively:
-- **Proven Architecture**: Page-based API interaction patterns (implemented in `aapclient.common.pages`)
-- **Robust Authentication**: Session management and credential handling (implemented in `aapclient.common.client`)
-- **Comprehensive Error Handling**: HTTP status code to exception mapping (implemented in `aapclient.common.exceptions`)
-- **Resource Management**: Flexible resource identification and manipulation (implemented in `aapclient.common.utils`)
-- **Output Formatting**: Multiple format support with filtering capabilities (implemented in `aapclient.common.format`)
+**Version 2.0.0 - Modern CLI Transformation**:
+- **Removed Cliff**: Eliminated legacy cliff-based commands entirely
+- **Click + Rich**: Modern CLI framework with enhanced output
+- **Simplified Structure**: API-centric organization (no cli/ directory)
+- **Decorator Pattern**: Reusable decorators for common operations
+- **Type Safety**: Full type hints throughout codebase
 
 ### Major Architectural Improvements
 
-1. **DRY Refactoring**: Eliminated 440+ lines of duplicate code with base classes
-2. **Consistent Error Handling**: Standardized messaging across all commands
-3. **Numeric Name Resolution**: Proper handling of resources with numeric names
-4. **GUI Alignment**: Matched CLI output to web interface layouts
-5. **Enhanced Pagination**: Consistent limits and sorting across all lists
-6. **Native Pattern Implementation**: Adopted proven patterns from AWXKit and OpenStack clients without external dependencies
+1. **CLI Framework Migration**: Complete transition from Cliff to Click + Rich
+2. **Structure Simplification**: Removed cli/ separation for API-centric organization
+3. **Decorator Architecture**: Eliminated code duplication with reusable decorators
+4. **Enhanced Output**: Rich tables, colors, and formatting throughout
+5. **Modern Dependencies**: Updated to modern Python packaging and dependencies
+6. **Consistent Error Handling**: Standardized API error propagation
 
-### Current State
+### Current State (Version 2.0.0)
 
-- **Native implementation** with established patterns and comprehensive error handling
-- **Complete CRUD coverage** for all major AAP resource types
-- **Robust base classes** eliminating common duplication patterns
-- **Comprehensive utilities** for formatting, validation, and resource lookup (implemented in `aapclient.common`)
-- **Pattern alignment** with awxkit and OpenStack client patterns for Controller API compatibility
+- **Modern CLI Framework**: Built entirely on Click + Rich
+- **API-Centric Structure**: Direct mapping from AAP APIs to code organization
+- **Complete Feature Parity**: All legacy commands migrated with enhanced experience
+- **Rich Output**: Beautiful tables and formatting throughout
+- **Decorator-Based**: Reusable patterns eliminate code duplication
+- **Type-Safe**: Full type hints and modern Python practices
 
 ## Development Guidelines
 
 ### Contributing Principles
 
-- **Follow established patterns**: Use existing commands as templates
-- **Leverage base classes**: Don't recreate common functionality
-- **Test thoroughly**: Both positive and negative scenarios
-- **Document decisions**: Update rules when introducing new patterns
+- **Use decorators**: Leverage existing decorators for common patterns
+- **Follow API structure**: Organize code by AAP API (controller/, gateway/)
+- **Rich output**: Ensure proper formatting for all output modes
+- **Test thoroughly**: Test table, JSON, and YAML output formats
+- **Type safety**: Use type hints throughout
 
 ### Code Quality Standards
 
-- **Inherit from base classes** for standard operations
-- **Use constants** instead of magic numbers
-- **Apply utility functions** for common operations
-- **Handle errors gracefully** with user-friendly messages
+- **Decorator usage**: Use appropriate decorators for command types
+- **Rich formatting**: Context-aware output (rich vs plain)
+- **Error handling**: Let decorators handle common error scenarios
+- **Resource resolution**: Use resolver functions for name/ID lookup
+- **Consistent patterns**: Follow established command patterns
 
 ### When to Update Rules
 
-- **New patterns emerge**: Document reusable approaches
-- **Base classes evolve**: Update guidance for new capabilities
-- **Architecture changes**: Reflect major structural modifications
-- **Standards clarification**: Address ambiguities discovered during development
+- **New decorators**: Document new reusable decorator patterns
+- **Output formats**: Updates to rich formatting or new format support
+- **API changes**: Major AAP API updates requiring pattern changes
+- **Architecture evolution**: Structural changes or new organizational patterns
 
-This project overview provides the foundational context for AAPClient development. For detailed development standards and patterns, see `.cursor/rules/development-standards.mdc`.
+This project overview reflects the modern Click + Rich architecture. For detailed development standards and patterns, see `.cursor/rules/development-standards.mdc`.
