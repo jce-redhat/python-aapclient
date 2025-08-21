@@ -246,7 +246,7 @@ def create_token(console, output_format, utc, scope, description, oauth_applicat
 
     if response.status_code == HTTP_CREATED:
         token_response = response.json()
-        show_success_message(console, f"Token created successfully")
+        show_success_message(console, "Token created successfully")
 
         # Show the created token value prominently
         token_value = token_response.get("token", "")

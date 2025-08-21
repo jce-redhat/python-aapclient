@@ -2,6 +2,7 @@
 
 import json
 import yaml
+import requests
 from datetime import datetime, timezone
 from aapclient.common.constants import GATEWAY_API_VERSION_ENDPOINT, CONTROLLER_API_VERSION_ENDPOINT, HTTP_OK
 from aapclient.common.exceptions import AAPClientError, AAPResourceNotFoundError, AAPAPIError
@@ -190,9 +191,9 @@ def resolve_organization_name(client, identifier, api="gateway"):
                     fallback_message = extract_api_error_message(fallback_response)
                     if fallback_message:
                         raise AAPAPIError(fallback_message, fallback_response.status_code)
-                except:
+                except (requests.exceptions.RequestException, AAPAPIError):
                     pass
-                raise AAPAPIError(f"No Organization matches the given query.", response.status_code)
+                raise AAPAPIError("No Organization matches the given query.", response.status_code)
     except ValueError:
         # Not a valid integer, and name lookup already failed
         # Try to get a proper API 404 message by attempting lookup with invalid ID
@@ -201,9 +202,9 @@ def resolve_organization_name(client, identifier, api="gateway"):
             fallback_message = extract_api_error_message(fallback_response)
             if fallback_message:
                 raise AAPAPIError(fallback_message, fallback_response.status_code)
-        except:
+        except (requests.exceptions.RequestException, AAPAPIError):
             pass
-        raise AAPAPIError(f"No Organization matches the given query.", 404)
+        raise AAPAPIError("No Organization matches the given query.", 404)
     except AAPAPIError:
         # Re-raise API errors unchanged to preserve the original message
         raise
@@ -280,9 +281,9 @@ def resolve_team_name(client, identifier, api="gateway"):
                     fallback_message = extract_api_error_message(fallback_response)
                     if fallback_message:
                         raise AAPAPIError(fallback_message, fallback_response.status_code)
-                except:
+                except (requests.exceptions.RequestException, AAPAPIError):
                     pass
-                raise AAPAPIError(f"No Team matches the given query.", response.status_code)
+                raise AAPAPIError("No Team matches the given query.", response.status_code)
     except ValueError:
         # Not a valid integer, and name lookup already failed
         # Try to get a proper API 404 message by attempting lookup with invalid ID
@@ -291,9 +292,9 @@ def resolve_team_name(client, identifier, api="gateway"):
             fallback_message = extract_api_error_message(fallback_response)
             if fallback_message:
                 raise AAPAPIError(fallback_message, fallback_response.status_code)
-        except:
+        except (requests.exceptions.RequestException, AAPAPIError):
             pass
-        raise AAPAPIError(f"No Team matches the given query.", 404)
+        raise AAPAPIError("No Team matches the given query.", 404)
     except AAPAPIError:
         # Re-raise API errors unchanged to preserve the original message
         raise
@@ -343,12 +344,12 @@ def resolve_user_name(client, identifier, api="gateway"):
             # Try to extract API error message
             api_message = extract_api_error_message(response)
             if api_message:
-                raise AAPClientError(api_message)
+                raise AAPAPIError(api_message, response.status_code)
             else:
-                raise AAPClientError(f"Failed to search for user '{identifier}'")
-    except AAPAPIError as api_error:
-        # Use the API error message directly - it already contains the API's message
-        raise AAPClientError(str(api_error))
+                raise AAPAPIError(f"Failed to search for user '{identifier}'", response.status_code)
+    except AAPAPIError:
+        # Re-raise API errors unchanged to preserve the original message
+        raise
 
     # Username lookup failed, try as ID if it's numeric
     try:
@@ -359,18 +360,34 @@ def resolve_user_name(client, identifier, api="gateway"):
         if response.status_code == HTTP_OK:
             return user_id
         else:
-            # Try to extract API error message for ID lookup
+            # Extract and re-throw the API error message
             api_message = extract_api_error_message(response)
             if api_message:
-                raise AAPClientError(api_message)
+                raise AAPAPIError(api_message, response.status_code)
             else:
-                raise AAPResourceNotFoundError("User", identifier)
+                # Fallback: try to get a proper API 404 message by attempting lookup with invalid ID
+                try:
+                    fallback_response = client.get(f"{api_endpoint}users/999999999/")
+                    fallback_message = extract_api_error_message(fallback_response)
+                    if fallback_message:
+                        raise AAPAPIError(fallback_message, fallback_response.status_code)
+                except (requests.exceptions.RequestException, AAPAPIError):
+                    pass
+                raise AAPAPIError("No User matches the given query.", response.status_code)
     except ValueError:
-        # Not a valid integer, and username lookup already failed
-        raise AAPResourceNotFoundError("User", identifier)
-    except AAPAPIError as api_error:
-        # Use the API error message directly - it already contains the API's message
-        raise AAPClientError(str(api_error))
+        # Not a valid integer, and name lookup already failed
+        # Try to get a proper API 404 message by attempting lookup with invalid ID
+        try:
+            fallback_response = client.get(f"{api_endpoint}users/999999999/")
+            fallback_message = extract_api_error_message(fallback_response)
+            if fallback_message:
+                raise AAPAPIError(fallback_message, fallback_response.status_code)
+        except (requests.exceptions.RequestException, AAPAPIError):
+            pass
+        raise AAPAPIError("No User matches the given query.", 404)
+    except AAPAPIError:
+        # Re-raise API errors unchanged to preserve the original message
+        raise
 
 
 def resolve_execution_environment_name(client, identifier, api="controller"):
@@ -439,13 +456,13 @@ def resolve_execution_environment_name(client, identifier, api="controller"):
                 if api_message:
                     raise AAPAPIError(api_message, response.status_code)
                 else:
-                    raise AAPAPIError(f"No Execution Environment matches the given query.", response.status_code)
+                    raise AAPAPIError("No Execution Environment matches the given query.", response.status_code)
         except AAPAPIError:
             # Re-raise the API error
             raise
         except Exception:
             # Fallback if we can't get an API error
-            raise AAPAPIError(f"No Execution Environment matches the given query.", 404)
+            raise AAPAPIError("No Execution Environment matches the given query.", 404)
     except ValueError:
         # Not a valid integer, and name lookup already failed
         # Try to get a proper API 404 error by attempting to look up a non-existent ID
@@ -455,13 +472,13 @@ def resolve_execution_environment_name(client, identifier, api="controller"):
             if api_message:
                 raise AAPAPIError(api_message, response.status_code)
             else:
-                raise AAPAPIError(f"No Execution Environment matches the given query.", response.status_code)
+                raise AAPAPIError("No Execution Environment matches the given query.", response.status_code)
         except AAPAPIError:
             # Re-raise the API error
             raise
         except Exception:
             # Fallback if we can't get an API error
-            raise AAPAPIError(f"No Execution Environment matches the given query.", 404)
+            raise AAPAPIError("No Execution Environment matches the given query.", 404)
     except AAPAPIError:
         # Re-raise API errors unchanged to preserve the original message
         raise
@@ -532,7 +549,7 @@ def resolve_credential_name(client, identifier, api="controller"):
             if api_message:
                 raise AAPAPIError(api_message, response.status_code)
             else:
-                raise AAPAPIError(f"No Credential matches the given query.", response.status_code)
+                raise AAPAPIError("No Credential matches the given query.", response.status_code)
     except ValueError:
         # Not a valid integer, and name lookup already failed
         # Try to get a proper API error by making a request to a non-existent credential
@@ -543,12 +560,12 @@ def resolve_credential_name(client, identifier, api="controller"):
             if api_message:
                 raise AAPAPIError(api_message, response.status_code)
             else:
-                raise AAPAPIError(f"No Credential matches the given query.", response.status_code)
+                raise AAPAPIError("No Credential matches the given query.", response.status_code)
         except AAPAPIError:
             raise  # Re-raise the API error
         except Exception:
             # Fallback if we can't get an API error
-            raise AAPAPIError(f"No Credential matches the given query.", 404)
+            raise AAPAPIError("No Credential matches the given query.", 404)
     except AAPAPIError:
         # Re-raise API errors unchanged to preserve the original message
         raise
@@ -619,7 +636,7 @@ def resolve_inventory_name(client, identifier, api="controller"):
             if api_message:
                 raise AAPAPIError(api_message, response.status_code)
             else:
-                raise AAPAPIError(f"No Inventory matches the given query.", response.status_code)
+                raise AAPAPIError("No Inventory matches the given query.", response.status_code)
     except ValueError:
         # Not a valid integer, and name lookup already failed
         # Try to get a proper API error by making a request to a non-existent inventory
@@ -630,12 +647,12 @@ def resolve_inventory_name(client, identifier, api="controller"):
             if api_message:
                 raise AAPAPIError(api_message, response.status_code)
             else:
-                raise AAPAPIError(f"No Inventory matches the given query.", response.status_code)
+                raise AAPAPIError("No Inventory matches the given query.", response.status_code)
         except AAPAPIError:
             raise  # Re-raise the API error
         except Exception:
             # Fallback if we can't get an API error
-            raise AAPAPIError(f"No Inventory matches the given query.", 404)
+            raise AAPAPIError("No Inventory matches the given query.", 404)
     except AAPAPIError:
         # Re-raise API errors unchanged to preserve the original message
         raise
@@ -702,7 +719,7 @@ def resolve_instance_group_name(client, identifier, api="controller"):
             if api_message:
                 raise AAPAPIError(api_message, response.status_code)
             else:
-                raise AAPAPIError(f"No Instance Group matches the given query.", response.status_code)
+                raise AAPAPIError("No Instance Group matches the given query.", response.status_code)
     except ValueError:
         # Not a valid integer, and name lookup already failed
         # Try to get a proper API error by making a request to a non-existent instance group
@@ -713,7 +730,7 @@ def resolve_instance_group_name(client, identifier, api="controller"):
             if api_message:
                 raise AAPAPIError(api_message, response.status_code)
             else:
-                raise AAPAPIError(f"No Instance Group matches the given query.", response.status_code)
+                raise AAPAPIError("No Instance Group matches the given query.", response.status_code)
         except AAPAPIError:
             raise
     except AAPAPIError:
@@ -860,7 +877,7 @@ def resolve_instance_name(client, identifier, api="controller"):
             if api_message:
                 raise AAPAPIError(api_message, response.status_code)
             else:
-                raise AAPAPIError(f"No Instance matches the given query.", response.status_code)
+                raise AAPAPIError("No Instance matches the given query.", response.status_code)
     except ValueError:
         # Not a valid integer, and hostname lookup already failed
         # Try to get a proper API error by making a request to a non-existent instance
@@ -871,7 +888,7 @@ def resolve_instance_name(client, identifier, api="controller"):
             if api_message:
                 raise AAPAPIError(api_message, response.status_code)
             else:
-                raise AAPAPIError(f"No Instance matches the given query.", response.status_code)
+                raise AAPAPIError("No Instance matches the given query.", response.status_code)
         except AAPAPIError:
             raise
     except AAPAPIError:
@@ -944,7 +961,7 @@ def resolve_project_name(client, identifier, api="controller"):
             if api_message:
                 raise AAPAPIError(api_message, response.status_code)
             else:
-                raise AAPAPIError(f"No Project matches the given query.", response.status_code)
+                raise AAPAPIError("No Project matches the given query.", response.status_code)
     except ValueError:
         # Not a valid integer, and name lookup already failed
         # Try to get a proper API error by making a request to a non-existent project
@@ -955,12 +972,12 @@ def resolve_project_name(client, identifier, api="controller"):
             if api_message:
                 raise AAPAPIError(api_message, response.status_code)
             else:
-                raise AAPAPIError(f"No Project matches the given query.", response.status_code)
+                raise AAPAPIError("No Project matches the given query.", response.status_code)
         except AAPAPIError:
             raise  # Re-raise the API error
         except Exception:
             # Fallback if we can't get an API error
-            raise AAPAPIError(f"No Project matches the given query.", 404)
+            raise AAPAPIError("No Project matches the given query.", 404)
     except AAPAPIError:
         # Re-raise API errors unchanged to preserve the original message
         raise
@@ -1312,7 +1329,7 @@ def resolve_job_template_name(client, identifier, api="controller"):
             if api_message:
                 raise AAPAPIError(api_message, response.status_code)
             else:
-                raise AAPAPIError(f"No JobTemplate matches the given query.", response.status_code)
+                raise AAPAPIError("No JobTemplate matches the given query.", response.status_code)
     except ValueError:
         # Not a valid integer, and name lookup already failed
         # Try to get a proper API error by making a request to a non-existent template
@@ -1323,12 +1340,12 @@ def resolve_job_template_name(client, identifier, api="controller"):
             if api_message:
                 raise AAPAPIError(api_message, response.status_code)
             else:
-                raise AAPAPIError(f"No JobTemplate matches the given query.", response.status_code)
+                raise AAPAPIError("No JobTemplate matches the given query.", response.status_code)
         except AAPAPIError:
             raise  # Re-raise the API error
         except Exception:
             # Fallback if we can't get an API error
-            raise AAPAPIError(f"No JobTemplate matches the given query.", 404)
+            raise AAPAPIError("No JobTemplate matches the given query.", 404)
     except AAPAPIError:
         # Re-raise API errors unchanged to preserve the original message
         raise

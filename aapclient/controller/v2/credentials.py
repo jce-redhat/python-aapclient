@@ -625,7 +625,7 @@ def set_credential(
 
         if response.status_code == HTTP_OK:
             updated_credential = response.json()
-            show_success_message(console, f"Credential updated successfully")
+            show_success_message(console, "Credential updated successfully")
 
             # Display the updated credential details
             formatted_data = _format_credential_data(updated_credential, use_utc=False)

@@ -254,7 +254,7 @@ def create_inventory(
                         show_error_message(console, f"{field}: {errors}")
             else:
                 show_error_message(console, f"API error: {error_data}")
-        except:
+        except (ValueError, KeyError):
             show_error_message(console, f"Failed to create inventory: HTTP {response.status_code}")
         click.get_current_context().exit(1)
 
@@ -413,7 +413,7 @@ def set_inventory(
                             show_error_message(console, f"{field}: {errors}")
                 else:
                     show_error_message(console, f"API error: {error_data}")
-            except:
+            except (ValueError, KeyError):
                 show_error_message(console, f"Failed to update inventory: HTTP {response.status_code}")
             click.get_current_context().exit(1)
 

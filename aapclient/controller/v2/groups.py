@@ -4,6 +4,7 @@ import sys
 from typing import Dict, Any
 
 import click
+import requests
 from rich.table import Table
 
 from aapclient.common.constants import (
@@ -64,7 +65,7 @@ def _get_group_resource_count(client, group_id, resource_type):
         if response.status_code == HTTP_OK:
             data = response.json()
             return data.get("count", 0)
-    except:
+    except (requests.exceptions.RequestException, ValueError, KeyError):
         pass  # Return 0 on any error
     return 0
 

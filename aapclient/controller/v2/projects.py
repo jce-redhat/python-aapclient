@@ -550,7 +550,7 @@ def set_project(
 
         if response.status_code == HTTP_OK:
             updated_project = response.json()
-            show_success_message(console, f"Project updated successfully")
+            show_success_message(console, "Project updated successfully")
 
             # Display the updated project details
             formatted_data = _format_project_data(updated_project, use_utc=False, client=client)
@@ -668,14 +668,14 @@ def sync_project(console, project_name, id, wait, timeout):
 
                             if status in ["successful", "failed", "error", "canceled"]:
                                 if status == "successful":
-                                    show_success_message(console, f"Project sync completed successfully")
+                                    show_success_message(console, "Project sync completed successfully")
                                 else:
                                     show_error_message(console, f"Project sync failed with status: {status}")
                                 break
 
                         time.sleep(2)
                     else:
-                        console.print(f"[yellow]Timeout reached. Sync may still be running.[/yellow]")
+                        console.print("[yellow]Timeout reached. Sync may still be running.[/yellow]")
             else:
                 show_success_message(console, f"Project sync started for '{project_name_actual}'")
         else:

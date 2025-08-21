@@ -95,7 +95,8 @@ def ping(console: Console, detail: bool, output_format: str, utc: bool) -> None:
         else:
             show_error_message(
                 console,
-                f"API ping failed - Gateway: {gateway_response.status_code}, Controller: {controller_response.status_code}",
+                f"API ping failed - Gateway: {gateway_response.status_code}, "
+                f"Controller: {controller_response.status_code}",
             )
 
     except AAPAPIError as e:

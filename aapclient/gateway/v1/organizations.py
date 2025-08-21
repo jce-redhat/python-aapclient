@@ -77,7 +77,7 @@ def _format_organization_data(
             controller_client = client_manager.controller
 
             # Get controller organization data for execution environment
-            controller_response = controller_client.get(f"/api/controller/v2/organizations/")
+            controller_response = controller_client.get("/api/controller/v2/organizations/")
             controller_orgs = controller_response.json().get("results", [])
 
             controller_org = None
@@ -324,7 +324,7 @@ def create_organization(
         for attempt in range(max_wait // wait_interval):
             try:
                 # Look for the organization in controller API
-                controller_response = controller_client.get(f"/api/controller/v2/organizations/")
+                controller_response = controller_client.get("/api/controller/v2/organizations/")
                 controller_orgs = controller_response.json().get("results", [])
 
                 for org in controller_orgs:
@@ -342,7 +342,8 @@ def create_organization(
         if not controller_org_id:
             show_error_message(
                 console,
-                "Organization created but controller synchronization timed out. You may need to configure controller resources manually.",
+                "Organization created but controller synchronization timed out. "
+                "You may need to configure controller resources manually.",
             )
             formatted_data = _format_organization_data(
                 created_organization, use_utc=False, output_format="table", client_manager=client_manager
@@ -477,7 +478,7 @@ def set_organization(
         controller_org_id = None
 
         try:
-            controller_response = controller_client.get(f"/api/controller/v2/organizations/")
+            controller_response = controller_client.get("/api/controller/v2/organizations/")
             controller_orgs = controller_response.json().get("results", [])
 
             # Get the current organization name from gateway API for lookup

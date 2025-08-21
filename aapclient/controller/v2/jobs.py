@@ -15,6 +15,7 @@ from aapclient.output import (
     format_datetime_rich,
     format_duration_rich,
     format_value_for_output,
+    show_error_message,
 )
 from aapclient.common.constants import CONTROLLER_API_VERSION_ENDPOINT, HTTP_OK
 
@@ -334,7 +335,8 @@ def show_job_output(console, job_id):
         # Unknown job type
         show_error_message(
             console,
-            f"Unsupported job type: {job_type}. Supported types: job, project_update, inventory_update, system_job, workflow_job",
+            f"Unsupported job type: {job_type}. Supported types: job, project_update, "
+            f"inventory_update, system_job, workflow_job",
         )
         sys.exit(1)
 
@@ -588,10 +590,6 @@ def _format_job_data(job_data: dict, use_utc: bool = False, output_format: str =
     data = {k: v for k, v in data.items() if v not in ["", None, "N/A"]}
 
     return data
-
-
-# Add import for show_error_message
-from aapclient.output import show_error_message
 
 
 @job.group("variables")

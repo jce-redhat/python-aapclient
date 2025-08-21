@@ -312,7 +312,7 @@ def download_instance(console, instance_name, id, output):
             try:
                 error_data = response.json()
                 error_msg = error_data.get("msg", error_data.get("detail", f"HTTP {response.status_code}"))
-            except:
+            except (ValueError, KeyError):
                 error_msg = f"HTTP {response.status_code}"
 
             show_error_message(console, f"Failed to download install bundle: {error_msg}")

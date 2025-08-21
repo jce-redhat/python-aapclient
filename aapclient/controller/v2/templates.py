@@ -305,7 +305,7 @@ def create_template(console: Console, name: str, **kwargs) -> None:
                         show_error_message(console, f"{field}: {errors}")
             else:
                 show_error_message(console, f"API error: {error_data}")
-        except:
+        except (ValueError, KeyError):
             show_error_message(console, f"Failed to create template: HTTP {response.status_code}")
         click.get_current_context().exit(1)
 
@@ -753,7 +753,6 @@ def delete_template(console, template_name, id):
 @optgroup.group("Webhook", cls=MutuallyExclusiveOptionGroup, help="Control webhook setting")
 @optgroup.option("--enable-webhook", is_flag=True, help="Enable webhook")
 @optgroup.option("--disable-webhook", is_flag=True, help="Disable webhook")
-
 # Webhook configuration options
 @click.option("--webhook-service", type=click.Choice(["gitlab", "github", "bitbucket_dc"]), help="Webhook service")
 @click.option("--webhook-credential", help="Webhook credential name or ID")

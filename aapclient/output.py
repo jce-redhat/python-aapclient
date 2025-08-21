@@ -230,11 +230,26 @@ def show_raw_yaml(data: Any) -> None:
         data: Data to display as raw YAML
     """
     import sys
+    from collections import OrderedDict
+
+    def convert_ordered_dict(obj):
+        """Recursively convert OrderedDict to regular dict while preserving order."""
+        if isinstance(obj, OrderedDict):
+            return dict(obj)
+        elif isinstance(obj, dict):
+            return {k: convert_ordered_dict(v) for k, v in obj.items()}
+        elif isinstance(obj, list):
+            return [convert_ordered_dict(item) for item in obj]
+        else:
+            return obj
 
     try:
         import yaml
 
-        yaml_str = yaml.dump(data, default_flow_style=False, indent=2)
+        # Convert OrderedDict to regular dict to avoid YAML object notation
+        # while preserving field order with sort_keys=False
+        clean_data = convert_ordered_dict(data)
+        yaml_str = yaml.dump(clean_data, default_flow_style=False, indent=2, sort_keys=False)
     except ImportError:
         # Fallback to JSON if PyYAML not available
         import json

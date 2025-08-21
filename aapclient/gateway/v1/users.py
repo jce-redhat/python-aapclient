@@ -418,41 +418,6 @@ def delete_user(console, username, id):
         sys.exit(1)
 
 
-def resolve_user_name(client, user_identifier: str) -> int:
-    """Resolve a user name or ID to its ID."""
-    # Try to parse as integer ID first
-    try:
-        user_id = int(user_identifier)
-        # Validate that this ID exists by fetching it
-        response = client.get(f"{GATEWAY_API_VERSION_ENDPOINT}users/{user_id}/")
-        if response.status_code == HTTP_OK:
-            return user_id
-    except (ValueError, TypeError):
-        pass
-
-    # Search by username
-    response = client.get(f"{GATEWAY_API_VERSION_ENDPOINT}users/", params={"username": user_identifier})
-    if response.status_code == HTTP_OK:
-        data = response.json()
-        results = data.get("results", [])
-        if results:
-            return results[0]["id"]
-
-    # If we get here, user was not found. Try to get a proper 404 error message
-    response = client.get(f"{GATEWAY_API_VERSION_ENDPOINT}users/999999999/")
-    api_message = "No User matches the given query."
-    if response.status_code == 404:
-        try:
-            error_data = response.json()
-            api_message = error_data.get("detail", api_message)
-        except:
-            pass
-
-    from aapclient.common.exceptions import AAPAPIError
-
-    raise AAPAPIError(api_message, response.status_code)
-
-
 def register_user_commands(main_group: click.Group) -> None:
     """Register user commands with the main CLI group."""
     main_group.add_command(user)

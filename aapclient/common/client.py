@@ -82,7 +82,7 @@ class AAPHTTPClient:
         """Handle API response and raise appropriate exceptions."""
         try:
             response.raise_for_status()
-        except requests.exceptions.HTTPError as e:
+        except requests.exceptions.HTTPError:
             # Try to extract detailed error message from API response
             error_message = None
             try:
@@ -101,7 +101,7 @@ class AAPHTTPClient:
                                 field_errors.append(f"{field}: {errors}")
                         if field_errors:
                             error_message = "\n".join(field_errors)
-            except:
+            except (ValueError, KeyError, TypeError):
                 pass  # If JSON parsing fails, use fallback messages
 
             if response.status_code == HTTP_UNAUTHORIZED:

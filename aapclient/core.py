@@ -56,7 +56,7 @@ console = Console()
     help="Path to CA certificate bundle file (overrides AAP_CA_BUNDLE environment variable)",
 )
 # @click.version_option(version=AAPCLI_VERSION, prog_name='aap')
-@click.version_option(version=AAPCLI_VERSION, prog_name="python-aapclient", message=f"%(prog)s v%(version)s")
+@click.version_option(version=AAPCLI_VERSION, prog_name="python-aapclient", message="%(prog)s v%(version)s")
 @click.pass_context
 def cli(ctx, url, username, password, token, request_timeout, validate_certs, ca_bundle):
     """
