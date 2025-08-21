@@ -224,7 +224,7 @@ def _build_ping_data(
     data = {}
 
     # Host information
-    data['Host'] = client_manager.config.hostname
+    data['Host'] = client_manager.config.url
 
     # Gateway API Data
     if 'status' in gateway_data:

@@ -21,10 +21,10 @@ console = Console()
 
 @click.group()
 @click.option(
-    '--hostname',
-    envvar='AAP_HOSTNAME',
-    metavar='<hostname>',
-    help='AAP hostname URL (overrides AAP_HOSTNAME environment variable)'
+    '--url',
+    envvar='AAP_URL',
+    metavar='<url>',
+    help='AAP URL (overrides AAP_URL environment variable)'
 )
 @click.option(
     '--username',
@@ -63,9 +63,10 @@ console = Console()
     metavar='<path>',
     help='Path to CA certificate bundle file (overrides AAP_CA_BUNDLE environment variable)'
 )
-@click.version_option(version=AAPCLI_VERSION, prog_name='aap')
+#@click.version_option(version=AAPCLI_VERSION, prog_name='aap')
+@click.version_option(version=AAPCLI_VERSION, prog_name='python-aapclient', message=f'%(prog)s v%(version)s')
 @click.pass_context
-def cli(ctx, hostname, username, password, token, request_timeout, validate_certs, ca_bundle):
+def cli(ctx, url, username, password, token, request_timeout, validate_certs, ca_bundle):
     """
     Ansible Automation Platform (AAP) Command Line Interface.
 
@@ -84,8 +85,8 @@ def cli(ctx, hostname, username, password, token, request_timeout, validate_cert
     # Build configuration overrides from command-line arguments
     config_overrides = {}
 
-    if hostname:
-        config_overrides['hostname'] = hostname
+    if url:
+        config_overrides['url'] = url
     if username:
         config_overrides['username'] = username
     if password:

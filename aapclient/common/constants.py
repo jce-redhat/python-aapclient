@@ -1,7 +1,7 @@
 """Constants for AAP client."""
 
 # Version
-AAPCLI_VERSION = "0.5"
+AAPCLI_VERSION = "0.5.0"
 
 # Default values
 DEFAULT_REQUEST_TIMEOUT = 30

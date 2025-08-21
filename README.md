@@ -27,7 +27,7 @@ Configure the AAP connection using either environment variables or an `.env` fil
 ### Environment Variables (Recommended)
 
 ```bash
-export AAP_HOST=https://your-aap-host.example.com
+export AAP_URL=https://your-aap-host.example.com
 # use token authentication
 export AAP_TOKEN=your-token
 # OR username and password authentication
@@ -50,8 +50,8 @@ cp env.example .env
 Example `.env` file:
 
 ```bash
-# Required: AAP server hostname or URL
-AAP_HOST=https://aap-host.example.com/
+# Required: AAP server URL
+AAP_URL=https://aap-host.example.com/
 
 # Authentication: Use either token OR username/password
 AAP_TOKEN=your-aap-token
@@ -74,7 +74,7 @@ AAP_TOKEN=your-aap-token
 
 1. **Configure authentication**:
 ```bash
-export AAP_HOST=https://your-aap-instance.example.com
+export AAP_URL=https://your-aap-instance.example.com
 export AAP_TOKEN=your-api-token
 ```
 

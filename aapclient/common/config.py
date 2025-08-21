@@ -17,13 +17,13 @@ class AAPConfig:
 
         Args:
             config_overrides: Dict of configuration overrides from command-line arguments.
-                             Keys can be 'hostname', 'username', 'password', 'token', 'request_timeout',
+                             Keys can be 'url', 'username', 'password', 'token', 'request_timeout',
                              'validate_certs', 'ca_bundle'.
         """
         overrides = config_overrides or {}
 
         # Apply overrides with precedence: command-line > environment variables
-        self.hostname = overrides.get('hostname') or os.getenv('AAP_HOSTNAME')
+        self.url = overrides.get('url') or os.getenv('AAP_URL')
         self.username = overrides.get('username') or os.getenv('AAP_USERNAME')
         self.password = overrides.get('password') or os.getenv('AAP_PASSWORD')
         self.token = overrides.get('token') or os.getenv('AAP_TOKEN')
@@ -39,8 +39,8 @@ class AAPConfig:
 
     def validate(self):
         """Validate configuration."""
-        if not self.hostname:
-            raise AAPClientError("AAP_HOSTNAME environment variable or --hostname argument is required")
+        if not self.url:
+            raise AAPClientError("AAP_URL environment variable or --url argument is required")
 
         if not (self.token or (self.username and self.password)):
             raise AAPClientError(
@@ -50,17 +50,17 @@ class AAPConfig:
     @property
     def base_url(self):
         """Get base URL for AAP."""
-        if not self.hostname:
+        if not self.url:
             return None
 
-        # AAP_HOSTNAME must be a full URL with scheme
-        if not self.hostname.startswith(('http://', 'https://')):
+        # AAP_URL must be a full URL with scheme
+        if not self.url.startswith(('http://', 'https://')):
             raise AAPClientError(
-                f"AAP_HOSTNAME must be a full URL with scheme (http:// or https://), "
-                f"got: {self.hostname}"
+                f"AAP_URL must be a full URL with scheme (http:// or https://), "
+                f"got: {self.url}"
             )
 
-        return self.hostname.rstrip('/')
+        return self.url.rstrip('/')
 
     @property
     def auth_headers(self):
